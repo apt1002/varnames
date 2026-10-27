@@ -115,7 +115,10 @@ varnames/
 │   ├── camelize_identifiers.py          # snake_case → CamelCase conversion
 │   ├── merge_identifiers.py             # merge the three lists, de-duplicate
 │   ├── common_substrings.py             # ^id$ substrings occurring ≥ N times
-│   └── run_camel_pipeline.sh            # run the four steps end to end
+│   ├── run_camel_pipeline.sh            # run the four steps end to end
+│   ├── successor_distributions.py       # P(next character | common substring)
+│   ├── cluster_substrings.py            # K-means on the Hellinger embedding
+│   └── cluster_entropy.py               # successor entropy (bits) per cluster
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
@@ -149,6 +152,28 @@ times.
 
 ```sh
 sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt work/camel
+```
+
+## Successor clustering
+
+`scripts/successor_distributions.py` estimates, for each analysable common
+substring (those not ending in `$`), the empirical distribution of the character
+that follows it, with the corpus-wide successor marginal emitted as a shared
+Dirichlet prior for smoothing. `scripts/cluster_substrings.py` embeds each
+distribution on the unit sphere as `√p` (so squared Euclidean distance is twice
+the squared Hellinger distance, a locally correct metric surrogate for the
+non-metric KL "compression" distance) and runs spherical K-means.
+`scripts/cluster_entropy.py` reports the successor entropy in bits per cluster.
+
+On the current corpus (1950 analysable substrings, `k = 12`):
+`H(next) = 4.935` bits, `H(next | substring) = 3.520` bits,
+`H(next | cluster) = 4.270` bits — the clustering retains 0.665 bits (13.5% of
+`H(next)`, ≈47% of the achievable predictability).
+
+```sh
+python3 scripts/successor_distributions.py work/camel/merged.txt work/camel/common_substrings.txt
+python3 scripts/cluster_substrings.py
+python3 scripts/cluster_entropy.py
 ```
 
 ## Reproducing
