@@ -110,9 +110,45 @@ varnames/
 │   ├── fetch_gems.py                    # parallel RubyGem downloader
 │   ├── unpack_gems.py                   # .gem → source tree
 │   ├── stats.py                         # corpus statistics → Markdown
-│   └── validate_corpus.py               # sorted/unique/ASCII + artefact check
+│   ├── validate_corpus.py               # sorted/unique/ASCII + artefact check
+│   ├── classify_identifiers.py          # lower_case / UPPER_CASE / CamelCase split
+│   ├── camelize_identifiers.py          # snake_case → CamelCase conversion
+│   ├── merge_identifiers.py             # merge the three lists, de-duplicate
+│   ├── common_substrings.py             # ^id$ substrings occurring ≥ N times
+│   └── run_camel_pipeline.sh            # run the four steps end to end
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
+```
+
+## CamelCase normalisation and common substrings
+
+`scripts/run_camel_pipeline.sh` (or the four scripts individually) derives a
+normalised corpus and its frequent substrings from `corpus/identifiers.multilang.txt`:
+
+1. **classify** — split into `lower_case` (has lower-case letters, no
+   upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both).
+2. **camelize** — rewrite the non-CamelCase lists in CamelCase: the first
+   letter after a run of underscores is upper-cased and all other letters,
+   including the leading letter of the identifier, are lower-cased, so `a`, `_a`
+   and `__a` stay distinct (`a`, `A`, `_A`); a run of underscores before a
+   letter gives up exactly one underscore (its word separator) and keeps the
+   rest, so `a_b` → `aB` but `a__b` → `a_B` (underscores before a digit, or at
+   the end, are kept as-is).
+3. **merge** — concatenate the CamelCase list with the two converted lists and
+   de-duplicate (`LC_ALL=C sort -u`).
+4. **common substrings** — wrap every identifier as `^identifier$`, then
+   enumerate all substrings occurring at least 10000 times (Apriori/BFS over
+   length with a 64-bit rolling-hash count). The empty string is common by
+   definition.
+
+On the current union (2,365,468 identifiers → 2,295,340 after normalisation and
+de-duplication) this yields 2,102 common substrings, the longest being 9
+characters (`Attribute`, `Response$`). The empty string, `^`, `$` and all 65
+single characters (`a-z`, `A-Z`, `0-9`, `_`, `^`, `$`) occur at least 10000
+times.
+
+```sh
+sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt work/camel
 ```
 
 ## Reproducing
