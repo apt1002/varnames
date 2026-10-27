@@ -1,96 +1,96 @@
-# Corpus statistics — `RubyGems (full)`
+# Corpus statistics — `RubyGems corpus`
 
 | Metric | Value |
 |---|---|
-| Distinct identifiers | 1,424,035 |
-| Total characters | 23,634,180 |
-| Mean length | 16.60 |
-| Median length | 13 |
+| Distinct identifiers | 710,477 |
+| Total characters | 12,657,587 |
+| Mean length | 17.82 |
+| Median length | 15 |
 | Min length | 1 |
-| Max length | 138,787 |
+| Max length | 264 |
 | Distinct characters | 63 |
-| Starts with `_` | 23,542 (1.65%) |
-| Contains `_` | 668,053 (46.91%) |
-| Ends with a digit | 112,317 (7.89%) |
-| Contains a digit | 206,647 (14.51%) |
-| ALL_CAPS style | 133,552 (9.38%) |
-| Contains inner capitals (camel/Pascal) | 610,777 (42.89%) |
+| Starts with `_` | 7,318 (1.03%) |
+| Contains `_` | 477,991 (67.28%) |
+| Ends with a digit | 17,273 (2.43%) |
+| Contains a digit | 36,172 (5.09%) |
+| ALL_CAPS style | 57,213 (8.05%) |
+| Contains inner capitals (camel/Pascal) | 231,408 (32.57%) |
 
 ## Length distribution
 
 | Percentile | Length (chars) |
 |---|---|
-| p10 | 5 |
-| p25 | 8 |
-| p50 | 13 |
-| p75 | 19 |
-| p90 | 28 |
-| p95 | 38 |
-| p99 | 84 |
-| p99.9 | 127 |
-| p99.99 | 694 |
-| max | 138,787 |
+| p10 | 8 |
+| p25 | 11 |
+| p50 | 15 |
+| p75 | 21 |
+| p90 | 30 |
+| p95 | 37 |
+| p99 | 62 |
+| p99.9 | 107 |
+| p99.99 | 148 |
+| max | 264 |
 
 ## Length histogram
 
 | Length | Count | % of corpus |
 |---|---|---|
-| 9-16 | 560,293 | 39.35% |
-| 17-24 | 282,749 | 19.86% |
-| 25-32 | 99,747 | 7.00% |
-| 33-48 | 59,525 | 4.18% |
-| 49-64 | 17,873 | 1.26% |
-| 65-96 | 16,309 | 1.15% |
-| 97-128 | 7,089 | 0.50% |
-| 129-256 | 954 | 0.07% |
-| >256 | 357 | 0.03% |
+| 9-16 | 315,313 | 44.38% |
+| 17-24 | 187,737 | 26.42% |
+| 25-32 | 68,351 | 9.62% |
+| 33-48 | 38,570 | 5.43% |
+| 49-64 | 9,397 | 1.32% |
+| 65-96 | 5,182 | 0.73% |
+| 97-128 | 955 | 0.13% |
+| 129-256 | 240 | 0.03% |
+| >256 | 1 | 0.00% |
 
 ## Character frequency (top 20)
 
 | Char | Occurrences | % of all chars |
 |---|---|---|
-| `e` | 2,286,837 | 9.68% |
-| `t` | 1,571,663 | 6.65% |
-| `a` | 1,400,346 | 5.93% |
-| `i` | 1,280,037 | 5.42% |
-| `_` | 1,256,690 | 5.32% |
-| `r` | 1,245,454 | 5.27% |
-| `s` | 1,232,932 | 5.22% |
-| `n` | 1,184,295 | 5.01% |
-| `o` | 1,182,215 | 5.00% |
-| `l` | 812,058 | 3.44% |
-| `c` | 749,426 | 3.17% |
-| `d` | 676,144 | 2.86% |
-| `u` | 581,944 | 2.46% |
-| `p` | 565,506 | 2.39% |
-| `m` | 523,762 | 2.22% |
-| `g` | 452,922 | 1.92% |
-| `A` | 321,040 | 1.36% |
-| `h` | 317,832 | 1.34% |
-| `f` | 299,849 | 1.27% |
-| `b` | 283,520 | 1.20% |
+| `e` | 1,372,429 | 10.84% |
+| `t` | 979,458 | 7.74% |
+| `_` | 907,479 | 7.17% |
+| `a` | 772,241 | 6.10% |
+| `r` | 745,255 | 5.89% |
+| `s` | 735,449 | 5.81% |
+| `i` | 712,987 | 5.63% |
+| `o` | 707,327 | 5.59% |
+| `n` | 673,498 | 5.32% |
+| `l` | 467,698 | 3.70% |
+| `c` | 444,379 | 3.51% |
+| `d` | 398,159 | 3.15% |
+| `p` | 332,096 | 2.62% |
+| `u` | 328,714 | 2.60% |
+| `m` | 285,997 | 2.26% |
+| `g` | 210,341 | 1.66% |
+| `h` | 180,491 | 1.43% |
+| `f` | 172,998 | 1.37% |
+| `b` | 144,328 | 1.14% |
+| `E` | 130,121 | 1.03% |
 
 ## Leading character (top 15)
 
 | Char | Identifiers | % of corpus |
 |---|---|---|
-| `c` | 84,543 | 5.94% |
-| `s` | 82,636 | 5.80% |
-| `t` | 60,469 | 4.25% |
-| `a` | 60,090 | 4.22% |
-| `r` | 58,403 | 4.10% |
-| `p` | 55,720 | 3.91% |
-| `g` | 55,180 | 3.87% |
-| `d` | 49,455 | 3.47% |
-| `i` | 48,040 | 3.37% |
-| `m` | 44,341 | 3.11% |
-| `f` | 40,711 | 2.86% |
-| `e` | 40,112 | 2.82% |
-| `l` | 38,528 | 2.71% |
-| `b` | 37,681 | 2.65% |
-| `C` | 36,591 | 2.57% |
+| `c` | 49,116 | 6.91% |
+| `s` | 46,658 | 6.57% |
+| `t` | 38,766 | 5.46% |
+| `r` | 34,576 | 4.87% |
+| `p` | 31,723 | 4.47% |
+| `a` | 31,185 | 4.39% |
+| `d` | 26,099 | 3.67% |
+| `C` | 23,432 | 3.30% |
+| `g` | 22,853 | 3.22% |
+| `S` | 21,507 | 3.03% |
+| `e` | 21,276 | 2.99% |
+| `f` | 20,514 | 2.89% |
+| `i` | 19,505 | 2.75% |
+| `m` | 19,237 | 2.71% |
+| `l` | 17,664 | 2.49% |
 
 ## Notes
 
-- 1,311 identifiers exceed 128 characters; the longest is 138,787 chars and is almost certainly an embedded blob (base64 font/source-map data) rather than a real identifier.
-- Longest token begins: `eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL2xpYi9oYW5kbGViYXJzL2NvbXBpbGVy...`
+- 241 identifiers exceed 128 characters; the longest is 264 chars and is almost certainly an embedded blob (base64 font/source-map data) rather than a real identifier.
+- Longest token begins: `abcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabc...`

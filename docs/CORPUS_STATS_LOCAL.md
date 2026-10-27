@@ -14,10 +14,10 @@ then de-duplicated with `LC_ALL=C sort -u`.
 
 | Language   | Source roots                                                        | Files scanned | Distinct identifiers | Violations |
 |------------|---------------------------------------------------------------------|---------------|----------------------|------------|
-| Go         | `/usr/share/go-1.24/src`                                            | 7,115         | 272,584              | 0          |
-| Python     | `/usr/lib/python3.13`, `/usr/lib/python3/dist-packages`             | 13,710        | 561,160              | 0          |
-| JavaScript | `/usr/share/javascript`                                             | 2,786         | 67,283               | 0          |
-| Perl       | `/usr/share/perl5`, `/usr/lib/aarch64-linux-gnu/perl5`              | 752           | 42,306               | 0          |
+| Go         | `/usr/share/go-1.24/src`                                            | 7,115         | 154,229              | 0          |
+| Python     | `/usr/lib/python3.13`, `/usr/lib/python3/dist-packages`             | 13,710        | 363,927              | 0          |
+| JavaScript | `/usr/share/javascript`                                             | 2,786         | 10,049               | 0          |
+| Perl       | `/usr/share/perl5`, `/usr/lib/aarch64-linux-gnu/perl5`              | 752           | 17,304               | 0          |
 
 ## Union total
 
@@ -25,15 +25,21 @@ Grand total of distinct identifiers across the union of all four files:
 
 ```
 cat corpus/by_language/*.txt | LC_ALL=C sort -u | wc -l
-869353
+527316
 ```
 
 ## Method
 
+Each source file is lexically scrubbed before tokenisation: string literals
+(quoted, triple-quoted, raw, backtick), comments, heredocs, regex literals,
+numeric literals and non-ASCII runs are replaced by spaces so that base64 blobs,
+PEM data, URLs, English prose and the tails of hex/binary/decimal literals never
+reach the corpus. The scrubbed buffer is then tokenised.
+
 For each language, `scripts/extract.py` recursively walked the listed roots,
 kept only files whose extension was in the language's extension set, skipped any
 file containing NUL bytes (binary), and streamed the distinct token set to
-`work/local_ids/<lang>.shards` using a 400,000-token flush threshold to bound
+`work/clean_ids/<lang>.shards` using a 400,000-token flush threshold to bound
 memory. The shard file was then sorted and de-duplicated with
 `LC_ALL=C sort -u` into `corpus/by_language/<lang>.txt`.
 

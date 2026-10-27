@@ -12,7 +12,7 @@ regex `[A-Za-z_][A-Za-z0-9_]*`.
 | crates downloaded | 2,500 |
 | crates unpacked | 2,500 |
 | `.rs` files scanned | 64,650 |
-| distinct identifiers | **1,854,408** |
+| distinct identifiers | **1,290,194** |
 
 ## Method
 
@@ -25,11 +25,11 @@ regex `[A-Za-z_][A-Za-z0-9_]*`.
 * **Unpack:** each `.crate` is a gzipped tarball with top directory `NAME-VERSION/`,
   extracted into `work/rust_src/`. Corrupt/truncated archives are skipped; already
   unpacked directories are not re-extracted.
-* **Extraction:** `python3 scripts/extract.py work/rust_ids.shards work/rust_src
+* **Extraction:** `python3 scripts/extract.py work/clean_ids/rust.shards work/rust_src
   --exts .rs --threshold 400000`. Walks the tree, keeps `.rs` files, skips files
   containing NUL bytes (treated as binary), and writes the distinct token set
   one-per-line, memory-bounded via the shard threshold.
-* **Finalize:** `LC_ALL=C sort -u work/rust_ids.shards > corpus/by_language/rust.txt`.
+* **Finalize:** `LC_ALL=C sort -u work/clean_ids/rust.shards > corpus/by_language/rust.txt`.
 
 ## Validation
 
