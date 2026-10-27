@@ -1,0 +1,10 @@
+# large downloaded / unpacked raw data (regenerable)
+/work/
+/data/
+/requests-src/
+/tmpdl/
+*.crate
+
+# python
+__pycache__/
+*.pyc
