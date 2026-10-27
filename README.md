@@ -177,30 +177,60 @@ The pipeline writes the case-normalisation artefacts (`lower_case.txt`,
 
 ## Successor clustering
 
-`scripts/successor_distributions.py` estimates, for each analysable common
-substring (those not ending in `$`), the empirical distribution of the character
-that follows it, with the corpus-wide successor marginal emitted as a shared
-Dirichlet prior for smoothing. `scripts/cluster_substrings.py` embeds each
-distribution on the unit sphere as `√p` (so squared Euclidean distance is twice
-the squared Hellinger distance, a locally correct metric surrogate for the
-non-metric KL "compression" distance) and runs spherical K-means.
-`scripts/cluster_entropy.py` reports the successor entropy in bits per cluster.
+`scripts/successor_distributions.py` builds, for every common substring, the
+empirical distribution of the character that follows it. It uses a
+**longest-suffix (variable-order) model**: at each split of a wrapped identifier
+`^identifier$` (from just after the `^` to just after the identifier) the
+successor is credited to the *longest common substring that is a suffix of the
+prefix*, so e.g. after `^Ac` the successor is credited to `^Ac` rather than to
+`Ac` or `c`. Every one of the 41,272,149 split positions is assigned to exactly
+one context. The rows are the common substrings that can occur as a prefix
+suffix (non-empty, not ending in `$`) and a `#global` row carries the
+corpus-wide successor marginal, used as a shared Dirichlet prior for smoothing.
 
-On the current corpus (1950 analysable substrings, `k = 12`):
-`H(next) = 4.935` bits, `H(next | substring) = 3.520` bits,
-`H(next | cluster) = 4.270` bits — the clustering retains 0.665 bits (13.5% of
-`H(next)`, ≈47% of the achievable predictability).
+`scripts/cluster_substrings.py` groups the contexts by their successor
+distribution, with two objectives:
+
+* `--method kl` (default) directly minimises the occurrence-weighted
+  cross-entropy `Σ_s N_s · H(p_s ‖ P_cluster(s))`, which equals `H(next |
+  cluster)`; assignment is to the smallest cross-entropy and the update is the
+  pooled-count mean (Lloyd's algorithm for the KL/multinomial objective). This
+  optimises exactly the quantity we report.
+* `--method sphere` embeds `√p` on the unit sphere (squared Euclidean distance =
+  twice the squared Hellinger distance, a metric surrogate for the non-metric KL
+  "compression" distance) and runs spherical K-means.
+
+The two agree to within ~0.02 bits — the Hellinger clustering was already
+near-optimal for the reported objective. `scripts/cluster_entropy.py` reports
+`H(next)`, `H(next | substring)`, `H(next | cluster)` and the information
+retained.
+
+On the current corpus (1,950 analysable contexts), `H(next) = 4.966` and
+`H(next | substring) = 3.070` bits. With the `kl` objective:
+
+| k | 12 | 22 (elbow) | 100 |
+|---|---|---|---|
+| `H(next | cluster)` | 4.011 | 3.821 | 3.502 |
+
+So **k is the dominant lever**: the cluster model approaches — but with 100
+clusters still does not reach — the exact-context 3.070 bits. At the elbow
+`k = 22` the clustering retains 1.145 bits (60% of the 1.896-bit achievable
+reduction); at `k = 12` it retains 0.955 bits (50%). The earlier plain
+"character after substring" count gave a less sharp context model (3.520 bits)
+and retained ~49% at `k = 12`.
 
 ```sh
 python3 scripts/successor_distributions.py work/camel/merged.txt work/common10000/common_substrings.txt
-python3 scripts/cluster_substrings.py --outdir work/common10000
+python3 scripts/cluster_substrings.py --outdir work/common10000      # --method kl (default)
 python3 scripts/cluster_entropy.py --outdir work/common10000
 ```
 
 ### Scaling up: more substrings, more clusters
 
 Lowering the common-substring threshold to 2000 gives 11,758 common substrings
-(max length 14) and 10,890 analysable successor distributions. The number of
+(max length 14) and 10,890 analysable successor distributions. (The numbers in
+this subsection predate the longest-suffix model — they use the plain
+"character after substring" count and the Hellinger clustering.) The number of
 clusters is chosen by mean silhouette over `k = 2..100` (the assignment step of
 the sweep is a fixed random subsample of 4000 points; all points are used as the
 reference set): the silhouette peaks at `k = 17` (+0.3170) and drifts around

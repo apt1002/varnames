@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
 """Estimate the successor distribution of every common substring.
 
-For each common substring (see common_substrings.py) we count how often each
-character immediately follows it in the wrapped corpus (^identifier$), giving an
-empirical distribution over successors.
+Longest-suffix (variable-order) model
+-------------------------------------
+For each split of a wrapped identifier (^identifier$) we take the prefix up to
+the split and find the *longest common substring* (see common_substrings.py)
+that is a suffix of that prefix; the successor is the character at the split.
+That (context, successor) pair is counted.  For example, at the split after
+"^Ac" the successor is credited to "^Ac" (if that is common), not to "Ac" or
+"c".
 
-Substrings that end with '$' have no successor (the identifier is over) and are
-omitted, as is the empty substring.  The successor alphabet is
+This differs from a plain "character after substring" count: each split
+contributes to exactly one context, the longest one, so a short suffix such as
+"c" only receives the positions where no longer common suffix applies.  The
+splits run from just after the leading '^' (predicting the first character) to
+just after the identifier (predicting the trailing '$').
+
+The empty string is a common substring, but as every occurring single character
+is common, it can never be the longest suffix; any such positions are counted
+separately and reported as `unassigned` (expected to be zero).
+
+Rows: every common substring except the empty string and those ending in '$'
+(a '$' cannot appear inside a prefix).  The successor alphabet is
 [a-z A-Z 0-9 _ $] ('^' can never follow anything).
 
 Output is a dense count table (tab separated):
@@ -15,8 +30,9 @@ Output is a dense count table (tab separated):
     #global	<total>	<counts of the corpus-wide successor distribution q>
     Attribute	10956	...
 
-The '#global' row is the global successor distribution, provided so that the
-clustering step can smooth sparse counts with a shared Dirichlet prior.
+The '#global' row is the global successor distribution over all split
+positions, provided so that the clustering step can smooth sparse counts with a
+shared Dirichlet prior.
 
 Input : corpus (one identifier per line) and common-substring list.
 Output: <outdir>/successor_distributions.tsv
@@ -31,7 +47,7 @@ import numpy as np
 
 B = 0x9E3779B97F4A7C15            # same multiplier as common_substrings.py
 NUL = 0
-CHUNK = 1 << 22
+CHUNK = 1 << 21
 # characters that can follow a substring ('^' only ever starts an identifier)
 SYMS = (b"abcdefghijklmnopqrstuvwxyz"
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -68,74 +84,92 @@ def main():
     ap.add_argument('--outdir', default='work/common10000')
     args = ap.parse_args()
 
-    pats = []
+    # ---- vocabulary: every non-empty common substring --------------------
+    vocab = []
     with open(args.substrings, 'rb') as f:
         for line in f:
             s = line.rstrip(b'\n')
-            if s == b'' or s.endswith(b'$'):
-                continue                    # no successor
-            pats.append(s)
-    print(f"analysable common substrings: {len(pats)}")
+            if s == b'':
+                continue
+            vocab.append(s)
+    rows = [s for s in vocab if not s.endswith(b'$')]   # contexts that can occur
+    vidx = {s: i for i, s in enumerate(vocab)}
+    print(f"vocabulary: {len(vocab)}  output rows: {len(rows)}")
 
     text, nlines = build_text(args.corpus)
     T = np.frombuffer(text, dtype=np.uint8)
     N = T.shape[0]
-    print(f"identifiers: {nlines}  text bytes: {N}")
+    max_len = max(len(s) for s in vocab)
+    print(f"identifiers: {nlines}  text bytes: {N}  max context length: {max_len}")
 
     sym_col = np.full(256, -1, dtype=np.int64)
-    syms_arr = np.frombuffer(SYMS, dtype=np.uint8)
     for i, c in enumerate(SYMS):
         sym_col[c] = i
-    glob = np.bincount(T[1:], minlength=256)[syms_arr].astype(np.int64)
 
+    Bpow = np.ones(max_len + 1, dtype=np.uint64)
+    for l in range(1, max_len + 1):
+        Bpow[l] = np.uint64((int(Bpow[l - 1]) * B) & 0xFFFFFFFFFFFFFFFF)
+
+    # hashes of the common substrings, grouped by length
     by_len = {}
-    for s in pats:
-        by_len.setdefault(len(s), []).append(s)
-    max_len = max(by_len)
+    for vi, s in enumerate(vocab):
+        by_len.setdefault(len(s), []).append((hash_bytes(s), vi))
+    Hs, Imap = {}, {}
+    for l, lst in by_len.items():
+        a = np.array([h for h, _ in lst], dtype=np.uint64)
+        idx = np.array([vi for _, vi in lst], dtype=np.int32)
+        order = np.argsort(a, kind='stable')
+        a, idx = a[order], idx[order]
+        if a.size > 1 and np.any(a[1:] == a[:-1]):
+            print(f"warning: hash collision among length-{l} substrings", file=sys.stderr)
+        Hs[l], Imap[l] = a, idx
+    lengths = sorted(by_len, reverse=True)
 
-    counts = {}
-    h = T.astype(np.uint64)                 # window hashes for length 1
+    NCTX = len(vocab)
+    counts = np.zeros((NCTX, NSYM), dtype=np.int64)
+    glob = np.zeros(NSYM, dtype=np.int64)
+    unassigned = 0
+
+    # pad so that a length-l window never starts before T[0]
+    Tpad = np.zeros(N + max_len, dtype=np.uint8)
+    Tpad[max_len:] = T
+
     with np.errstate(over='ignore'):
-        for L in range(1, max_len + 1):
-            m = N - L + 1
-            if L > 1:
-                win = h[:m]
-                np.multiply(win, np.uint64(B), out=win)
-                for s in range(0, m, CHUNK):
-                    e = min(s + CHUNK, m)
-                    add = np.frombuffer(text, np.uint8, count=e - s,
-                                        offset=(L - 1) + s).astype(np.uint64)
-                    win[s:e] += add
-            lpats = by_len.get(L)
-            if not lpats:
-                continue
-            npats = len(lpats)
-            ph = np.array([hash_bytes(s) for s in lpats], dtype=np.uint64)
-            order = np.argsort(ph)
-            phs = ph[order]
-            lc = np.zeros((npats, NSYM), dtype=np.int64)
-            view = h[:m]
-            for s in range(0, m, CHUNK):
-                e = min(s + CHUNK, m)
-                chunk = view[s:e]
-                idx = np.searchsorted(phs, chunk)
-                np.minimum(idx, npats - 1, out=idx)
-                hitf = phs[idx] == chunk
-                if not hitf.any():
-                    continue
-                pos = np.nonzero(hitf)[0]           # positions within chunk
-                patidx = order[idx[pos]]
-                succ = T[s + pos + L]               # char after the match
-                col = sym_col[succ]
-                good = col >= 0                     # NUL etc. cannot happen
-                if not good.any():
-                    continue
-                comb = patidx[good] * NSYM + col[good]
-                lc += np.bincount(comb, minlength=npats * NSYM).reshape(npats, NSYM)
-            for i, s in enumerate(lpats):
-                counts[s] = lc[i]
-            print(f"level {L}: {npats} substrings, "
-                  f"{int(lc.sum())} successor samples")
+        for p0 in range(0, N, CHUNK):
+            p1 = min(p0 + CHUNK, N)
+            nchunk = p1 - p0
+            seg = Tpad[p0:p1 + max_len]          # local t -> global p0+t
+            ctxidx = np.full(nchunk, -1, dtype=np.int32)
+            for l in lengths:                    # longest first
+                hw = np.zeros(nchunk, dtype=np.uint64)
+                off = max_len - l
+                for k in range(l):
+                    sl = seg[off + k:off + k + nchunk].astype(np.uint64)
+                    hw += sl * Bpow[l - 1 - k]
+                Hs_l = Hs[l]
+                pos = np.searchsorted(Hs_l, hw)
+                np.minimum(pos, Hs_l.shape[0] - 1, out=pos)
+                match = (Hs_l[pos] == hw) & (ctxidx < 0)
+                if match.any():
+                    ctxidx[match] = Imap[l][pos[match]]
+            # record the longest-suffix length distribution
+            hit = ctxidx >= 0
+            # succ + counts
+            succ = T[p0:p1]
+            col = sym_col[succ]
+            valid = col >= 0
+            unassigned += int((valid & ~hit).sum())
+            if valid.any():
+                glob += np.bincount(col[valid], minlength=NSYM)
+                g = valid & hit
+                if g.any():
+                    flat = ctxidx[g].astype(np.int64) * NSYM + col[g]
+                    counts += np.bincount(flat, minlength=NCTX * NSYM).reshape(NCTX, NSYM)
+
+    total = int(counts.sum())
+    print(f"split positions (valid): {int(glob.sum())}")
+    print(f"assigned to a context:   {total}")
+    print(f"unassigned (empty ctx):  {unassigned}")
 
     # ---- write ----
     os.makedirs(args.outdir, exist_ok=True)
@@ -145,8 +179,8 @@ def main():
         f.write('#substring\tsample_size\t' + sym_hdr + '\n')
         f.write('#global\t%d\t' % int(glob.sum()) +
                 '\t'.join(str(int(x)) for x in glob) + '\n')
-        for s in pats:
-            c = counts[s]
+        for s in rows:
+            c = counts[vidx[s]]
             f.write(s.decode('latin1') + '\t' + str(int(c.sum())) + '\t' +
                     '\t'.join(str(int(x)) for x in c) + '\n')
     print(f"wrote {path}")

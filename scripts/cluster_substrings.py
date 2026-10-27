@@ -22,13 +22,25 @@ global successor distribution q (the '#global' row of the input):
 
     p_c = (n_c + alpha * q_c) / (N + alpha)
 
-K-means is run on the sphere: assignment by nearest Euclidean distance
-(= largest dot product with the centre), update by re-normalising the mean of
-the assigned points, several restarts, and the best inertia is kept.  The
-number of clusters is chosen by the mean silhouette score unless --k is given.
-The silhouette of every candidate k is estimated on a fixed random subsample of
-the points (all points are still used as the reference set); this keeps the
-O(n^2) distance work bounded as k grows.
+Two clustering objectives are provided:
+
+* ``--method kl`` (default): Lloyd's algorithm for the occurrence-weighted
+  cross-entropy, i.e. it directly minimises
+      sum_s N_s * H(p_s || P_{cluster(s)}),
+  with the centre P_c the count-weighted mean of its members and assignment to
+  the smallest cross-entropy (largest sum_x p_s(x) log P_c(x)).  This is exactly
+  the quantity behind H(next | cluster), so it optimises what we report.
+
+* ``--method sphere``: K-means on the Hellinger embedding, assignment by nearest
+  Euclidean distance (= largest dot product), update by re-normalising the mean.
+  This is the metric surrogate discussed above.
+
+Both use k-means++ style seeding on the Hellinger embedding and several restarts
+(the restart with the lowest H(next | cluster) is kept).  The number of clusters
+is chosen by the mean silhouette score unless --k is given.  The silhouette of
+every candidate k is estimated on a fixed random subsample of the points (all
+points are still used as the reference set); this keeps the O(n^2) distance work
+bounded as k grows.
 
 Performance
 -----------
@@ -36,14 +48,15 @@ The three hot operations (k-means assignment/accumulation and the silhouette
 distance sweep) are O(n*k*d) and O(n^2*d).  The host BLAS is reference (netlib)
 BLAS, which is far too slow for n ~ 1e4, so these are done by a small OpenMP
 kernel compiled from scripts/fastkern.c (falling back to NumPy if gcc is
-missing).
+missing).  The ``kl`` method uses plain NumPy matmuls (fine for n ~ 1e3).
 
 Input : <outdir>/successor_distributions.tsv
 Output: <outdir>/clusters.tsv          substring, sample_size, cluster
         <outdir>/cluster_summary.txt   per-cluster profile + members
-        <outdir>/cluster_selection.txt inertia/silhouette for a range of k
+        <outdir>/cluster_selection.txt silhouette and H(next|cluster) vs k
 
-Usage: cluster_substrings.py [--outdir work/common10000] [--k K] [--alpha 1.0]
+Usage: cluster_substrings.py [--outdir work/common10000] [--k K]
+                             [--method kl|sphere] [--alpha 1.0]
                              [--restarts 20] [--kmax 15] [--sil-sample 4000]
                              [--examples 25]
 """
@@ -171,6 +184,65 @@ def kmeans_sphere(X32, k, rng, iters=100):
     return labels, centers.astype(np.float64), inertia
 
 
+def entropy_bits(p):
+    p = p[p > 0]
+    return float(-(p * np.log2(p)).sum())
+
+
+def h_given_cluster(C, labels):
+    """Occurrence-weighted H(next | cluster) in bits from pooled counts."""
+    total = C.sum()
+    h = 0.0
+    for c in np.unique(labels):
+        agg = C[labels == c].sum(0)
+        n = agg.sum()
+        if n > 0:
+            h += (n / total) * entropy_bits(agg / n)
+    return h
+
+
+def kmeans_kl(C, Ns, q, k, rng, alpha, iters=100):
+    """Lloyd's algorithm for occurrence-weighted cross-entropy (a.k.a. KL).
+
+    Directly minimises  sum_s N_s * H(p_s || P_{cluster(s)})  with the centre
+    P_c the count-weighted mean of its members -- which is exactly the quantity
+    behind H(next | cluster).  Assignment is to the smallest cross-entropy
+    (= largest sum_x p_s(x) log P_c(x)); the update is the pooled-count mean.
+    Seeded k-means++ style using the Hellinger (2 H^2) distance.
+    """
+    n, d = C.shape
+    P = (C + alpha * q[None, :]) / (Ns[:, None] + alpha)     # smoothed members
+    X = np.sqrt(P)
+    centers = np.empty((k, d))
+    i0 = int(rng.integers(n))
+    centers[0] = P[i0]
+    d2 = np.maximum(2.0 - 2.0 * (X @ X[i0]), 0.0)
+    for j in range(1, k):
+        t = d2.sum()
+        pj = d2 / t if t > 0 else np.full(n, 1.0 / n)
+        c = int(rng.choice(n, p=pj))
+        centers[j] = P[c]
+        d2 = np.minimum(d2, np.maximum(2.0 - 2.0 * (X @ X[c]), 0.0))
+    labels = None
+    P32 = np.ascontiguousarray(P, dtype=np.float32)
+    for _ in range(iters):
+        logPc = np.log(np.maximum(centers, 1e-300))
+        new_labels = assign(P32, np.ascontiguousarray(logPc, dtype=np.float32), k)
+        aggC = np.zeros((k, d))
+        aggN = np.zeros(k)
+        for c in range(k):
+            m = new_labels == c
+            if m.any():
+                aggC[c] = C[m].sum(0)
+                aggN[c] = Ns[m].sum()
+        new_centers = (aggC + alpha * q[None, :]) / (aggN[:, None] + alpha)
+        if labels is not None and np.array_equal(new_labels, labels):
+            centers, labels = new_centers, new_labels
+            break
+        centers, labels = new_centers, new_labels
+    return labels, centers, h_given_cluster(C, labels)
+
+
 def silhouette(X32, labels, qidx=None, chunk=1024):
     """Mean silhouette on the sphere (over qidx if given)."""
     n, d = X32.shape
@@ -181,6 +253,8 @@ def silhouette(X32, labels, qidx=None, chunk=1024):
         lq = labels[qidx]
     nq = Q.shape[0]
     k = int(labels.max()) + 1
+    lq = np.ascontiguousarray(lq, dtype=np.int32)
+    labels = np.ascontiguousarray(labels, dtype=np.int32)
     n_c = np.bincount(labels, minlength=k).astype(np.int32)
     if KERN is not None:
         out = np.empty(nq, dtype=np.float32)
@@ -215,6 +289,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--outdir', default='work/common10000')
     ap.add_argument('--k', type=int, default=0)
+    ap.add_argument('--method', choices=('kl', 'sphere'), default='kl',
+                    help="'kl' minimises occurrence-weighted cross-entropy "
+                         "(H(next|cluster)); 'sphere' is Hellinger K-means")
+    ap.add_argument('--select', choices=('silhouette', 'bits'), default=None,
+                    help='criterion for choosing k (default: silhouette for '
+                         'sphere, elbow of H(next|cluster) for kl)')
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--restarts', type=int, default=20)
     ap.add_argument('--kmax', type=int, default=15)
@@ -234,12 +314,14 @@ def main():
         os.path.join(args.outdir, 'successor_distributions.tsv'))
     n = C.shape[0]
     tot = C.sum(1, keepdims=True)
+    Ns = tot[:, 0]
     q = glob / glob.sum()
     P = (C + args.alpha * q[None, :]) / (tot + args.alpha)   # smoothed
     X = np.sqrt(P).astype(np.float32)
     X /= np.linalg.norm(X, axis=1, keepdims=True)
     X = np.ascontiguousarray(X)
-    print(f"substrings: {n}  successor alphabet: {C.shape[1]}  alpha: {args.alpha}")
+    print(f"substrings: {n}  successor alphabet: {C.shape[1]}  "
+          f"alpha: {args.alpha}  method: {args.method}")
 
     rng = np.random.default_rng(args.seed)
 
@@ -255,27 +337,38 @@ def main():
 
     results = {}
     for k in ks:
-        best = None
+        best, best_bits = None, None
         for _ in range(args.restarts):
-            labels, centers, inertia = kmeans_sphere(X, k, rng)
-            if best is None or inertia < best[2]:
-                best = (labels, centers, inertia)
+            if args.method == 'sphere':
+                labels, centers, _ = kmeans_sphere(X, k, rng)
+            else:
+                labels, centers, _ = kmeans_kl(C, Ns, q, k, rng, args.alpha)
+            bits = h_given_cluster(C, labels)
+            if best_bits is None or bits < best_bits:
+                best_bits, best = bits, (labels, centers)
         sil = silhouette(X, best[0], qidx)
-        results[k] = (best, sil)
-        print(f"k={k:3d}  inertia={best[2]:9.2f}  silhouette={sil:+.4f}", flush=True)
+        results[k] = (best, sil, best_bits)
+        print(f"k={k:3d}  H(next|cluster)={best_bits:.4f} bits  "
+              f"silhouette={sil:+.4f}", flush=True)
 
     with open(os.path.join(args.outdir, 'cluster_selection.txt'), 'w') as f:
-        f.write('k\tinertia\tsilhouette\n')
+        f.write('k\tsilhouette\tH_cond_bits\n')
         for k in ks:
-            f.write(f"{k}\t{results[k][0][2]:.2f}\t{results[k][1]:.4f}\n")
+            f.write(f"{k}\t{results[k][1]:.4f}\t{results[k][2]:.6f}\n")
 
     if args.k:
         chosen = args.k
-    else:
+    elif (args.select or ('bits' if args.method == 'kl' else 'silhouette')) == 'silhouette':
         chosen = max(ks, key=lambda k: results[k][1])
-    labels, centers, inertia = results[chosen][0]
+    else:                                    # elbow of the H(next|cluster) curve
+        x = np.array(ks, dtype=float)
+        y = np.array([results[k][2] for k in ks], dtype=float)
+        xn = (x - x[0]) / (x[-1] - x[0])
+        yn = (y - y.min()) / (y.max() - y.min())
+        chosen = ks[int(np.argmin(xn + yn))]
+    labels, centers = results[chosen][0]
     print(f"\nchosen k = {chosen}  (silhouette {results[chosen][1]:+.4f}, "
-          f"inertia {inertia:.2f})")
+          f"H(next|cluster) {results[chosen][2]:.4f} bits)")
 
     # ---- write assignments ----
     with open(os.path.join(args.outdir, 'clusters.tsv'), 'w') as f:
@@ -283,16 +376,20 @@ def main():
         for i in range(n):
             f.write(f"{names[i]}\t{int(tot[i, 0])}\t{int(labels[i])}\n")
 
-    # ---- per-cluster profile ----
+    # ---- per-cluster profile (pooled counts = the cluster's predictive dist) ----
     sym_arr = np.array(list(syms))
     with open(os.path.join(args.outdir, 'cluster_summary.txt'), 'w') as f:
         order = sorted(range(len(centers)),
                        key=lambda j: -(labels == j).sum())
         for j in order:
             members = np.nonzero(labels == j)[0]
-            top = np.argsort(-centers[j])[:6]
-            succ = ' '.join(f"{sym_arr[t]}:{centers[j][t]**2:.2f}" for t in top)
-            f.write(f"cluster {j}: {members.size} members\n")
+            agg = C[members].sum(0)
+            n_j = agg.sum()
+            pj = agg / n_j if n_j > 0 else q
+            top = np.argsort(-pj)[:6]
+            succ = ' '.join(f"{sym_arr[t]}:{pj[t]:.2f}" for t in top)
+            f.write(f"cluster {j}: {members.size} members, "
+                    f"{int(n_j)} samples\n")
             f.write(f"  top successors (prob): {succ}\n")
             ex = sorted((names[i] for i in members),
                         key=lambda s: (len(s), s))[:args.examples]
