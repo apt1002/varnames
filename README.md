@@ -118,6 +118,7 @@ varnames/
 │   ├── run_camel_pipeline.sh            # run the four steps end to end
 │   ├── successor_distributions.py       # P(next character | common substring)
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
+│   ├── fastkern.c                       # OpenMP kernels (assignment/silhouette)
 │   └── cluster_entropy.py               # successor entropy (bits) per cluster
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
@@ -174,6 +175,40 @@ On the current corpus (1950 analysable substrings, `k = 12`):
 python3 scripts/successor_distributions.py work/camel/merged.txt work/camel/common_substrings.txt
 python3 scripts/cluster_substrings.py
 python3 scripts/cluster_entropy.py
+```
+
+### Scaling up: more substrings, more clusters
+
+Lowering the common-substring threshold to 2000 gives 11,758 common substrings
+(max length 14) and 10,890 analysable successor distributions. The number of
+clusters is chosen by mean silhouette over `k = 2..100` (the assignment step of
+the sweep is a fixed random subsample of 4000 points; all points are used as the
+reference set): the silhouette peaks at `k = 17` (+0.3170) and drifts around
+0.29–0.30 for larger `k`, i.e. the extra clusters add little separation.
+
+With `k = 17` the successor structure sharpens considerably: many clusters are
+near-deterministic, each pinned to a single likely next character — `t:0.96`,
+`o:0.95`, `e:0.94`, `r:0.94`, `l:0.94`, `d:0.93`, `a:0.91`, `g:0.91`, `s:0.89`,
+`n:0.87`, `i:0.85` — plus a digit/underscore cluster (`1:0.16 _:0.14 2:0.12 …`)
+and a large mixed "junk drawer". The measured entropies are:
+`H(next) = 4.935`, `H(next | substring) = 3.159`, `H(next | cluster) = 3.941`
+bits, so the clustering retains 0.993 bits (20.1% of `H(next)`).
+
+`scripts/fastkern.c` holds the three O(n·k·d) / O(n²·d) inner loops (K-means
+assignment, cluster accumulation, silhouette distance sweep). It is compiled on
+demand with `gcc -O3 -march=native -fopenmp` and loaded through `ctypes`,
+because the host's BLAS is reference (netlib) BLAS (~0.2 GFLOP/s) which makes
+the NumPy fallback far too slow at this size; if compilation fails the script
+falls back to pure NumPy automatically.
+
+```sh
+python3 scripts/common_substrings.py work/camel/merged.txt \
+        --outdir work/camel2000 --threshold 2000
+python3 scripts/successor_distributions.py work/camel/merged.txt \
+        work/camel2000/common_substrings.txt --outdir work/camel2000
+python3 scripts/cluster_substrings.py --outdir work/camel2000 \
+        --kmax 100 --restarts 10 --sil-sample 4000
+python3 scripts/cluster_entropy.py --outdir work/camel2000
 ```
 
 ## Reproducing

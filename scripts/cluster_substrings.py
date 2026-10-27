@@ -26,6 +26,17 @@ K-means is run on the sphere: assignment by nearest Euclidean distance
 (= largest dot product with the centre), update by re-normalising the mean of
 the assigned points, several restarts, and the best inertia is kept.  The
 number of clusters is chosen by the mean silhouette score unless --k is given.
+The silhouette of every candidate k is estimated on a fixed random subsample of
+the points (all points are still used as the reference set); this keeps the
+O(n^2) distance work bounded as k grows.
+
+Performance
+-----------
+The three hot operations (k-means assignment/accumulation and the silhouette
+distance sweep) are O(n*k*d) and O(n^2*d).  The host BLAS is reference (netlib)
+BLAS, which is far too slow for n ~ 1e4, so these are done by a small OpenMP
+kernel compiled from scripts/fastkern.c (falling back to NumPy if gcc is
+missing).
 
 Input : <outdir>/successor_distributions.tsv
 Output: <outdir>/clusters.tsv          substring, sample_size, cluster
@@ -33,12 +44,88 @@ Output: <outdir>/clusters.tsv          substring, sample_size, cluster
         <outdir>/cluster_selection.txt inertia/silhouette for a range of k
 
 Usage: cluster_substrings.py [--outdir work/camel] [--k K] [--alpha 1.0]
-                             [--restarts 20] [--kmax 15] [--examples 25]
+                             [--restarts 20] [--kmax 15] [--sil-sample 4000]
+                             [--examples 25]
 """
 import argparse
+import ctypes
 import os
+import subprocess
+import sys
 
 import numpy as np
+
+KERN = None
+
+F32P = ctypes.POINTER(ctypes.c_float)
+I32P = ctypes.POINTER(ctypes.c_int32)
+F64P = ctypes.POINTER(ctypes.c_double)
+
+
+def _f(a):
+    return a.ctypes.data_as(F32P)
+
+
+def _i(a):
+    return a.ctypes.data_as(I32P)
+
+
+def _d(a):
+    return a.ctypes.data_as(F64P)
+
+
+def load_kernel(dest):
+    """Compile and load scripts/fastkern.c; return None on failure."""
+    csrc = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fastkern.c')
+    try:
+        if not os.path.exists(dest) or os.path.getmtime(dest) < os.path.getmtime(csrc):
+            subprocess.run(['gcc', '-O3', '-march=native', '-ffast-math', '-fopenmp',
+                            '-shared', '-fPIC', '-o', dest, csrc],
+                           check=True, capture_output=True)
+        lib = ctypes.CDLL(dest)
+    except Exception as exc:                                     # pragma: no cover
+        print(f"fastkern unavailable ({exc}); falling back to NumPy",
+              file=sys.stderr)
+        return None
+    lib.assign.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, ctypes.c_int, I32P]
+    lib.matvec.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, F32P]
+    lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int, F64P]
+    lib.silhouette_rows.argtypes = [F32P, ctypes.c_int, F32P, ctypes.c_int, ctypes.c_int,
+                                    I32P, I32P, ctypes.c_int, I32P, F32P]
+    return lib
+
+
+# ---------------------------------------------------------------- core ops ---
+def assign(X32, C32, k):
+    n, d = X32.shape
+    labels = np.empty(n, dtype=np.int32)
+    if KERN is not None:
+        KERN.assign(_f(X32), n, d, _f(C32), k, _i(labels))
+    else:
+        labels[:] = (X32 @ C32.T).argmax(1).astype(np.int32)
+    return labels
+
+
+def matvec(X32, c32):
+    n, d = X32.shape
+    out = np.empty(n, dtype=np.float32)
+    if KERN is not None:
+        KERN.matvec(_f(X32), n, d, _f(c32), _f(out))
+    else:
+        out[:] = X32 @ c32
+    return out
+
+
+def accumulate(X32, labels, k):
+    n, d = X32.shape
+    if KERN is not None:
+        sums = np.empty((k, d), dtype=np.float64)
+        KERN.accumulate(_f(X32), n, d, _i(labels), k, _d(sums))
+        return sums
+    sums = np.empty((k, d), dtype=np.float64)
+    for t in range(d):
+        sums[:, t] = np.bincount(labels, weights=X32[:, t], minlength=k)
+    return sums
 
 
 def read_table(path):
@@ -56,72 +143,92 @@ def read_table(path):
     return syms, names, np.array(counts, dtype=np.float64), glob
 
 
-def kmeans_sphere(X, k, rng, iters=200):
-    n, d = X.shape
-    centers = np.empty((k, d))
+def kmeans_sphere(X32, k, rng, iters=100):
+    n, d = X32.shape
+    centers = np.empty((k, d), dtype=np.float32)
     i0 = int(rng.integers(n))
-    centers[0] = X[i0]
-    d2 = np.maximum(2.0 - 2.0 * (X @ centers[0]), 0.0)
-    for j in range(1, k):
+    centers[0] = X32[i0]
+    d2 = np.maximum(2.0 - 2.0 * matvec(X32, centers[0]), 0.0).astype(np.float64)
+    for j in range(1, k):                       # k-means++ style seeding
         tot = d2.sum()
         p = d2 / tot if tot > 0 else np.full(n, 1.0 / n)
         c = int(rng.choice(n, p=p))
-        centers[j] = X[c]
-        d2 = np.minimum(d2, np.maximum(2.0 - 2.0 * (X @ centers[j]), 0.0))
+        centers[j] = X32[c]
+        d2 = np.minimum(d2, np.maximum(2.0 - 2.0 * matvec(X32, centers[j]), 0.0))
     labels = None
     for _ in range(iters):
-        sim = X @ centers.T
-        new_labels = sim.argmax(1)
-        new_centers = np.zeros((k, d))
-        for j in range(k):
-            m = new_labels == j
-            if m.any():
-                new_centers[j] = X[m].sum(0)
-        norm = np.linalg.norm(new_centers, axis=1, keepdims=True)
+        new_labels = assign(X32, centers, k)
+        sums = accumulate(X32, new_labels, k)
+        norm = np.linalg.norm(sums, axis=1, keepdims=True)
         norm[norm == 0] = 1.0
-        new_centers /= norm
-        if labels is not None and np.array_equal(new_labels, labels) and \
-                np.allclose(new_centers, centers):
-            centers = new_centers
-            labels = new_labels
+        new_centers = (sums / norm).astype(np.float32)
+        if labels is not None and np.array_equal(new_labels, labels):
+            centers, labels = new_centers, new_labels
             break
         centers, labels = new_centers, new_labels
-    sim = X @ centers.T
-    inertia = float((2.0 - 2.0 * sim[np.arange(n), labels]).sum())
-    return labels, centers, inertia
+    dot = (X32 * centers[labels]).sum(1)
+    inertia = float((2.0 - 2.0 * dot).sum())
+    return labels, centers.astype(np.float64), inertia
 
 
-def silhouette(D, labels):
-    n = D.shape[0]
-    uniq = np.unique(labels)
-    if uniq.size < 2:
-        return -1.0
-    scores = np.empty(n)
-    for i in range(n):
-        same = labels == labels[i]
-        same[i] = False
-        a = D[i, same].mean() if same.any() else 0.0
-        b = np.inf
-        for c in uniq:
-            if c == labels[i]:
-                continue
-            other = labels == c
-            if other.any():
-                b = min(b, D[i, other].mean())
-        scores[i] = (b - a) / max(a, b) if max(a, b) > 0 else 0.0
+def silhouette(X32, labels, qidx=None, chunk=1024):
+    """Mean silhouette on the sphere (over qidx if given)."""
+    n, d = X32.shape
+    if qidx is None:
+        Q, lq = X32, labels
+    else:
+        Q = np.ascontiguousarray(X32[qidx])
+        lq = labels[qidx]
+    nq = Q.shape[0]
+    k = int(labels.max()) + 1
+    n_c = np.bincount(labels, minlength=k).astype(np.int32)
+    if KERN is not None:
+        out = np.empty(nq, dtype=np.float32)
+        KERN.silhouette_rows(_f(Q if Q.flags['C_CONTIGUOUS'] else np.ascontiguousarray(Q)),
+                             nq, _f(X32), n, d, _i(lq), _i(labels), k, _i(n_c), _f(out))
+        return float(out.mean())
+    # ---- NumPy fallback ----
+    n_cf = np.maximum(n_c.astype(np.float64), 1.0)
+    M = np.zeros((n, k), dtype=np.float64)
+    M[np.arange(n), labels] = 1.0
+    M /= n_cf[None, :]
+    scores = np.empty(nq, dtype=np.float64)
+    for s in range(0, nq, chunk):
+        e = min(s + chunk, nq)
+        D = 2.0 - 2.0 * (Q[s:e] @ X32.T)
+        np.maximum(D, 0.0, out=D)
+        np.sqrt(D, out=D)
+        S = D @ M
+        ri = np.arange(e - s)
+        own = lq[s:e]
+        a = np.where(n_c[own] > 1,
+                     S[ri, own] * n_c[own] / np.maximum(n_c[own] - 1.0, 1.0), 0.0)
+        S[ri, own] = np.inf
+        b = S.min(1)
+        m = np.maximum(a, b)
+        scores[s:e] = np.where(m > 0, (b - a) / m, 0.0)
     return float(scores.mean())
 
 
 def main():
+    global KERN
     ap = argparse.ArgumentParser()
     ap.add_argument('--outdir', default='work/camel')
     ap.add_argument('--k', type=int, default=0)
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--restarts', type=int, default=20)
     ap.add_argument('--kmax', type=int, default=15)
+    ap.add_argument('--sil-sample', type=int, default=4000,
+                    help='points used to estimate silhouette for k selection '
+                         '(0 = all)')
     ap.add_argument('--examples', type=int, default=25)
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
+
+    os.makedirs(args.outdir, exist_ok=True)
+    KERN = load_kernel(os.path.join(args.outdir, 'fastkern.so'))
+    if KERN is not None:
+        print("using compiled OpenMP kernel scripts/fastkern.c")
 
     syms, names, C, glob = read_table(
         os.path.join(args.outdir, 'successor_distributions.tsv'))
@@ -129,8 +236,9 @@ def main():
     tot = C.sum(1, keepdims=True)
     q = glob / glob.sum()
     P = (C + args.alpha * q[None, :]) / (tot + args.alpha)   # smoothed
-    X = np.sqrt(P)
+    X = np.sqrt(P).astype(np.float32)
     X /= np.linalg.norm(X, axis=1, keepdims=True)
+    X = np.ascontiguousarray(X)
     print(f"substrings: {n}  successor alphabet: {C.shape[1]}  alpha: {args.alpha}")
 
     rng = np.random.default_rng(args.seed)
@@ -140,7 +248,11 @@ def main():
     else:
         ks = list(range(2, args.kmax + 1))
 
-    D = np.sqrt(np.maximum(2.0 - 2.0 * (X @ X.T), 0.0))     # metric distances
+    if args.sil_sample and n > args.sil_sample:
+        qidx = np.sort(rng.choice(n, args.sil_sample, replace=False))
+    else:
+        qidx = None
+
     results = {}
     for k in ks:
         best = None
@@ -148,9 +260,9 @@ def main():
             labels, centers, inertia = kmeans_sphere(X, k, rng)
             if best is None or inertia < best[2]:
                 best = (labels, centers, inertia)
-        sil = silhouette(D, best[0])
+        sil = silhouette(X, best[0], qidx)
         results[k] = (best, sil)
-        print(f"k={k:2d}  inertia={best[2]:9.2f}  silhouette={sil:+.4f}")
+        print(f"k={k:3d}  inertia={best[2]:9.2f}  silhouette={sil:+.4f}", flush=True)
 
     with open(os.path.join(args.outdir, 'cluster_selection.txt'), 'w') as f:
         f.write('k\tinertia\tsilhouette\n')
