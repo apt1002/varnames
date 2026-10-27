@@ -21,7 +21,7 @@ clustering step can smooth sparse counts with a shared Dirichlet prior.
 Input : corpus (one identifier per line) and common-substring list.
 Output: <outdir>/successor_distributions.tsv
 
-Usage: successor_distributions.py CORPUS SUBSTRINGS [--outdir work/camel]
+Usage: successor_distributions.py CORPUS SUBSTRINGS [--outdir work/common10000]
 """
 import argparse
 import os
@@ -65,7 +65,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('corpus')
     ap.add_argument('substrings')
-    ap.add_argument('--outdir', default='work/camel')
+    ap.add_argument('--outdir', default='work/common10000')
     args = ap.parse_args()
 
     pats = []

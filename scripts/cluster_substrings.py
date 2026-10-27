@@ -43,7 +43,7 @@ Output: <outdir>/clusters.tsv          substring, sample_size, cluster
         <outdir>/cluster_summary.txt   per-cluster profile + members
         <outdir>/cluster_selection.txt inertia/silhouette for a range of k
 
-Usage: cluster_substrings.py [--outdir work/camel] [--k K] [--alpha 1.0]
+Usage: cluster_substrings.py [--outdir work/common10000] [--k K] [--alpha 1.0]
                              [--restarts 20] [--kmax 15] [--sil-sample 4000]
                              [--examples 25]
 """
@@ -213,7 +213,7 @@ def silhouette(X32, labels, qidx=None, chunk=1024):
 def main():
     global KERN
     ap = argparse.ArgumentParser()
-    ap.add_argument('--outdir', default='work/camel')
+    ap.add_argument('--outdir', default='work/common10000')
     ap.add_argument('--k', type=int, default=0)
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--restarts', type=int, default=20)

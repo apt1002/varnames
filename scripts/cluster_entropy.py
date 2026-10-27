@@ -24,7 +24,7 @@ Input : <outdir>/successor_distributions.tsv, <outdir>/clusters.tsv
 Output: <outdir>/cluster_entropy.tsv  (cluster, size, samples, entropy_bits)
         and a report on stdout.
 
-Usage: cluster_entropy.py [--outdir work/camel]
+Usage: cluster_entropy.py [--outdir work/common10000]
 """
 import argparse
 import os
@@ -54,7 +54,7 @@ def entropy_bits(p):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--outdir', default='work/camel')
+    ap.add_argument('--outdir', default='work/common10000')
     args = ap.parse_args()
 
     syms, names, C, glob = read_distributions(

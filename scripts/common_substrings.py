@@ -22,7 +22,7 @@ Output: <outdir>/common_substrings.txt  - one common substring per line
         <outdir>/common_substrings.tsv  - length<TAB>count<TAB>substring
 and a verification report on stdout.
 
-Usage: common_substrings.py INPUT [--threshold 10000] [--outdir work/camel]
+Usage: common_substrings.py INPUT [--threshold 10000] [--outdir work/common10000]
 """
 import argparse
 import os
@@ -74,7 +74,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('infile')
     ap.add_argument('--threshold', type=int, default=10000)
-    ap.add_argument('--outdir', default='work/camel')
+    ap.add_argument('--outdir', default='work/common10000')
     args = ap.parse_args()
     K = args.threshold
 

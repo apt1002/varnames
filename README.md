@@ -124,6 +124,19 @@ varnames/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
 
+### Working directories (gitignored, regenerable)
+
+```
+work/camel/         # case normalisation: lower/upper/camel splits,
+                    #   camel_from_lower/upper, merged.txt
+work/common10000/   # common substrings (threshold 10000) + successor
+                    #   distributions, clusters, entropy
+work/common2000/    # the same, at threshold 2000
+```
+
+`work/` also holds the corpus-build intermediates (`gems_dl/`, `*_src/`,
+`clean_ids/`, `*.shards`, per-ecosystem logs).
+
 ## CamelCase normalisation and common substrings
 
 `scripts/run_camel_pipeline.sh` (or the four scripts individually) derives a
@@ -155,6 +168,13 @@ times.
 sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt work/camel
 ```
 
+The pipeline writes the case-normalisation artefacts (`lower_case.txt`,
+`upper_case.txt`, `camel_case.txt`, `camel_from_lower.txt`,
+`camel_from_upper.txt`, `merged.txt`) into the CamelCase directory
+(`work/camel`) and the common-substring artefacts into `work/common<THRESHOLD>`;
+`THRESHOLD=2000 sh scripts/run_camel_pipeline.sh` therefore produces
+`work/common2000`.
+
 ## Successor clustering
 
 `scripts/successor_distributions.py` estimates, for each analysable common
@@ -172,9 +192,9 @@ On the current corpus (1950 analysable substrings, `k = 12`):
 `H(next)`, ≈47% of the achievable predictability).
 
 ```sh
-python3 scripts/successor_distributions.py work/camel/merged.txt work/camel/common_substrings.txt
-python3 scripts/cluster_substrings.py
-python3 scripts/cluster_entropy.py
+python3 scripts/successor_distributions.py work/camel/merged.txt work/common10000/common_substrings.txt
+python3 scripts/cluster_substrings.py --outdir work/common10000
+python3 scripts/cluster_entropy.py --outdir work/common10000
 ```
 
 ### Scaling up: more substrings, more clusters
@@ -203,12 +223,12 @@ falls back to pure NumPy automatically.
 
 ```sh
 python3 scripts/common_substrings.py work/camel/merged.txt \
-        --outdir work/camel2000 --threshold 2000
+        --outdir work/common2000 --threshold 2000
 python3 scripts/successor_distributions.py work/camel/merged.txt \
-        work/camel2000/common_substrings.txt --outdir work/camel2000
-python3 scripts/cluster_substrings.py --outdir work/camel2000 \
+        work/common2000/common_substrings.txt --outdir work/common2000
+python3 scripts/cluster_substrings.py --outdir work/common2000 \
         --kmax 100 --restarts 10 --sil-sample 4000
-python3 scripts/cluster_entropy.py --outdir work/camel2000
+python3 scripts/cluster_entropy.py --outdir work/common2000
 ```
 
 ## Reproducing
