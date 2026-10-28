@@ -32,10 +32,13 @@ Two clustering objectives are provided:
   the quantity behind H(next | cluster), so it optimises what we report.
 
 * ``--method sphere``: K-means on the Hellinger embedding, assignment by nearest
-  Euclidean distance (= largest dot product), update by re-normalising the mean.
-  This is the metric surrogate discussed above.
+  Euclidean distance (= largest dot product), update by re-normalising the
+  occurrence-weighted mean of the members.  This is the metric surrogate
+  discussed above; it minimises the occurrence-weighted squared Hellinger
+  distortion sum_s N_s ||x_s - c_{cluster(s)}||^2.
 
-Both use k-means++ style seeding on the Hellinger embedding and several restarts
+Both weight every point by its occurrence count N_s and use k-means++ style
+seeding (the sphere method seeds proportional to N_s * d^2) with several restarts
 (the restart with the lowest H(next | cluster) is kept).  The number of clusters
 is chosen by the mean silhouette score unless --k is given.  The silhouette of
 every candidate k is estimated on a fixed random subsample of the points (all
@@ -102,7 +105,8 @@ def load_kernel(dest):
         return None
     lib.assign.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, ctypes.c_int, I32P]
     lib.matvec.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, F32P]
-    lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int, F64P]
+    lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int,
+                               F32P, F64P]
     lib.silhouette_rows.argtypes = [F32P, ctypes.c_int, F32P, ctypes.c_int, ctypes.c_int,
                                     I32P, I32P, ctypes.c_int, I32P, F32P]
     return lib
@@ -129,15 +133,15 @@ def matvec(X32, c32):
     return out
 
 
-def accumulate(X32, labels, k):
+def accumulate(X32, labels, k, w):
+    """Count-weighted cluster sums: sums[j,t] = sum_{i in j} w[i] * X32[i,t]."""
     n, d = X32.shape
-    if KERN is not None:
-        sums = np.empty((k, d), dtype=np.float64)
-        KERN.accumulate(_f(X32), n, d, _i(labels), k, _d(sums))
-        return sums
     sums = np.empty((k, d), dtype=np.float64)
+    if KERN is not None:
+        KERN.accumulate(_f(X32), n, d, _i(labels), k, _f(w), _d(sums))
+        return sums
     for t in range(d):
-        sums[:, t] = np.bincount(labels, weights=X32[:, t], minlength=k)
+        sums[:, t] = np.bincount(labels, weights=w * X32[:, t], minlength=k)
     return sums
 
 
@@ -156,22 +160,31 @@ def read_table(path):
     return syms, names, np.array(counts, dtype=np.float64), glob
 
 
-def kmeans_sphere(X32, k, rng, iters=100):
+def kmeans_sphere(X32, w, k, rng, iters=100):
+    """K-means on the Hellinger embedding, occurrence-weighted.
+
+    Minimises sum_s w_s ||x_s - c_{cluster(s)}||^2 (w_s = the context's occurrence
+    count) with c on the unit sphere; the weighted centroid is
+    c = sum_{s in C} w_s x_s / ||sum_{s in C} w_s x_s||.  (The assignment step is
+    unchanged by the weights: they are a per-point constant.)
+    """
     n, d = X32.shape
+    w = np.ascontiguousarray(w, dtype=np.float32)
     centers = np.empty((k, d), dtype=np.float32)
     i0 = int(rng.integers(n))
     centers[0] = X32[i0]
     d2 = np.maximum(2.0 - 2.0 * matvec(X32, centers[0]), 0.0).astype(np.float64)
-    for j in range(1, k):                       # k-means++ style seeding
-        tot = d2.sum()
-        p = d2 / tot if tot > 0 else np.full(n, 1.0 / n)
+    for j in range(1, k):                       # weighted k-means++ seeding
+        p = d2 * w
+        tot = p.sum()
+        p = p / tot if tot > 0 else np.full(n, 1.0 / n)
         c = int(rng.choice(n, p=p))
         centers[j] = X32[c]
         d2 = np.minimum(d2, np.maximum(2.0 - 2.0 * matvec(X32, centers[j]), 0.0))
     labels = None
     for _ in range(iters):
         new_labels = assign(X32, centers, k)
-        sums = accumulate(X32, new_labels, k)
+        sums = accumulate(X32, new_labels, k, w)
         norm = np.linalg.norm(sums, axis=1, keepdims=True)
         norm[norm == 0] = 1.0
         new_centers = (sums / norm).astype(np.float32)
@@ -180,7 +193,7 @@ def kmeans_sphere(X32, k, rng, iters=100):
             break
         centers, labels = new_centers, new_labels
     dot = (X32 * centers[labels]).sum(1)
-    inertia = float((2.0 - 2.0 * dot).sum())
+    inertia = float(((2.0 - 2.0 * dot) * w).sum())
     return labels, centers.astype(np.float64), inertia
 
 
@@ -340,7 +353,7 @@ def main():
         best, best_bits = None, None
         for _ in range(args.restarts):
             if args.method == 'sphere':
-                labels, centers, _ = kmeans_sphere(X, k, rng)
+                labels, centers, _ = kmeans_sphere(X, Ns, k, rng)
             else:
                 labels, centers, _ = kmeans_kl(C, Ns, q, k, rng, args.alpha)
             bits = h_given_cluster(C, labels)

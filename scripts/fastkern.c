@@ -44,9 +44,10 @@ void matvec(const float *X, int n, int d, const float *c, float *out) {
     }
 }
 
-/* sums[j,t] = sum of X[i,t] over i with labels[i] == j  (k*d doubles, zeroed) */
+/* sums[j,t] = sum_i w[i] * X[i,t] over i with labels[i] == j  (k*d doubles, zeroed).
+ * w[i] is the occurrence weight of point i; pass all-ones for an unweighted mean. */
 void accumulate(const float *X, int n, int d, const int *labels, int k,
-                double *sums) {
+                const float *w, double *sums) {
     memset(sums, 0, sizeof(double) * (size_t)k * d);
 #pragma omp parallel
     {
@@ -54,8 +55,9 @@ void accumulate(const float *X, int n, int d, const int *labels, int k,
 #pragma omp for schedule(static)
         for (int i = 0; i < n; i++) {
             const float *xi = X + (size_t)i * d;
+            double wi = w[i];
             double *l = loc + (size_t)labels[i] * d;
-            for (int t = 0; t < d; t++) l[t] += xi[t];
+            for (int t = 0; t < d; t++) l[t] += wi * xi[t];
         }
 #pragma omp critical
         for (size_t t = 0; t < (size_t)k * d; t++) sums[t] += loc[t];
