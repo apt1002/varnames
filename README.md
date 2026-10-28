@@ -215,7 +215,10 @@ distribution, with two objectives:
   occurrence-weighted: each context contributes with weight `N_s`, and the
   sphere update is the re-normalised count-weighted mean `Σ N_s x_s` (the `kl`
   update is the pooled-count mean). The assignment steps are unaffected by the
-  weighting, since the weight is a per-point constant factor.
+  weighting, since the weight is a per-point constant factor. The `k`-selection
+  silhouette is occurrence-weighted too: each context counts as `N_s` replicas,
+  the per-cluster size is its total weight `Σ N_s`, and a singleton cluster
+  scores 0 (`k` is otherwise picked as the silhouette argmax).
 
 The two agree to within ~0.03 bits (over `k = 12..100`: `kl` is a hair better at
 small `k`, the sphere method a hair better at `k = 100`) — the Hellinger
@@ -249,8 +252,8 @@ python3 scripts/cluster_entropy.py --outdir work/common10000
 Lowering the common-substring threshold to 2000 gives 11,758 common substrings
 (max length 14) and 10,890 analysable successor distributions. (The numbers in
 this subsection predate the longest-suffix model — they use the plain
-"character after substring" count — and predate the count-weighting fix to the
-Hellinger clustering, so treat them as indicative only.) The number of
+"character after substring" count — and predate the count-weighting of the
+clustering and the silhouette, so treat them as indicative only.) The number of
 clusters is chosen by mean silhouette over `k = 2..100` (the assignment step of
 the sweep is a fixed random subsample of 4000 points; all points are used as the
 reference set): the silhouette peaks at `k = 17` (+0.3170) and drifts around
