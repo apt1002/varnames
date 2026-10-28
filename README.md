@@ -124,6 +124,7 @@ varnames/
 │   ├── normalise_counts.py              # case-normalise an occurrence-count file
 │   ├── pair_matrix.py                   # prefix/suffix adjacency M + low-rank SVD/NMF
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
+│   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + smoothing
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
@@ -296,7 +297,12 @@ prefix/suffix adjacency matrix `M` (longest common substring that is a suffix of
 the left half against the longest common substring that is a prefix of the right
 half) and approximates it with a rank-`L` SVD (`N x L` times `L x N`), and
 `scripts/latent_probabilities.py` measures ways of coping with the negative
-entries that factorisation introduces.
+entries that factorisation introduces, and `scripts/sqrt_and_smooth.py` explores
+a better fix: factorise `√M` (equivalently the occurrence-weighted Hellinger
+embedding of the conditionals) and square the reconstruction back, which is both
+non-negative by construction and ~30% lower KL than any remedy; smoothing `M`
+towards the independence model is a trade of KL for fewer latent negatives. See
+`docs/HELLINGER_FACTORISATION.md`.
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds.
