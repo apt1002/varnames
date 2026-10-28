@@ -1,10 +1,9 @@
-/* Small OpenMP kernels for spherical K-means + silhouette.
+/* Small OpenMP kernels for spherical K-means.
  *
- * The host's BLAS is reference (netlib) BLAS (~0.2 GFLOP/s), which is far too
- * slow for the O(n^2) silhouette and for many restarts of K-means at n ~ 1e4.
- * These hand-written kernels are compiled with -O3 -march=native -fopenmp and
- * loaded through ctypes; the Python code falls back to NumPy if compilation is
- * unavailable.
+ * The host's BLAS is reference (netlib) BLAS (~0.2 GFLOP/s), far too slow for
+ * many restarts of K-means at n ~ 1e4.  These hand-written kernels are compiled
+ * with -O3 -march=native -fopenmp and loaded through ctypes; the Python code
+ * falls back to NumPy if compilation is unavailable.
  *
  * All matrices are row-major float32; labels are int32; accumulators are double.
  */
@@ -62,54 +61,5 @@ void accumulate(const float *X, int n, int d, const int *labels, int k,
 #pragma omp critical
         for (size_t t = 0; t < (size_t)k * d; t++) sums[t] += loc[t];
         free(loc);
-    }
-}
-
-/* Per-query silhouette on the sphere, occurrence-weighted.
- *
- * Point i has weight w[i]; the score equals the ordinary silhouette of a
- * multiset in which i is replicated w[i] times, so the per-cluster "size" is the
- * cluster weight wc[c] = sum_{j in c} w[j], distances are accumulated with
- * weight w[j], and out[i] is the silhouette of any one copy of i (they all
- * share the same value).
- *
- *   a(i) = sum_{j in c_i} w[j] d(i,j) / (wc[c_i] - 1)   (own cluster, others)
- *   b(i) = min_{c != c_i} sum_{j in c} w[j] d(i,j) / wc[c]
- *   s(i) = (b - a) / max(a, b)      [0 for a singleton cluster, Rousseeuw]
- *
- * Distance is the chord d(i,j) = sqrt(2 - 2 Q_i . X_j).  The caller forms the
- * weighted mean of out[] with the query weights.  When Q == X and lq == lx this
- * is the exact (weighted) silhouette.
- */
-void silhouette_rows(const float *Q, int nq, const float *X, int n, int d,
-                     const int *lq, const int *lx, int k, const float *w,
-                     const double *wc, float *out) {
-#pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < nq; i++) {
-        const float *qi = Q + (size_t)i * d;
-        double *acc = (double *)calloc((size_t)k, sizeof(double));
-        for (int j = 0; j < n; j++) {
-            const float *xj = X + (size_t)j * d;
-            float dot = 0.0f;
-            for (int t = 0; t < d; t++) dot += qi[t] * xj[t];
-            float dd = 2.0f - 2.0f * dot;
-            if (dd < 0.0f) dd = 0.0f;
-            acc[lx[j]] += (double)w[j] * sqrt((double)dd);
-        }
-        int li = lq[i];
-        double own = wc[li];
-        double a = 0.0, b = 1e300;
-        int found = 0;
-        if (own > 1.0) a = acc[li] / (own - 1.0);
-        for (int c = 0; c < k; c++) {
-            if (c == li || wc[c] <= 0.0) continue;
-            double m = acc[c] / wc[c];
-            if (m < b) { b = m; found = 1; }
-        }
-        double mx = a > b ? a : b;
-        double s = (own <= 1.0 || !found) ? 0.0
-                 : (mx > 0.0 ? (b - a) / mx : 0.0);
-        out[i] = (float)s;
-        free(acc);
     }
 }

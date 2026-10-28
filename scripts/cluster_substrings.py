@@ -39,34 +39,30 @@ Two clustering objectives are provided:
 
 Both weight every point by its occurrence count N_s and use k-means++ style
 seeding (the sphere method seeds proportional to N_s * d^2) with several restarts
-(the restart with the lowest H(next | cluster) is kept).  The number of clusters
-is chosen by the elbow of the H(next | cluster) curve unless --k is given;
---select silhouette picks the argmax of the mean silhouette instead.  The choice
-of criterion is made independently of --method, since the two methods agree to
-within ~0.03 bits.  The silhouette is occurrence-weighted: point i counts as
-N_s[i] replicas, the per-cluster "size" is its total weight, and the mean is
-taken over points weighted by N_s (a singleton cluster scores 0, Rousseeuw's
-convention).  Silhouette for every candidate k is estimated on a fixed random
-subsample of the points (all points are still used as the reference set); this
-keeps the O(n^2) distance work bounded as k grows.
+(the restart with the lowest H(next | cluster) is kept).
+
+The number of clusters k is fixed by the caller (--k).  There is deliberately no
+automatic selection: every objective criterion tried (elbow of the bits curve,
+mean silhouette, and in principle held-out compression) is either arbitrary or
+merely relocates the arbitrariness -- the best compromise depends on how much
+pressure one feels to keep the model low-dimensional.  Sweep k by hand if a curve
+is wanted.
 
 Performance
 -----------
-The three hot operations (k-means assignment/accumulation and the silhouette
-distance sweep) are O(n*k*d) and O(n^2*d).  The host BLAS is reference (netlib)
-BLAS, which is far too slow for n ~ 1e4, so these are done by a small OpenMP
-kernel compiled from scripts/fastkern.c (falling back to NumPy if gcc is
-missing).  The ``kl`` method uses plain NumPy matmuls (fine for n ~ 1e3).
+The two hot operations (k-means assignment and accumulation) are O(n*k*d).  The
+host BLAS is reference (netlib) BLAS, which is far too slow for n ~ 1e4, so these
+are done by a small OpenMP kernel compiled from scripts/fastkern.c (falling back
+to NumPy if gcc is missing).  The ``kl`` method uses plain NumPy matmuls (fine
+for n ~ 1e3).
 
 Input : <outdir>/successor_distributions.tsv
 Output: <outdir>/clusters.tsv          substring, sample_size, cluster
         <outdir>/cluster_summary.txt   per-cluster profile + members
-        <outdir>/cluster_selection.txt silhouette and H(next|cluster) vs k
 
-Usage: cluster_substrings.py [--outdir work/common10000] [--k K]
+Usage: cluster_substrings.py --k K [--outdir work/common10000]
                              [--method kl|sphere] [--alpha 1.0]
-                             [--restarts 20] [--kmax 15] [--sil-sample 4000]
-                             [--examples 25]
+                             [--restarts 20] [--examples 25]
 """
 import argparse
 import ctypes
@@ -112,8 +108,6 @@ def load_kernel(dest):
     lib.matvec.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, F32P]
     lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int,
                                F32P, F64P]
-    lib.silhouette_rows.argtypes = [F32P, ctypes.c_int, F32P, ctypes.c_int, ctypes.c_int,
-                                    I32P, I32P, ctypes.c_int, F32P, F64P, F32P]
     return lib
 
 
@@ -261,81 +255,18 @@ def kmeans_kl(C, Ns, q, k, rng, alpha, iters=100):
     return labels, centers, h_given_cluster(C, labels)
 
 
-def silhouette(X32, labels, w, qidx=None, chunk=1024):
-    """Occurrence-weighted mean silhouette on the sphere (over qidx if given).
-
-    Point i counts with weight w[i]: its score is the silhouette of a multiset in
-    which i is replicated w[i] times, and the mean is taken over the query points
-    weighted by w.  A singleton cluster (weight <= 1) scores 0, Rousseeuw's
-    convention.
-    """
-    n, d = X32.shape
-    w = np.ascontiguousarray(w, dtype=np.float64)
-    if qidx is None:
-        Q, lq, wq = X32, labels, w
-    else:
-        Q = np.ascontiguousarray(X32[qidx])
-        lq = labels[qidx]
-        wq = w[qidx]
-    nq = Q.shape[0]
-    k = int(labels.max()) + 1
-    lq = np.ascontiguousarray(lq, dtype=np.int32)
-    labels = np.ascontiguousarray(labels, dtype=np.int32)
-    wc = np.bincount(labels, weights=w, minlength=k)     # cluster weights M_c
-    tot = float(wq.sum())
-    if tot <= 0:
-        return 0.0
-    if KERN is not None:
-        wf = np.ascontiguousarray(w, dtype=np.float32)
-        out = np.empty(nq, dtype=np.float32)
-        KERN.silhouette_rows(_f(Q if Q.flags['C_CONTIGUOUS'] else np.ascontiguousarray(Q)),
-                             nq, _f(X32), n, d, _i(lq), _i(labels), k,
-                             _f(wf), _d(wc), _f(out))
-        return float(np.average(out.astype(np.float64), weights=wq))
-    # ---- NumPy fallback ----
-    nz = wc > 0
-    M = np.zeros((n, k), dtype=np.float64)
-    M[np.arange(n), labels] = w
-    M[:, nz] /= wc[nz][None, :]
-    scores = np.empty(nq, dtype=np.float64)
-    for s in range(0, nq, chunk):
-        e = min(s + chunk, nq)
-        D = 2.0 - 2.0 * (Q[s:e] @ X32.T)
-        np.maximum(D, 0.0, out=D)
-        np.sqrt(D, out=D)
-        S = D @ M                       # S[i,c] = weighted mean distance to c
-        S[:, ~nz] = np.inf
-        ri = np.arange(e - s)
-        own = lq[s:e]
-        a = np.where(wc[own] > 1,
-                     S[ri, own] * wc[own] / np.maximum(wc[own] - 1.0, 1.0), 0.0)
-        S[ri, own] = np.inf
-        b = S.min(1)
-        m = np.maximum(a, b)
-        sc = np.where(np.isfinite(b) & (m > 0), (b - a) / m, 0.0)
-        scores[s:e] = np.where(wc[own] <= 1, 0.0, sc)
-    return float(np.average(scores, weights=wq))
-
-
 def main():
     global KERN
     ap = argparse.ArgumentParser()
     ap.add_argument('--outdir', default='work/common10000')
-    ap.add_argument('--k', type=int, default=0)
+    ap.add_argument('--k', type=int, required=True,
+                    help='number of clusters (no automatic selection; sweep by '
+                         'hand if a H(next|cluster) vs k curve is wanted)')
     ap.add_argument('--method', choices=('kl', 'sphere'), default='kl',
                     help="'kl' minimises occurrence-weighted cross-entropy "
                          "(H(next|cluster)); 'sphere' is Hellinger K-means")
-    ap.add_argument('--select', choices=('silhouette', 'bits'), default='bits',
-                    help="criterion for choosing k, independent of --method: "
-                         "'bits' = elbow of the H(next|cluster) curve (default), "
-                         "'silhouette' = argmax of the (occurrence-weighted) mean "
-                         "silhouette")
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--restarts', type=int, default=20)
-    ap.add_argument('--kmax', type=int, default=15)
-    ap.add_argument('--sil-sample', type=int, default=4000,
-                    help='points used to estimate silhouette for k selection '
-                         '(0 = all)')
     ap.add_argument('--examples', type=int, default=25)
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
@@ -360,50 +291,19 @@ def main():
 
     rng = np.random.default_rng(args.seed)
 
-    if args.k:
-        ks = [args.k]
-    else:
-        ks = list(range(2, args.kmax + 1))
-
-    if args.sil_sample and n > args.sil_sample:
-        qidx = np.sort(rng.choice(n, args.sil_sample, replace=False))
-    else:
-        qidx = None
-
-    results = {}
-    for k in ks:
-        best, best_bits = None, None
-        for _ in range(args.restarts):
-            if args.method == 'sphere':
-                labels, centers, _ = kmeans_sphere(X, Ns, k, rng)
-            else:
-                labels, centers, _ = kmeans_kl(C, Ns, q, k, rng, args.alpha)
-            bits = h_given_cluster(C, labels)
-            if best_bits is None or bits < best_bits:
-                best_bits, best = bits, (labels, centers)
-        sil = silhouette(X, best[0], Ns, qidx)
-        results[k] = (best, sil, best_bits)
-        print(f"k={k:3d}  H(next|cluster)={best_bits:.4f} bits  "
-              f"silhouette={sil:+.4f}", flush=True)
-
-    with open(os.path.join(args.outdir, 'cluster_selection.txt'), 'w') as f:
-        f.write('k\tsilhouette\tH_cond_bits\n')
-        for k in ks:
-            f.write(f"{k}\t{results[k][1]:.4f}\t{results[k][2]:.6f}\n")
-
-    if args.k:
-        chosen = args.k
-    elif args.select == 'silhouette':
-        chosen = max(ks, key=lambda k: results[k][1])
-    else:                                    # elbow of the H(next|cluster) curve
-        x = np.array(ks, dtype=float)
-        y = np.array([results[k][2] for k in ks], dtype=float)
-        xn = (x - x[0]) / (x[-1] - x[0])
-        yn = (y - y.min()) / (y.max() - y.min())
-        chosen = ks[int(np.argmin(xn + yn))]
-    labels, centers = results[chosen][0]
-    print(f"\nchosen k = {chosen}  (silhouette {results[chosen][1]:+.4f}, "
-          f"H(next|cluster) {results[chosen][2]:.4f} bits)")
+    k = args.k
+    best, best_bits = None, None
+    for _ in range(args.restarts):
+        if args.method == 'sphere':
+            labels, centers, _ = kmeans_sphere(X, Ns, k, rng)
+        else:
+            labels, centers, _ = kmeans_kl(C, Ns, q, k, rng, args.alpha)
+        bits = h_given_cluster(C, labels)
+        if best_bits is None or bits < best_bits:
+            best_bits, best = bits, (labels, centers)
+    labels, centers = best
+    print(f"k = {k}  H(next|cluster) = {best_bits:.4f} bits "
+          f"(best of {args.restarts} restarts)", flush=True)
 
     # ---- write assignments ----
     with open(os.path.join(args.outdir, 'clusters.tsv'), 'w') as f:
@@ -431,7 +331,6 @@ def main():
             f.write(f"  examples: {' '.join(repr(e) for e in ex)}\n\n")
     print(f"wrote {os.path.join(args.outdir, 'clusters.tsv')}")
     print(f"wrote {os.path.join(args.outdir, 'cluster_summary.txt')}")
-    print(f"wrote {os.path.join(args.outdir, 'cluster_selection.txt')}")
 
 
 if __name__ == '__main__':

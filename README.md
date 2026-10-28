@@ -127,7 +127,7 @@ varnames/
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
-│   ├── fastkern.c                       # OpenMP kernels (assignment/silhouette)
+│   ├── fastkern.c                       # OpenMP kernels (assignment/accumulation)
 │   └── cluster_entropy.py               # successor entropy (bits) per cluster
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
@@ -215,45 +215,37 @@ distribution, with two objectives:
   occurrence-weighted: each context contributes with weight `N_s`, and the
   sphere update is the re-normalised count-weighted mean `Σ N_s x_s` (the `kl`
   update is the pooled-count mean). The assignment steps are unaffected by the
-  weighting, since the weight is a per-point constant factor. The `k`-selection
-  silhouette is occurrence-weighted too: each context counts as `N_s` replicas,
-  the per-cluster size is its total weight `Σ N_s`, and a singleton cluster
-  scores 0.
+  weighting, since the weight is a per-point constant factor.
 
-`k` is chosen by the elbow of the `H(next | cluster)` curve (computed over the
-swept range `k = 2..kmax`, so the result depends on `--kmax`), or by
-`--select silhouette` for the mean-silhouette argmax. The criterion is
-deliberately **independent of `--method`**, because the two methods agree to
-within ~0.04 bits (over `k = 2..100` on the current corpus the gap is at most
-0.034 bits, mean 0.017; `kl` is a hair better at small `k`, the sphere method
-occasionally better at large `k`). The Hellinger surrogate is thus an excellent
-stand-in for the objective, and there is no reason to pick `k` differently
-depending on which one you ran.
-`scripts/cluster_entropy.py` reports
-`H(next)`, `H(next | substring)`, `H(next | cluster)` and the information
-retained.
+`k` is fixed by the caller (`--k`); there is deliberately no automatic
+selection. Every criterion tried (the elbow of the bits curve, the mean
+silhouette, and in principle held-out compression) was either arbitrary or
+merely relocated the arbitrariness — the best compromise depends on how much
+pressure one feels to keep the model low-dimensional — so `k` is chosen by hand
+and the `H(next | cluster)` vs `k` curve is produced by sweeping `--k` yourself.
+The two clustering methods agree to within ~0.04 bits (over `k = 2..100` on the
+current corpus the gap is at most 0.034 bits, mean 0.017; `kl` a hair better at
+small `k`, the sphere method occasionally better at large `k`), so it does not
+matter which one you run. `scripts/cluster_entropy.py` reports `H(next)`,
+`H(next | substring)`, `H(next | cluster)` and the information retained.
 
 On the current corpus (1,950 analysable contexts), `H(next) = 4.966` and
 `H(next | substring) = 3.070` bits. With the `kl` objective:
 
-| k | 12 | 22 (elbow) | 100 |
+| k | 12 | 22 | 100 |
 |---|---|---|---|
 | `H(next | cluster)` | 4.011 | 3.821 | 3.502 |
 
-(The elbow `k = 22` is the value swept over `--kmax 100`; with the default
-`--kmax 15` the elbow of the same curve lands much lower, `k = 6` — a reminder
-that this criterion is range-dependent.)
-
 So **k is the dominant lever**: the cluster model approaches — but with 100
-clusters still does not reach — the exact-context 3.070 bits. At the elbow
-`k = 22` the clustering retains 1.145 bits (60% of the 1.896-bit achievable
-reduction); at `k = 12` it retains 0.955 bits (50%). The earlier plain
+clusters still does not reach — the exact-context 3.070 bits. At `k = 22` the
+clustering retains 1.145 bits (60% of the 1.896-bit achievable reduction); at
+`k = 12` it retains 0.955 bits (50%). The earlier plain
 "character after substring" count gave a less sharp context model (3.520 bits)
 and retained ~49% at `k = 12`.
 
 ```sh
 python3 scripts/successor_distributions.py work/camel/merged.txt work/common10000/common_substrings.txt
-python3 scripts/cluster_substrings.py --outdir work/common10000 --kmax 100   # --method kl (default)
+python3 scripts/cluster_substrings.py --outdir work/common10000 --k 22   # --method kl (default)
 python3 scripts/cluster_entropy.py --outdir work/common10000
 ```
 
@@ -263,26 +255,24 @@ Lowering the common-substring threshold to 2000 gives 11,758 common substrings
 (max length 14) and 10,890 analysable successor distributions. (The numbers in
 this subsection predate the longest-suffix model — they use the plain
 "character after substring" count — and predate the count-weighting of the
-clustering and the silhouette, so treat them as indicative only.) The number of
-clusters is chosen by mean silhouette over `k = 2..100` (the assignment step of
-the sweep is a fixed random subsample of 4000 points; all points are used as the
-reference set): the silhouette peaks at `k = 17` (+0.3170) and drifts around
-0.29–0.30 for larger `k`, i.e. the extra clusters add little separation.
+clustering, so treat them as indicative only; `k` is now chosen by hand rather
+than by silhouette.)
 
-With `k = 17` the successor structure sharpens considerably: many clusters are
-near-deterministic, each pinned to a single likely next character — `t:0.96`,
-`o:0.95`, `e:0.94`, `r:0.94`, `l:0.94`, `d:0.93`, `a:0.91`, `g:0.91`, `s:0.89`,
-`n:0.87`, `i:0.85` — plus a digit/underscore cluster (`1:0.16 _:0.14 2:0.12 …`)
-and a large mixed "junk drawer". The measured entropies are:
-`H(next) = 4.935`, `H(next | substring) = 3.159`, `H(next | cluster) = 3.941`
-bits, so the clustering retains 0.993 bits (20.1% of `H(next)`).
+At a hand-picked `k = 17` the successor structure sharpens considerably: many
+clusters are near-deterministic, each pinned to a single likely next character —
+`t:0.96`, `o:0.95`, `e:0.94`, `r:0.94`, `l:0.94`, `d:0.93`, `a:0.91`, `g:0.91`,
+`s:0.89`, `n:0.87`, `i:0.85` — plus a digit/underscore cluster
+(`1:0.16 _:0.14 2:0.12 …`) and a large mixed "junk drawer". The measured
+entropies are: `H(next) = 4.935`, `H(next | substring) = 3.159`,
+`H(next | cluster) = 3.941` bits, so the clustering retains 0.993 bits (20.1% of
+`H(next)`).
 
-`scripts/fastkern.c` holds the three O(n·k·d) / O(n²·d) inner loops (K-means
-assignment, cluster accumulation, silhouette distance sweep). It is compiled on
-demand with `gcc -O3 -march=native -fopenmp` and loaded through `ctypes`,
-because the host's BLAS is reference (netlib) BLAS (~0.2 GFLOP/s) which makes
-the NumPy fallback far too slow at this size; if compilation fails the script
-falls back to pure NumPy automatically.
+`scripts/fastkern.c` holds the two O(n·k·d) inner loops (K-means assignment,
+cluster accumulation). It is compiled on demand with
+`gcc -O3 -march=native -fopenmp` and loaded through `ctypes`, because the host's
+BLAS is reference (netlib) BLAS (~0.2 GFLOP/s) which makes the NumPy fallback
+far too slow at this size; if compilation fails the script falls back to pure
+NumPy automatically.
 
 ```sh
 python3 scripts/common_substrings.py work/camel/merged.txt \
@@ -290,7 +280,7 @@ python3 scripts/common_substrings.py work/camel/merged.txt \
 python3 scripts/successor_distributions.py work/camel/merged.txt \
         work/common2000/common_substrings.txt --outdir work/common2000
 python3 scripts/cluster_substrings.py --outdir work/common2000 \
-        --kmax 100 --restarts 10 --sil-sample 4000
+        --k 17 --restarts 10
 python3 scripts/cluster_entropy.py --outdir work/common2000
 ```
 
