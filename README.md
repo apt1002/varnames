@@ -218,11 +218,17 @@ distribution, with two objectives:
   weighting, since the weight is a per-point constant factor. The `k`-selection
   silhouette is occurrence-weighted too: each context counts as `N_s` replicas,
   the per-cluster size is its total weight `Σ N_s`, and a singleton cluster
-  scores 0 (`k` is otherwise picked as the silhouette argmax).
+  scores 0.
 
-The two agree to within ~0.03 bits (over `k = 12..100`: `kl` is a hair better at
-small `k`, the sphere method a hair better at `k = 100`) — the Hellinger
-clustering was already near-optimal for the reported objective.
+`k` is chosen by the elbow of the `H(next | cluster)` curve (computed over the
+swept range `k = 2..kmax`, so the result depends on `--kmax`), or by
+`--select silhouette` for the mean-silhouette argmax. The criterion is
+deliberately **independent of `--method`**, because the two methods agree to
+within ~0.04 bits (over `k = 2..100` on the current corpus the gap is at most
+0.034 bits, mean 0.017; `kl` is a hair better at small `k`, the sphere method
+occasionally better at large `k`). The Hellinger surrogate is thus an excellent
+stand-in for the objective, and there is no reason to pick `k` differently
+depending on which one you ran.
 `scripts/cluster_entropy.py` reports
 `H(next)`, `H(next | substring)`, `H(next | cluster)` and the information
 retained.
@@ -234,6 +240,10 @@ On the current corpus (1,950 analysable contexts), `H(next) = 4.966` and
 |---|---|---|---|
 | `H(next | cluster)` | 4.011 | 3.821 | 3.502 |
 
+(The elbow `k = 22` is the value swept over `--kmax 100`; with the default
+`--kmax 15` the elbow of the same curve lands much lower, `k = 6` — a reminder
+that this criterion is range-dependent.)
+
 So **k is the dominant lever**: the cluster model approaches — but with 100
 clusters still does not reach — the exact-context 3.070 bits. At the elbow
 `k = 22` the clustering retains 1.145 bits (60% of the 1.896-bit achievable
@@ -243,7 +253,7 @@ and retained ~49% at `k = 12`.
 
 ```sh
 python3 scripts/successor_distributions.py work/camel/merged.txt work/common10000/common_substrings.txt
-python3 scripts/cluster_substrings.py --outdir work/common10000      # --method kl (default)
+python3 scripts/cluster_substrings.py --outdir work/common10000 --kmax 100   # --method kl (default)
 python3 scripts/cluster_entropy.py --outdir work/common10000
 ```
 

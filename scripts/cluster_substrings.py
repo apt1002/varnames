@@ -40,13 +40,15 @@ Two clustering objectives are provided:
 Both weight every point by its occurrence count N_s and use k-means++ style
 seeding (the sphere method seeds proportional to N_s * d^2) with several restarts
 (the restart with the lowest H(next | cluster) is kept).  The number of clusters
-is chosen by the mean silhouette score unless --k is given.  The silhouette is
-occurrence-weighted too: point i counts as N_s[i] replicas, the per-cluster
-"size" is its total weight, and the mean is taken over points weighted by N_s
-(a singleton cluster scores 0, Rousseeuw's convention).  Silhouette for every
-candidate k is estimated on a fixed random subsample of the points (all
-points are still used as the reference set); this keeps the O(n^2) distance work
-bounded as k grows.
+is chosen by the elbow of the H(next | cluster) curve unless --k is given;
+--select silhouette picks the argmax of the mean silhouette instead.  The choice
+of criterion is made independently of --method, since the two methods agree to
+within ~0.03 bits.  The silhouette is occurrence-weighted: point i counts as
+N_s[i] replicas, the per-cluster "size" is its total weight, and the mean is
+taken over points weighted by N_s (a singleton cluster scores 0, Rousseeuw's
+convention).  Silhouette for every candidate k is estimated on a fixed random
+subsample of the points (all points are still used as the reference set); this
+keeps the O(n^2) distance work bounded as k grows.
 
 Performance
 -----------
@@ -323,9 +325,11 @@ def main():
     ap.add_argument('--method', choices=('kl', 'sphere'), default='kl',
                     help="'kl' minimises occurrence-weighted cross-entropy "
                          "(H(next|cluster)); 'sphere' is Hellinger K-means")
-    ap.add_argument('--select', choices=('silhouette', 'bits'), default=None,
-                    help='criterion for choosing k (default: silhouette for '
-                         'sphere, elbow of H(next|cluster) for kl)')
+    ap.add_argument('--select', choices=('silhouette', 'bits'), default='bits',
+                    help="criterion for choosing k, independent of --method: "
+                         "'bits' = elbow of the H(next|cluster) curve (default), "
+                         "'silhouette' = argmax of the (occurrence-weighted) mean "
+                         "silhouette")
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--restarts', type=int, default=20)
     ap.add_argument('--kmax', type=int, default=15)
@@ -389,7 +393,7 @@ def main():
 
     if args.k:
         chosen = args.k
-    elif (args.select or ('bits' if args.method == 'kl' else 'silhouette')) == 'silhouette':
+    elif args.select == 'silhouette':
         chosen = max(ks, key=lambda k: results[k][1])
     else:                                    # elbow of the H(next|cluster) curve
         x = np.array(ks, dtype=float)
