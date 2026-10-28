@@ -140,6 +140,61 @@ Observations:
   modest, not tiny, `L` (tens), and benefits from keeping the backoff ("empty")
   context explicitly.
 
+### L = 1: the independence model vs the leading singular pair
+
+The rank-1 factorisation has a clean interpretation. Write `M ≈ σ u vᵀ` with
+unit `u, v`; then the implied conditional is `p(b | a) = v_b / Σ_b v_b`, a
+function of `b` alone — i.e. **the right context is independent of the left**.
+The question is *which* `v`, and the answer depends on the objective:
+
+* the **maximum-likelihood** (KL / Poisson) rank-1 fit is the independence
+  model `M_mar = r cᵀ / T` with `r = M 1`, `c = Mᵀ 1`, `T = 1ᵀM1` — literally
+  "global distribution over prefixes times global distribution over suffixes";
+* the **Frobenius** rank-1 fit is the leading SVD term `σ₁ u₁ v₁ᵀ`.
+
+`scripts/rank1_marginals.py` compares them. `cos(u₁, r/‖r‖)` and
+`cos(v₁, c/‖c‖)` measure how close the SVD vectors are to the marginals
+(1.0 = same direction); the same two rank-1 models are then scored as
+probability models.
+
+| T | cos(u₁, prefix marg.) | cos(v₁, suffix marg.) | relerr marg. | relerr r1 | KL marg. | KL r1 | top-1 marg. | top-1 r1 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.95 | 2.04 | 23.2% | 23.2% |
+| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.70 | 2.91 | 22.7% | 22.7% |
+| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.92 | 4.89 | 20.2% | 0.1% |
+| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.87 | 7.10 | 21.5% | 0.1% |
+| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.60 | 8.27 | 21.5% | 0.0% |
+
+(KL in bits, occurrence-weighted over rows with a positive count; `relerr` is
+the relative Frobenius error.)
+
+Observations:
+
+* The leading **left** singular vector stays close to the prefix marginal
+  (`cos ≈ 0.93–0.99` at every threshold): the row space is dominated by a few
+  very frequent left contexts, so `u₁` and `r` point the same way almost
+  regardless of `N`.
+* The leading **right** singular vector falls away from the suffix marginal as
+  `N` grows (`0.98 → 0.92 → 0.56 → 0.29 → 0.27`): the column space has a long,
+  heavy tail, and least squares, dominated by the few largest counts, latches
+  onto a direction that is not the one the mass of contexts actually follows.
+  By `T = 10000` `v₁` is close to orthogonal to `c`, and it stops falling
+  after that (the direction that least squares prefers stabilises).
+* Consequently the Frobenius rank-1 wins on **Frobenius error** at every
+  threshold, while the marginal model wins on **KL** at every threshold, and
+  by a widening margin. From `T = 10000` down the independence model even has
+  `relerr > 1` — it is further from `M` than the zero matrix — yet it is still
+  the better *probability* model.
+* The clearest symptom is **top-1**: the marginal model predicts the modal
+  suffix and is right for ~20–23% of rows, whereas the SVD rank-1 predicts a
+  single globally-rare suffix and is right for ~0.1% of rows (0.0% at
+  `T = 5000`). Optimising the wrong norm does not merely mis-calibrate the
+  probabilities, it can invert the ranking entirely.
+
+This is the concrete form of the "the objective decides the answer" point, and
+it is the sharpest argument for fitting the adjacency model in **KL/Poisson**
+rather than least squares.
+
 ## Coping with negative probabilities
 
 The truncated SVD is the best rank-`L` approximation in Frobenius norm, but its
@@ -149,8 +204,9 @@ entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
 | T | negative entries of M̂ |
 |---:|---:|
 | 100000 | 20.1% |
-| 20000 | 22.2% |
 | 50000 | 21.9% |
+| 20000 | 22.2% |
+| 10000 | 22.0% |
 
 `scripts/latent_probabilities.py` rebuilds `M`, reconstructs `M̂ = (UΣ)Vᵀ`, and
 scores several ways of turning it back into a probability model
@@ -159,15 +215,17 @@ scores several ways of turning it back into a probability model
 (lower is better) and top-1 accuracy (does the predicted argmax `b` match the
 empirical argmax?).
 
-| remedy | T=100000: KL / top-1 | T=20000: KL / top-1 |
-|---|---:|---:|
-| `M̂` as-is (floor at 1e-12) | 2.01 / 60.3% | 3.42 / 34.6% |
-| clip negatives to 0, renormalise | 2.01 / 60.3% | 3.42 / 34.6% |
-| `|M̂|` (sign folding) | 1.01 / 60.3% | 2.79 / 34.6% |
-| Euclidean projection onto the simplex | 28.30 / 60.3% | 30.15 / 34.6% |
-| backoff mixture with the global marginal (λ=0.1) | 0.93 / 58.9% | 2.62 / 34.4% |
-| **NMF** (multiplicative updates, non-negative) | 0.97 / 62.9% | 2.72 / 33.3% |
-| *(reference) empirical row entropy H(p(b|a))* | 4.77 bits | 5.03 bits |
+| remedy | T=100000 | T=20000 | T=10000 |
+|---|---:|---:|---:|
+| `M̂` as-is (floor at 1e-12) | 2.01 / 60.3% | 3.42 / 34.6% | 4.24 / 33.3% |
+| clip negatives to 0, renormalise | 2.01 / 60.3% | 3.42 / 34.6% | 4.24 / 33.3% |
+| `|M̂|` (sign folding) | 1.01 / 60.3% | 2.79 / 34.6% | 3.72 / 33.2% |
+| Euclidean projection onto the simplex | 28.30 / 60.3% | 30.15 / 34.6% | 30.22 / 33.3% |
+| backoff mixture with the global marginal (λ=0.1) | 0.93 / 58.9% | 2.62 / 34.4% | 3.51 / 33.2% |
+| **NMF** (multiplicative updates, non-negative) | 0.97 / 62.9% | 2.72 / 33.3% | 3.66 / 30.5% |
+| *(reference) empirical row entropy H(p(b|a))* | 4.77 bits | 5.03 bits | 5.01 bits |
+
+(cells are mean KL in bits / top-1 accuracy)
 
 (Softmax of the latent scores is not tabulated here because it needs a
 per-row temperature: with the raw score scale the exponent underflows and the

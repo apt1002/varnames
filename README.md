@@ -124,6 +124,7 @@ varnames/
 │   ├── normalise_counts.py              # case-normalise an occurrence-count file
 │   ├── pair_matrix.py                   # prefix/suffix adjacency M + low-rank SVD/NMF
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
+│   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
 │   ├── fastkern.c                       # OpenMP kernels (assignment/silhouette)
