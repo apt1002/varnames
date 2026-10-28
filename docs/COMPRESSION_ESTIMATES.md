@@ -195,6 +195,52 @@ This is the concrete form of the "the objective decides the answer" point, and
 it is the sharpest argument for fitting the adjacency model in **KL/Poisson**
 rather than least squares.
 
+#### Is the row/column asymmetry a bug? (no)
+
+The construction is symmetric under *reversing* the identifiers: a left
+context (longest common **suffix of the left half**) becomes a right context
+(longest common **prefix of the right half**) under `s ↦ φ(s)` = reverse and
+swap `^`↔`$`. So one might expect the row and column behaviour to match, and
+the large gap in the table above looks suspicious. It is not a bug.
+`scripts/symmetry_check.py` verifies three things:
+
+* **Entrywise.** Building `M` on the corpus and `Mᴿ` on the corpus with every
+  identifier reversed, `Mᴿ[φ(b), φ(a)] = M[a, b]` **exactly** (relative
+  Frobenius residual `0.0`, max discrepancy `0` against a max count of
+  104,614). `φ` maps the two vocabularies onto each other with no missing
+  entries.
+* **The cosines swap.** At `T = 10000` the corpus gives
+  `cos(u₁, prefix) = 0.928`, `cos(v₁, suffix) = 0.293`; the **reversed**
+  corpus gives `0.299` and `0.933` — exactly the predicted exchange.
+* **Symmetric data ⇒ symmetric behaviour.** Run on a synthetic
+  reversal-closed corpus (every identifier and its reverse), an *exact* SVD
+  gives `cos(u₁, r) = cos(v₁, c) = 0.779237`, agreement to `5e-15`.
+
+So the asymmetry is a genuine property of the **data**: the corpus is not
+reversal-symmetric, i.e. `M` is not equal to `φ Mᵀ φ`, or equivalently the
+distribution of contexts that *precede* a split differs from those that
+*follow* it. Measured over the left contexts, `cos(r_C, φ(c_C)) = 0.787`: the
+two marginals are strongly but not perfectly correlated. The pattern is
+morphological — English word-parts sit preferentially at the front or the back
+of identifiers. Examples (count as a preceding context vs a following one, at
+`T = 10000`):
+
+| string | as left context | as right context |
+|---|---:|---:|
+| `test` | 3,471 | 107,952 |
+| `est` | 30,190 | 135,882 |
+| `ion` | 5,924 | 119,680 |
+| `St` | 89,697 | 15,213 |
+| `h` | 44,510 | 155,475 |
+
+So reversing the corpus is a genuinely different (though related) dataset, and
+the row/column behaviours legitimately differ. Two caveats: (i) the reported
+`cos` values come from a *randomised* SVD and carry a small approximation
+error (≈0.02 in a small-`N` control), which does not affect the large
+asymmetry; (ii) the effect is a property of *identifier* corpora in general —
+English-like word structure — and would largely vanish on reversal-symmetric
+data.
+
 ## Coping with negative probabilities
 
 The truncated SVD is the best rank-`L` approximation in Frobenius norm, but its
