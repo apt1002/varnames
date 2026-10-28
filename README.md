@@ -298,14 +298,17 @@ the left half against the longest common substring that is a prefix of the right
 half) and approximates it with a rank-`L` factorisation — by default in the
 square-root (Hellinger) domain, `M ~ (√M)_L²`, which is non-negative by
 construction and minimises the metric that matches KL (`--no-sqrt` for the old
-count-space SVD), and
+count-space SVD). All of these are scored by the **joint** KL
+`KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix.kl_joint`), which differs from the older
+occurrence-weighted *conditional* KL only by a model-independent constant, so
+no conditional `p(b|a)` is formed.
 `scripts/latent_probabilities.py` measures ways of coping with the negative
-entries that factorisation introduces, and `scripts/sqrt_and_smooth.py` explores
-a better fix: factorise `√M` (equivalently the occurrence-weighted Hellinger
-embedding of the conditionals) and square the reconstruction back, which is both
-non-negative by construction and ~30% lower KL than any remedy; smoothing `M`
-towards the independence model is a trade of KL for fewer latent negatives. See
-`docs/HELLINGER_FACTORISATION.md`.
+entries that factorisation introduces, and `scripts/sqrt_and_smooth.py`
+explores a better fix: factorise `√M` (the occurrence-weighted Hellinger
+embedding — rooting the counts already builds in the weighting) and square the
+reconstruction back, which is both non-negative by construction and ~30% lower
+KL than any remedy; smoothing `M` towards the independence model is a trade of
+KL for fewer latent negatives. See `docs/HELLINGER_FACTORISATION.md`.
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds.

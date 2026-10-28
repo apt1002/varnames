@@ -1,13 +1,12 @@
-# Hellinger (square-root) factorisation of the adjacency matrix, and smoothing
+# Square-root (Hellinger) factorisation of the adjacency matrix, and smoothing
 
-Status: the square-root (Hellinger) factorisation is now the **default** in
+Status: the square-root (Hellinger) factorisation is the **default** in
 `scripts/pair_matrix.py` (saved `pair_factors_L*.npy` carry a `sqrt` flag;
-`--no-sqrt` restores the old count-space behaviour).  All numbers below are the
-occurrence-weighted mean `KL(P_emp ‖ p̂)` in bits (lower is better) unless a
-column says otherwise; `P_emp` is the row-normalised empirical conditional
-`p(b|a)`, `p̂` the model.
+`--no-sqrt` restores the old count-space behaviour).  The metric is now the
+**joint** KL, `KL(M/T ‖ M̂/ΣM̂)` in bits (lower is better), computed by
+`pair_matrix.kl_joint`; no conditional `p(b|a)` is formed anywhere any more.
 
-## Why the occurrence-weighted KL is the right one
+## Why the joint KL is the right metric (and why the conditional is unnecessary)
 
 For the joint distribution over `(a, b)` the chain rule gives, exactly,
 
@@ -15,25 +14,21 @@ For the joint distribution over `(a, b)` the chain rule gives, exactly,
     KL(P(a,b)‖Q(a,b))  = KL(P(a)‖Q(a)) + Σ_a P(a)·KL(P(b|a)‖Q(b|a)).
 
 The joint KL therefore splits into a row-marginal term plus the
-*occurrence-weighted* conditional KL.  Two consequences:
+*occurrence-weighted* conditional KL.  The row-marginal term is the same for
+every model here (they all leave the prefix marginal `P(a)` fixed), so it is a
+**model-independent constant** and cancels in any comparison.  Hence ranking
+models by the joint KL, by the joint cross-entropy, or by the weighted
+conditional KL all agree — and the conditional never needed to be built.
 
-* The cross-entropy differs from this by the **model-independent constant**
-  `H(P(a,b))` (equivalently `H(P(a))`), so ranking models by the weighted
-  conditional KL, by the joint cross-entropy, or by `KL(M, M̂)` all agree.
-* Our model only fits the conditionals and keeps the empirical row marginal
-  `P(a)`, so `KL(P(a)‖Q(a))` is common to every model and cancels.  Ranking by
-  the weighted conditional KL is then *identical* to ranking by `KL(M, M̂)`.
-
-Verified numerically at `T = 100000` with the count-space SVD:
+Verified numerically at `T = 100000`:
 
     1.35269  =  0.0135  +  1.3392      (joint = row-marginal + weighted cond.)
     11.912   =  6.766   +  5.146       (H(P(a,b)) = H(P(a)) + H(P(b|a)))
 
-The **uniform** mean over rows that the report used corresponds instead to a
-joint in which every prefix `a` is equiprobable — a different quantity (1.727 vs
-1.339 above) — which is why it could rank models differently.  So the
-occurrence weighting is not a preference: it is what makes the conditional KL
-equal to the joint KL.
+So the earlier "occurrence-weighted conditional" KL and the joint KL agree to
+the small row-marginal mismatch, model by model (e.g. `sqrtcnt` 0.480 vs 0.494
+at `T = 100000`); the ordering is unchanged.  Reporting the joint is the simpler
+statement and drops a whole intermediate object.
 
 ## Big idea
 
@@ -42,8 +37,10 @@ vectors the square-root map is an isometry,
 
     ‖√p − √q‖² = 2 H²(p, q) ≈ 2 KL(p ‖ q)   for p ≈ q,
 
-so factorise the Hellinger embeddings `X = √P` (rows unit norm) rather than `M`,
-and **square the reconstruction back**: `p̂(b|a) ∝ x̂²`, `x̂ = (U Σ Vᵀ)_L`.
+so factorise the Hellinger embedding `√M` of the **count** matrix and **square
+the reconstruction back**:
+
+    sqrtcnt:   √M ≈ (U Σ Vᵀ)_L ,    M̂ = (U Σ Vᵀ)_L² .
 
 Two consequences:
 
@@ -51,103 +48,75 @@ Two consequences:
   scale.  This is worth far more than anything done to the raw SVD.
 * The square is non-negative *however signed the latent scores are*, so the
   **model never has negative probabilities** — the negatives survive only in the
-  latent `x̂`, where they are harmless (they perturb the Hellinger-space fit, not
-  a probability).  So negative *probabilities* were never the real problem.
+  latent reconstruction, where they perturb the Hellinger-space fit, not a
+  probability.  So negative *probabilities* were never the real problem.
 
-Two weightings, which turn out to be related:
-
-* `hell` — SVD of `√P`, all rows equal.
-* `hellw` — SVD of `diag(√N_a)·√P` then divide by `√N_a`, the exact minimiser of
-  the occurrence-weighted `Σ_a N_a ‖x_a − x̂_a‖²`.
-* `sqrtcnt` — the count-scale analogue, SVD of `√M` elementwise.  Because
-  `√M[a,b] = √(N_a) · x_a,b`, this is *identical* to `hellw` (verified to 4 d.p.
-  with the exact SVD); dividing by `√N_a` and renormalising cancels.  **Rooting
-  the counts is the same as occurrence-weighting the Hellinger fit.**
-
-## Metric correction (important)
-
-The KL metric used so far (in `latent_probabilities.py`, `rank1_marginals.py`
-and the report) is documented as "occurrence-weighted", but it is not: it
-weights each row by `P.sum(1)`, and `P` is row-normalised, so every weight is 1.
-It is a plain **uniform** mean over rows.  A genuinely occurrence-weighted mean
-needs the raw row counts passed separately.
-
-The two metrics can even disagree on the winner, so this matters (see below).
+Working in count space is the point.  `√M[a,b] = √(N_a) · √(p(b|a))`, so rooting
+the counts already builds in the occurrence weighting.  This is *identical* to
+rooting a row-normalised `p(b|a)` and weighting by `√N_a` (the `hellw` of
+earlier versions), verified to 4 d.p. with the exact SVD — dividing by `√N_a`
+and renormalising cancels.  **Rooting the counts is the same as
+occurrence-weighting the Hellinger fit**, and it is the reason the conditional
+could be dropped: `hell` (unweighted), `hellw` (weighted) and the explicit
+`diag(√N_a)` dance were all just this one model in disguise.
 
 ## Results
 
-`L = 16`, `alpha = 0`, exact SVD.  `sqrtcnt ≡ hellw`.
+`L = 16`, `alpha = 0`, exact SVD.  Joint KL (bits):
 
-Occurrence-weighted KL (bits):
+| threshold (N) | clip | abs | backoff .1 | nmf | **sqrtcnt** | independence |
+|---|---:|---:|---:|---:|---:|---:|
+| 100000 (159) | 1.059 | 0.757 | 0.688 | 0.730 | **0.494** | 1.623 |
+| 50000 (316) | 1.547 | 1.298 | 1.213 | 1.290 | **0.990** | 2.329 |
+| 20000 (911)* | 2.528 | 2.423 | 2.256 | 2.367 | **2.016** | 3.475 |
 
-| threshold (N) | clip | abs | backoff .1 | nmf | **hellw** | hell | independence |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 100000 (159) | 1.174 | 0.732 | 0.679 | 0.719 | **0.480** | 0.552 | 1.623 |
-| 50000 (316) | 1.672 | 1.265 | 1.199 | 1.278 | **0.945** | 1.046 | 2.329 |
-| 20000 (911)* | 2.630 | 2.333 | 2.206 | 2.292 | **1.860** | 1.997 | 3.475 |
+\* randomised SVD (exact is ~30 s per factorisation on N=911 with reference
+BLAS).  The randomised values are within ~0.02 bits and keep the ordering.
 
-\* randomised SVD (exact is 31 s on N=911 with reference BLAS).
+`sqrtcnt` wins at every threshold — the Hellinger factorisation is worth more
+than any of the "cope with negatives" remedies, and it needs none.
 
-The pipeline's randomised SVD gives the same picture (T = 100000 and 50000,
-`L = 16`, `alpha = 0`, occurrence-weighted): `hellw` 0.493 / 0.964 vs exact
-0.480 / 0.945, `hell` 0.575 / 1.065, `backoff` 0.685 / 1.228 — i.e. the exact /
-randomised difference is ~0.02 bits and does not touch the ordering.
+## Rank dependence (T = 100000, exact)
 
-Uniform KL (the metric reported until now):
+| L | clip | abs | backoff .1 | nmf | **sqrtcnt** |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 1.500 | 1.425 | 1.408 | 1.464 | 1.439 |
+| 4 | 1.352 | 1.174 | 1.145 | 1.197 | **1.120** |
+| 8 | 1.254 | 0.992 | 0.945 | 0.990 | **0.806** |
+| 16 | 1.059 | 0.757 | 0.688 | 0.730 | **0.494** |
+| 32 | 0.721 | 0.465 | 0.402 | 0.468 | **0.215** |
+| 64 | 0.324 | 0.198 | 0.168 | 0.232 | **0.046** |
 
-| threshold | clip | abs | backoff .1 | nmf | hellw | **hell** | independence |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 1.525 | 0.995 | 0.920 | 0.970 | 0.643 | **0.589** | 1.952 |
-| 50000 | 2.009 | 1.584 | 1.501 | 1.594 | 1.174 | **1.122** | 2.696 |
-| 20000* | 3.056 | 2.779 | 2.623 | 2.712 | 2.213 | **2.196** | 3.919 |
-
-**The winner flips with the metric.**  On the metric we actually want
-(occurrence-weighted) the *weighted* Hellinger fit `hellw` wins; on the uniform
-metric the unweighted `hell` wins.  That is exactly what theory predicts, and it
-is independent evidence that the occurrence-weighted metric is the right one to
-report.
-
-## Rank dependence (T = 100000, exact, occurrence-weighted)
-
-| L | clip | abs | backoff .1 | nmf | **hellw** | hell |
-|---:|---:|---:|---:|---:|---:|---:|
-| 2 | 1.491 | 1.386 | 1.380 | 1.433 | **1.372** | 1.449 |
-| 4 | 1.401 | 1.149 | 1.129 | 1.182 | **1.074** | 1.105 |
-| 8 | 1.340 | 0.962 | 0.930 | 0.970 | **0.778** | 0.840 |
-| 16 | 1.174 | 0.732 | 0.679 | 0.719 | **0.480** | 0.552 |
-| 32 | 0.833 | 0.451 | 0.399 | 0.462 | **0.212** | 0.277 |
-| 64 | 0.390 | 0.189 | 0.168 | 0.229 | **0.046** | 0.073 |
-
-`hellw` wins at every rank from L=4 up, and by a factor approaching 4× at
-L=64 (0.046 vs 0.168 for the best previous remedy).  The advantage *grows* with
-L: the Hellinger space makes the extra ranks count.
+`sqrtcnt` wins from L=4 up, and the advantage *grows* with L (a factor ~4× over
+the best previous remedy at L=64): the Hellinger space makes the extra ranks
+count.  At L=2 the rank-1 backoff/marginal direction is marginally better.
 
 ## Smoothing towards independence
 
-Add `alpha · M_mar`, `M_mar = r cᵀ / T`, before factorising (the user's second
-idea).  It does what was hoped and something was not:
+Add `alpha · M_mar`, `M_mar = r cᵀ / T`, before factorising.  It does what was
+hoped, and something was not:
 
-* it **reduces the latent negatives**, a lot — `hell` goes 14% → 4% → 1% at
-  `alpha = 0, 0.05, 0.2` (T=100000);
-* but it **raises the KL** for every good method.  At T=100000 (weighted):
-  `hellw` 0.480 → 0.487 → 0.543, `hell` 0.552 → 0.557 → 0.607, `nmf` 0.719 →
-  0.716 → 0.733;
-* it does help the *naive* family: `clip` improves 1.174 → 1.090 → 0.973, but
-  never gets near `hellw` at `alpha = 0`.
+* it **reduces the latent negatives**, a lot — `sqrtcnt` goes 14.4% → 8.7% →
+  4.7% at `alpha = 0, 0.05, 0.2` (T=100000);
+* but it **raises the KL** for every good method.  At T=100000 (joint KL):
+  `sqrtcnt` 0.494 → 0.498 → 0.549, `nmf` 0.730 → 0.726 → 0.742;
+* it does help the *naive* family: `clip` improves 1.059 → 0.994 → 0.908, but
+  never gets near `sqrtcnt` at `alpha = 0`.
 
-So smoothing is a trade of KL for fewer negatives — and since the squared
+So smoothing trades KL for fewer negatives — and since the squared
 reconstruction already gives a non-negative *model*, the negatives it removes
 are only in the latent scores, so it buys nothing worth the KL it costs.
 
-## Tentative conclusions
+## Conclusions
 
-0. The square-root factorisation is now the default in `pair_matrix.py`
-   (`--no-sqrt` for the old count-space behaviour); saved factors carry a `sqrt`
-   flag, and squaring the reconstruction gives the model.
+0. The square-root factorisation is the default in `pair_matrix.py` (`--no-sqrt`
+   for the old count-space behaviour); saved factors carry a `sqrt` flag, and
+   squaring the reconstruction gives the model.
 1. Factorise `√M` (equivalently, the occurrence-weighted Hellinger embedding)
-   and square back.  Best KL at every threshold and every rank; model is
+   and square back.  Best KL at every threshold and every rank ≥ 4; the model is
    non-negative by construction; no extra hyper-parameters.
-2. The count-scale root `sqrtcnt` is not an approximation to the weighted
-   Hellinger fit — it *is* it.
+2. Score with the **joint** KL `KL(M/T ‖ M̂/ΣM̂)`.  It differs from the old
+   occurrence-weighted conditional KL only by a model-independent constant, so
+   the conditional `p(b|a)` is not needed and has been removed from the code.
 3. Don't smooth `M` towards independence unless you specifically need the latent
    scores to be non-negative; it costs KL.

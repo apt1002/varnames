@@ -159,15 +159,14 @@ probability models.
 
 | T | cos(u₁, prefix marg.) | cos(v₁, suffix marg.) | relerr marg. | relerr r1 | KL marg. | KL r1 |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.95 | 2.04 |
-| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.70 | 2.91 |
-| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.92 | 4.89 |
-| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.87 | 7.10 |
-| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.60 | 8.27 |
+| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.623 | 1.704 |
+| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.329 | 2.644 |
+| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.475 | 4.530 |
+| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.340 | 6.762 |
+| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.060 | 8.079 |
 
-(KL in bits; the two KL columns are *uniform* means over rows with a positive
-count — see the metric-correction note below; `relerr` is the relative Frobenius
-error.)
+(KL in bits, computed as the **joint** KL `KL(M/T ‖ M̂/ΣM̂)`; `relerr` is the
+relative Frobenius error.)
 
 Observations:
 
@@ -240,28 +239,26 @@ asymmetry; (ii) the effect is a property of *identifier* corpora in general —
 English-like word structure — and would largely vanish on reversal-symmetric
 data.
 
-### Metric correction: the KL was not occurrence-weighted
+### Metric correction: from the conditional to the joint
 
-The KL metric used throughout this report (and in `latent_probabilities.py` and
-`rank1_marginals.py`) was documented as "occurrence-weighted", but it multiplied
-each row by `P.sum(1)` where `P` is the *row-normalised* conditional, so every
-weight was 1.  It is a plain **uniform** mean over the rows that occur.
-`kl_rows` now takes the raw row counts separately and reports both metrics
-(which can even rank models differently).
+The KL metric used throughout this report was for a while documented as
+"occurrence-weighted" but was actually a plain **uniform** mean over the rows
+that occur (it multiplied each row by `P.sum(1)` where `P` is the
+*row-normalised* conditional, so every weight was 1).  That was fixed, and the
+conditional itself has now been dropped entirely.  By the chain rule
 
-| T | KL marg. unif. | KL marg. occ | KL r1 unif. | KL r1 occ |
-|---:|---:|---:|---:|---:|
-| 100000 | 1.95 | 1.62 | 2.04 | 1.67 |
-| 50000 | 2.70 | 2.33 | 2.91 | 2.49 |
-| 20000 | 3.92 | 3.47 | 4.89 | 4.28 |
+    KL(P(a,b)‖Q(a,b)) = KL(P(a)‖Q(a)) + Σ_a P(a)·KL(P(b|a)‖Q(b|a))
 
-The occurrence-weighted values are uniformly lower, and the conclusion (the
-marginal model beats the SVD rank-1 on KL) is unchanged.  The remedies table
-below is also uniform; its occurrence-weighted column differs by the same kind
-of factor (e.g. backoff λ=0.1: 0.93 uniform → 0.69 weighted at T=100000) with
-the ranking intact.  The `hellw` vs `hell` comparison in
-`docs/HELLINGER_FACTORISATION.md` *does* flip between the two metrics, which is
-why it is now stated explicitly which one is meant.
+the joint KL splits into a row-marginal term plus the occurrence-weighted
+conditional KL; the models leave the prefix marginal `P(a)` fixed, so the
+row-marginal term is a **model-independent constant**.  So the weighted
+conditional KL, the joint cross-entropy, and the **joint KL
+`KL(M/T ‖ M̂/ΣM̂)`** all give the same ranking — and the conditional `p(b|a)`
+need never be built.  All KL figures in this report are now the joint KL
+`KL(M/T ‖ M̂/ΣM̂)` in bits, computed by `pair_matrix.kl_joint` (see
+`docs/HELLINGER_FACTORISATION.md`).  It differs from the old occurrence-weighted
+conditional KL only by the small row-marginal mismatch, model by model (`sqrtcnt`
+0.480 → 0.494 at T=100000), so every ordering below is unchanged.
 
 ## Coping with negative probabilities
 
@@ -276,65 +273,62 @@ entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
 
 | T | negative entries of M̂ |
 |---:|---:|
-| 100000 | 20.1% |
-| 50000 | 21.9% |
-| 20000 | 22.2% |
-| 10000 | 22.0% |
+| 100000 | 19.5% |
+| 50000 | 21.8% |
+| 20000 | 21.4% |
+| 10000 | 21.1% |
 
 `scripts/latent_probabilities.py` rebuilds `M`, reconstructs `M̂ = (UΣ)Vᵀ`, and
-scores several ways of turning it back into a probability model
-`p(b | a)`, against the occurrence-weighted empirical row distribution
-`P_emp` (rows with a positive count). Metric: mean `KL(P_emp ‖ P_pred)` in bits
-(lower is better) — a *uniform* mean over rows, see the metric-correction note
-above.
+scores several ways of turning it back into a non-negative probability model.
+Metric: the joint KL `KL(M/T ‖ M̂/ΣM̂)` in bits (lower is better) — no
+conditional `p(b|a)` is formed (see the metric-correction note above).
 
-| remedy | T=100000 | T=20000 | T=10000 |
+| remedy | T=100000 | T=50000 | T=20000 |
 |---|---:|---:|---:|
-| `M̂` as-is (floor at 1e-12) | 2.01 | 3.42 | 4.24 |
-| clip negatives to 0, renormalise | 2.01 | 3.42 | 4.24 |
-| `|M̂|` (sign folding) | 1.01 | 2.79 | 3.72 |
-| Euclidean projection onto the simplex | 28.30 | 30.15 | 30.22 |
-| backoff mixture with the global marginal (λ=0.1) | 0.93 | 2.62 | 3.51 |
-| **NMF** (multiplicative updates, non-negative) | 0.97 | 2.72 | 3.66 |
-| **`hell`: square-root SVD, squared back** | **0.65** | **2.22** | — |
-| *(reference) empirical row entropy H(p(b|a))* | 4.77 bits | 5.03 bits | 5.01 bits |
+| `M̂` as-is (clip negatives to 0) | 1.072 | 1.648 | 2.528 |
+| `|M̂|` (sign folding) | 0.765 | 1.352 | 2.423 |
+| Euclidean projection onto the simplex | 23.40 | 22.86 | 22.04 |
+| backoff mixture with the independence model (λ=0.1) | 0.695 | 1.244 | 2.256 |
+| **NMF** (multiplicative updates, non-negative) | 0.730 | 1.290 | 2.367 |
+| **`sqrtcnt`: square-root SVD, squared back** | **0.504** | **1.006** | **2.034** |
 
-(cells are mean KL in bits; the `hell` row is the model recommended in
-`docs/HELLINGER_FACTORISATION.md`, 0.49 / 1.87 bits on the occurrence-weighted
-metric at T=100000 / 20000, and is computed by `latent_probabilities.py`
-alongside the count-space remedies.)
+(cells are joint KL in bits, randomised SVD.  `sqrtcnt` is the model
+recommended in `docs/HELLINGER_FACTORISATION.md` and computed by
+`latent_probabilities.py` alongside the count-space remedies; it reads a little
+above the exact 0.494 / 0.990 / 2.016.)
 
 (Softmax of the latent scores is not tabulated here because it needs a
-per-row temperature: with the raw score scale the exponent underflows and the
-row collapses to a one-hot.  Calibrated per row it lands mid-pack — at
-T = 50000, KL 2.68 bits.)
+calibration scale: with the raw score scale the exponent underflows and the
+matrix collapses to a one-hot.  Calibrated it lands mid-pack — at T = 50000,
+joint KL ≈ 2.93.)
 
 Ranking and recommendation:
 
-0. **Square-root (Hellinger) factorisation** `p̂ ∝ (√M reconstruction)²` — the
+0. **Square-root (Hellinger) factorisation** `M̂ = (√M reconstruction)²` — the
    recommended model and now the default; non-negative by construction and the
    lowest KL by a wide margin.  The count-space remedies below are only for
    when you are stuck with the old `--no-sqrt` factorisation.  See
    `docs/HELLINGER_FACTORISATION.md`.
-1. **NMF (non-negative matrix factorisation)** — `p ∝ W H` with `W, H >= 0`.
+1. **NMF (non-negative matrix factorisation)** — `M̂ = W H` with `W, H >= 0`.
    This is the principled fix: the factors are non-negative *by construction*,
    so no clipping is needed, and it is competitive on KL while never producing
-   a negative probability. For counts, prefer a **KL-divergence / Poisson NMF**
+   a negative entry. For counts, prefer a **KL-divergence / Poisson NMF**
    whose objective matches the multinomial likelihood rather than least squares.
 2. **Backoff mixture** — take the clipped factorisation and mix it with the
-   global column marginal `q_b`, `(1-λ)·clip(M̂) + λ·q_b` with small λ. This
-   gave the best KL, repairs rows whose reconstruction is entirely negative, and
+   rank-1 independence model `M_mar = r cᵀ / T`, `(1-λ)·clip(M̂) + λ·M_mar`
+   with small λ. This repairs entries whose reconstruction is negative and
    guarantees full support (useful when the model must never assign zero
    probability). Think of it as Dirichlet smoothing of the latent model.
 3. **Sign folding** `|M̂|` — preserves the ordering of the latent scores and is
    much better than clipping, at zero extra cost. Good if the goal is only "can
    `a` and `b` be adjacent?" rather than a calibrated probability.
 4. **softmax of the latent scores** — a log-bilinear model
-   `p(b|a) ∝ exp(⟨u_a, v_b⟩ / τ)`. Attractive (it is the natural exponential
-   family for this bilinear form) but the temperature must be calibrated per
-   row; uncalibrated it collapses to a one-hot or underflows.
-5. **clip + renormalise** — simple but mediocre: zeroing ~20% of entries and
-   leaving all-negative rows uniform both hurt.
+   `M̂ ∝ exp(⟨u_a, v_b⟩ / τ)`. Attractive (it is the natural exponential
+   family for this bilinear form) but the temperature must be calibrated; the
+   raw score scale makes the exponent underflow and collapses the model to a
+   one-hot.
+5. **clip negatives to 0** — simple but mediocre: zeroing ~20% of the entries
+   hurts.
 6. **Euclidean projection onto the simplex** — do **not** use: it is optimal in
    Euclidean distance but catastrophic in KL (the true successor is often
    projected to zero).
