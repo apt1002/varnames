@@ -14,8 +14,7 @@ p(b | a), and score each against the row-normalised empirical distribution:
   svd-abs  p(b|a) ∝ |M_hat[a,b]| (uses the factorisation only for ranking)
 
 Metrics over the rows that occur in the corpus: mean KL(P_emp || P_pred)
-(bits) and top-1 accuracy (does the predicted argmax b match the empirical
-one?).  Only rows with a positive empirical count are scored.
+(bits).  Only rows with a positive empirical count are scored.
 
 Usage: latent_probabilities.py CORPUS SUBS [--outdir DIR] [--L 16]
 """
@@ -69,12 +68,6 @@ def project_simplex_rows(Z, iters=50):
         theta = css[rho] / (rho + 1.0)
         out[i] = np.maximum(Z[i] - theta, 0.0)
     return out
-
-
-def top1(P, Q):
-    tot = P.sum(1)
-    m = tot > 0
-    return float((P[m].argmax(1) == Q[m].argmax(1)).mean())
 
 
 def main():
@@ -133,9 +126,9 @@ def main():
           f"rel.err {np.linalg.norm(M - Wh)/np.linalg.norm(M):.4f}")
     rows.append(("nmf", Wh))
 
-    print(f"\n{'method':22s} {'mean KL (bits)':>14s} {'top-1':>7s}")
+    print(f"\n{'method':22s} {'mean KL (bits)':>14s}")
     for name, Q in rows:
-        print(f"{name:22s} {kl_rows(P, Q):14.4f} {100*top1(P, Q):6.1f}%")
+        print(f"{name:22s} {kl_rows(P, Q):14.4f}")
 
     print(f"\nempirical row entropy H(p(b|a)) = {row_entropy(P):.4f} bits "
           f"(the KL floor: no factorisation can go below 0 KL, but a "

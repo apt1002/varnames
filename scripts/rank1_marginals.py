@@ -14,8 +14,8 @@ in general.  This script reports
   * cos(u_1, r/||r||) and cos(v_1, c/||c||)   -- how far the SVD rank-1 is
     from the marginals (1.0 = identical direction),
   * the relative Frobenius error of each rank-1 model,
-  * the mean KL(P_emp || p(b|a)) and top-1 accuracy of each as probability
-    models, showing that the objective decides which one wins.
+  * the mean KL(P_emp || p(b|a)) of each as a probability model, showing that
+    the objective decides which one wins.
 
 Usage: rank1_marginals.py CORPUS SUBS [--outdir DIR]
 """
@@ -39,13 +39,6 @@ def kl_rows(P, Q):
     m = tot > 0
     kl = (P[m] * (np.log2(np.maximum(P[m], 1e-12)) - np.log2(Qn[m]))).sum(1)
     return float((kl * tot[m]).sum() / tot[m].sum())
-
-
-def top1(P, Q):
-    Q = _broadcast(Q, P.shape[0])
-    tot = P.sum(1)
-    m = tot > 0
-    return float((P[m].argmax(1) == Q[m].argmax(1)).mean())
 
 
 def main():
@@ -97,11 +90,10 @@ def main():
     print(f"N={N}  ||M||_F={fro:.0f}  T={T:.0f}")
     print(f"  cos(u1, prefix marginal) = {cos_u:.4f}")
     print(f"  cos(v1, suffix marginal) = {cos_v:.4f}")
-    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'mean KL':>9s} {'top-1':>7s}")
+    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'mean KL':>9s}")
     for name, rel, P in (("marginal (KL-optimal)", rel_mar, pmar_row),
                          ("SVD rank-1 (LS-optimal)", rel_r1, pr1_row)):
-        print(f"{name:22s} {rel:17.4f} {kl_rows(Pemp, P):9.4f} "
-              f"{100*top1(Pemp, P):6.1f}%")
+        print(f"{name:22s} {rel:17.4f} {kl_rows(Pemp, P):9.4f}")
 
 
 if __name__ == '__main__':

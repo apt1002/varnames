@@ -157,13 +157,13 @@ The question is *which* `v`, and the answer depends on the objective:
 (1.0 = same direction); the same two rank-1 models are then scored as
 probability models.
 
-| T | cos(u₁, prefix marg.) | cos(v₁, suffix marg.) | relerr marg. | relerr r1 | KL marg. | KL r1 | top-1 marg. | top-1 r1 |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.95 | 2.04 | 23.2% | 23.2% |
-| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.70 | 2.91 | 22.7% | 22.7% |
-| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.92 | 4.89 | 20.2% | 0.1% |
-| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.87 | 7.10 | 21.5% | 0.1% |
-| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.60 | 8.27 | 21.5% | 0.0% |
+| T | cos(u₁, prefix marg.) | cos(v₁, suffix marg.) | relerr marg. | relerr r1 | KL marg. | KL r1 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.95 | 2.04 |
+| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.70 | 2.91 |
+| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.92 | 4.89 |
+| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.87 | 7.10 |
+| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.60 | 8.27 |
 
 (KL in bits, occurrence-weighted over rows with a positive count; `relerr` is
 the relative Frobenius error.)
@@ -181,15 +181,13 @@ Observations:
   By `T = 10000` `v₁` is close to orthogonal to `c`, and it stops falling
   after that (the direction that least squares prefers stabilises).
 * Consequently the Frobenius rank-1 wins on **Frobenius error** at every
-  threshold, while the marginal model wins on **KL** at every threshold, and
-  by a widening margin. From `T = 10000` down the independence model even has
-  `relerr > 1` — it is further from `M` than the zero matrix — yet it is still
-  the better *probability* model.
-* The clearest symptom is **top-1**: the marginal model predicts the modal
-  suffix and is right for ~20–23% of rows, whereas the SVD rank-1 predicts a
-  single globally-rare suffix and is right for ~0.1% of rows (0.0% at
-  `T = 5000`). Optimising the wrong norm does not merely mis-calibrate the
-  probabilities, it can invert the ranking entirely.
+  threshold, while the marginal model wins on **KL** at every threshold, and by
+  a widening margin. Because `v₁` is nearly orthogonal to `c`, the SVD rank-1
+  spreads its mass along a suffix direction that the mass of contexts does not
+  follow; so from `T = 10000` down the independence model even has `relerr > 1`
+  — it is further from `M` than the zero matrix — and is *still* the better
+  probability model. Optimising the wrong norm does not merely mis-calibrate
+  the probabilities, it can move them further from the empirical distribution.
 
 This is the concrete form of the "the objective decides the answer" point, and
 it is the sharpest argument for fitting the adjacency model in **KL/Poisson**
@@ -257,42 +255,41 @@ entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
 `scripts/latent_probabilities.py` rebuilds `M`, reconstructs `M̂ = (UΣ)Vᵀ`, and
 scores several ways of turning it back into a probability model
 `p(b | a)`, against the occurrence-weighted empirical row distribution
-`P_emp` (rows with a positive count). Metrics: mean `KL(P_emp ‖ P_pred)` in bits
-(lower is better) and top-1 accuracy (does the predicted argmax `b` match the
-empirical argmax?).
+`P_emp` (rows with a positive count). Metric: mean `KL(P_emp ‖ P_pred)` in bits
+(lower is better).
 
 | remedy | T=100000 | T=20000 | T=10000 |
 |---|---:|---:|---:|
-| `M̂` as-is (floor at 1e-12) | 2.01 / 60.3% | 3.42 / 34.6% | 4.24 / 33.3% |
-| clip negatives to 0, renormalise | 2.01 / 60.3% | 3.42 / 34.6% | 4.24 / 33.3% |
-| `|M̂|` (sign folding) | 1.01 / 60.3% | 2.79 / 34.6% | 3.72 / 33.2% |
-| Euclidean projection onto the simplex | 28.30 / 60.3% | 30.15 / 34.6% | 30.22 / 33.3% |
-| backoff mixture with the global marginal (λ=0.1) | 0.93 / 58.9% | 2.62 / 34.4% | 3.51 / 33.2% |
-| **NMF** (multiplicative updates, non-negative) | 0.97 / 62.9% | 2.72 / 33.3% | 3.66 / 30.5% |
+| `M̂` as-is (floor at 1e-12) | 2.01 | 3.42 | 4.24 |
+| clip negatives to 0, renormalise | 2.01 | 3.42 | 4.24 |
+| `|M̂|` (sign folding) | 1.01 | 2.79 | 3.72 |
+| Euclidean projection onto the simplex | 28.30 | 30.15 | 30.22 |
+| backoff mixture with the global marginal (λ=0.1) | 0.93 | 2.62 | 3.51 |
+| **NMF** (multiplicative updates, non-negative) | 0.97 | 2.72 | 3.66 |
 | *(reference) empirical row entropy H(p(b|a))* | 4.77 bits | 5.03 bits | 5.01 bits |
 
-(cells are mean KL in bits / top-1 accuracy)
+(cells are mean KL in bits)
 
 (Softmax of the latent scores is not tabulated here because it needs a
 per-row temperature: with the raw score scale the exponent underflows and the
 row collapses to a one-hot.  Calibrated per row it lands mid-pack — at
-T = 50000, KL 2.68 bits and top-1 45.8%.)
+T = 50000, KL 2.68 bits.)
 
 Ranking and recommendation:
 
 1. **NMF (non-negative matrix factorisation)** — `p ∝ W H` with `W, H >= 0`.
    This is the principled fix: the factors are non-negative *by construction*,
-   so no clipping is needed, and it is competitive on both metrics (best top-1
-   at T = 100000). For counts, prefer a **KL-divergence / Poisson NMF** whose
-   objective matches the multinomial likelihood rather than least squares.
+   so no clipping is needed, and it is competitive on KL while never producing
+   a negative probability. For counts, prefer a **KL-divergence / Poisson NMF**
+   whose objective matches the multinomial likelihood rather than least squares.
 2. **Backoff mixture** — take the clipped factorisation and mix it with the
    global column marginal `q_b`, `(1-λ)·clip(M̂) + λ·q_b` with small λ. This
    gave the best KL, repairs rows whose reconstruction is entirely negative, and
    guarantees full support (useful when the model must never assign zero
    probability). Think of it as Dirichlet smoothing of the latent model.
-3. **Sign folding** `|M̂|` — keeps the *ranking* (top-1 unchanged) and is much
-   better than clipping, at zero extra cost. Good if the goal is only "can `a`
-   and `b` be adjacent?" rather than a calibrated probability.
+3. **Sign folding** `|M̂|` — preserves the ordering of the latent scores and is
+   much better than clipping, at zero extra cost. Good if the goal is only "can
+   `a` and `b` be adjacent?" rather than a calibrated probability.
 4. **softmax of the latent scores** — a log-bilinear model
    `p(b|a) ∝ exp(⟨u_a, v_b⟩ / τ)`. Attractive (it is the natural exponential
    family for this bilinear form) but the temperature must be calibrated per
