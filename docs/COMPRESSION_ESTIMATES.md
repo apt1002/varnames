@@ -165,8 +165,9 @@ probability models.
 | 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.87 | 7.10 |
 | 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.60 | 8.27 |
 
-(KL in bits, occurrence-weighted over rows with a positive count; `relerr` is
-the relative Frobenius error.)
+(KL in bits; the two KL columns are *uniform* means over rows with a positive
+count — see the metric-correction note below; `relerr` is the relative Frobenius
+error.)
 
 Observations:
 
@@ -239,6 +240,29 @@ asymmetry; (ii) the effect is a property of *identifier* corpora in general —
 English-like word structure — and would largely vanish on reversal-symmetric
 data.
 
+### Metric correction: the KL was not occurrence-weighted
+
+The KL metric used throughout this report (and in `latent_probabilities.py` and
+`rank1_marginals.py`) was documented as "occurrence-weighted", but it multiplied
+each row by `P.sum(1)` where `P` is the *row-normalised* conditional, so every
+weight was 1.  It is a plain **uniform** mean over the rows that occur.
+`kl_rows` now takes the raw row counts separately and reports both metrics
+(which can even rank models differently).
+
+| T | KL marg. unif. | KL marg. occ | KL r1 unif. | KL r1 occ |
+|---:|---:|---:|---:|---:|
+| 100000 | 1.95 | 1.62 | 2.04 | 1.67 |
+| 50000 | 2.70 | 2.33 | 2.91 | 2.49 |
+| 20000 | 3.92 | 3.47 | 4.89 | 4.28 |
+
+The occurrence-weighted values are uniformly lower, and the conclusion (the
+marginal model beats the SVD rank-1 on KL) is unchanged.  The remedies table
+below is also uniform; its occurrence-weighted column differs by the same kind
+of factor (e.g. backoff λ=0.1: 0.93 uniform → 0.69 weighted at T=100000) with
+the ranking intact.  The `hellw` vs `hell` comparison in
+`docs/HELLINGER_FACTORISATION.md` *does* flip between the two metrics, which is
+why it is now stated explicitly which one is meant.
+
 ## Coping with negative probabilities
 
 The truncated SVD is the best rank-`L` approximation in Frobenius norm, but its
@@ -256,7 +280,8 @@ entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
 scores several ways of turning it back into a probability model
 `p(b | a)`, against the occurrence-weighted empirical row distribution
 `P_emp` (rows with a positive count). Metric: mean `KL(P_emp ‖ P_pred)` in bits
-(lower is better).
+(lower is better) — a *uniform* mean over rows, see the metric-correction note
+above.
 
 | remedy | T=100000 | T=20000 | T=10000 |
 |---|---:|---:|---:|

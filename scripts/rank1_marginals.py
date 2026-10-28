@@ -31,14 +31,23 @@ def _broadcast(Q, n):
     return np.repeat(Q, n, axis=0) if Q.shape[0] == 1 else Q
 
 
-def kl_rows(P, Q):
+def kl_rows(P, Q, w=None):
+    """Mean KL(P_row || Q_row) in bits, weighted by w (default uniform).
+
+    P is a row-normalised conditional (unit row sums), so pass the raw row
+    counts (N_a) as w for the occurrence-weighted mean; P itself cannot supply
+    them.  (Previously this multiplied by P.sum(1) == 1, i.e. it was uniform.)
+    """
     Q = _broadcast(Q, P.shape[0])
     Qn = np.maximum(Q, 1e-12)
     Qn = Qn / Qn.sum(1, keepdims=True)
-    tot = P.sum(1)
-    m = tot > 0
-    kl = (P[m] * (np.log2(np.maximum(P[m], 1e-12)) - np.log2(Qn[m]))).sum(1)
-    return float((kl * tot[m]).sum() / tot[m].sum())
+    live = P.sum(1) > 0
+    kl = (P * (np.log2(np.maximum(P, 1e-12)) - np.log2(Qn))).sum(1)
+    if w is None:
+        return float(kl[live].mean())
+    w = np.asarray(w, dtype=np.float64)
+    m = live & (w > 0)
+    return float((kl[m] * w[m]).sum() / w[m].sum())
 
 
 def main():
@@ -49,8 +58,13 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
-    N = len(vocab)
+    cache = os.path.join(args.outdir, 'M.npz')
+    if os.path.exists(cache):
+        M = np.load(cache)['M']
+    else:
+        M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
+        np.savez_compressed(cache, M=M)
+    N = M.shape[0]
     # work in float32 for the big matrices: at large N the float64 copies of
     # M, its reconstruction and their difference do not fit in memory.
     Mf = M.astype(np.float32)
@@ -90,10 +104,12 @@ def main():
     print(f"N={N}  ||M||_F={fro:.0f}  T={T:.0f}")
     print(f"  cos(u1, prefix marginal) = {cos_u:.4f}")
     print(f"  cos(v1, suffix marginal) = {cos_v:.4f}")
-    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'mean KL':>9s}")
+    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'KL occ-wtd':>11s} "
+          f"{'KL uniform':>11s}")
     for name, rel, P in (("marginal (KL-optimal)", rel_mar, pmar_row),
                          ("SVD rank-1 (LS-optimal)", rel_r1, pr1_row)):
-        print(f"{name:22s} {rel:17.4f} {kl_rows(Pemp, P):9.4f}")
+        print(f"{name:22s} {rel:17.4f} {kl_rows(Pemp, P, r):11.4f} "
+              f"{kl_rows(Pemp, P):11.4f}")
 
 
 if __name__ == '__main__':

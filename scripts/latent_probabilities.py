@@ -31,14 +31,24 @@ def entropy_bits(p):
     return float(-(p * np.log2(p)).sum())
 
 
-def kl_rows(P, Q):
-    """Occurrence-weighted mean of KL(P_row || Q_row), Q renormalised, in bits."""
+def kl_rows(P, Q, w=None):
+    """Mean KL(P_row || Q_row), in bits.
+
+    P is the row-normalised empirical conditional (unit row sums), so the
+    occurrence weight cannot be read off P -- pass the raw row counts as w for
+    the occurrence-weighted mean.  With w=None the mean is uniform over rows
+    that occur.  (This function previously multiplied by P.sum(1), which is 1
+    for every live row, so it silently returned the uniform mean.)
+    """
     Qn = np.maximum(Q, 1e-12)
     Qn = Qn / Qn.sum(1, keepdims=True)
-    tot = P.sum(1)
-    m = tot > 0
-    kl = (P[m] * (np.log2(np.maximum(P[m], 1e-12)) - np.log2(Qn[m]))).sum(1)
-    return float((kl * tot[m]).sum() / tot[m].sum())
+    live = P.sum(1) > 0
+    kl = (P * (np.log2(np.maximum(P, 1e-12)) - np.log2(Qn))).sum(1)
+    if w is None:
+        return float(kl[live].mean())
+    w = np.asarray(w, dtype=np.float64)
+    m = live & (w > 0)
+    return float((kl[m] * w[m]).sum() / w[m].sum())
 
 
 def row_entropy(P):
@@ -80,10 +90,16 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
-    n = len(vocab)
+    cache = os.path.join(args.outdir, 'M.npz')
+    if os.path.exists(cache):
+        M = np.load(cache)['M']
+    else:
+        M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
+        np.savez_compressed(cache, M=M)
+    n = M.shape[0]
     P = M.astype(np.float64)
     P = P / np.maximum(P.sum(1, keepdims=True), 1)
+    Nw = M.sum(1).astype(np.float64)
     nrows = int((M.sum(1) > 0).sum())
     print(f"N={n}  rows with counts: {nrows}  rank L={args.L}\n")
 
@@ -126,9 +142,9 @@ def main():
           f"rel.err {np.linalg.norm(M - Wh)/np.linalg.norm(M):.4f}")
     rows.append(("nmf", Wh))
 
-    print(f"\n{'method':22s} {'mean KL (bits)':>14s}")
+    print(f"\n{'method':22s} {'KL occ-wtd':>11s} {'KL uniform':>11s}")
     for name, Q in rows:
-        print(f"{name:22s} {kl_rows(P, Q):14.4f}")
+        print(f"{name:22s} {kl_rows(P, Q, Nw):11.4f} {kl_rows(P, Q):11.4f}")
 
     print(f"\nempirical row entropy H(p(b|a)) = {row_entropy(P):.4f} bits "
           f"(the KL floor: no factorisation can go below 0 KL, but a "
