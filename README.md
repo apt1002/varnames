@@ -104,7 +104,8 @@ varnames/
 │   ├── CORPUS_STATS_MULTILANG.md        # combined statistics
 │   ├── CORPUS_STATS.md                  # Ruby-only statistics
 │   ├── CORPUS_STATS_LOCAL.md            # Python/Go/JS/Perl harvest report
-│   └── CORPUS_STATS_RUST.md             # Rust harvest report
+│   ├── CORPUS_STATS_RUST.md             # Rust harvest report
+│   └── COMPRESSION_ESTIMATES.md         # fixed-budget rate + low-rank adjacency
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
 │   ├── fetch_gems.py                    # parallel RubyGem downloader
@@ -116,7 +117,14 @@ varnames/
 │   ├── merge_identifiers.py             # merge the three lists, de-duplicate
 │   ├── common_substrings.py             # ^id$ substrings occurring ≥ N times
 │   ├── run_camel_pipeline.sh            # run the four steps end to end
+│   ├── winhash.py                       # 64-bit rolling-hash helpers (shared)
 │   ├── successor_distributions.py       # P(next character | common substring)
+│   ├── code_lengths.py                  # ideal code length + 64/62-bit fit rates
+│   ├── sample_occurrences.py            # per-ecosystem identifier occurrence counts
+│   ├── normalise_counts.py              # case-normalise an occurrence-count file
+│   ├── pair_matrix.py                   # prefix/suffix adjacency M + low-rank SVD/NMF
+│   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
+│   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
 │   ├── fastkern.c                       # OpenMP kernels (assignment/silhouette)
 │   └── cluster_entropy.py               # successor entropy (bits) per cluster
@@ -132,6 +140,10 @@ work/camel/         # case normalisation: lower/upper/camel splits,
 work/common10000/   # common substrings (threshold 10000) + successor
                     #   distributions, clusters, entropy
 work/common2000/    # the same, at threshold 2000
+work/common<T>/     # ... one directory per threshold T
+                    #   (500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+work/occ/           # per-ecosystem identifier occurrence counts
+                    #   (<eco>.counts, all.counts, all.camel.counts)
 ```
 
 `work/` also holds the corpus-build intermediates (`gems_dl/`, `*_src/`,
@@ -260,6 +272,36 @@ python3 scripts/cluster_substrings.py --outdir work/common2000 \
         --kmax 100 --restarts 10 --sil-sample 4000
 python3 scripts/cluster_entropy.py --outdir work/common2000
 ```
+
+## Fixed-budget compressibility and the low-rank adjacency model
+
+`scripts/code_lengths.py` computes the ideal arithmetic-code length of each
+identifier under the longest-suffix successor model — the natural estimate of
+whether an identifier fits a 64-bit budget (with ~2 bits reserved for
+capitalisation style). Success rates are reported both **static** (percentage of
+`camel/merged` identifiers) and **dynamic** (percentage of real source-code
+occurrences, from `work/occ/`). `scripts/pair_matrix.py` builds the `N x N`
+prefix/suffix adjacency matrix `M` (longest common substring that is a suffix of
+the left half against the longest common substring that is a prefix of the right
+half) and approximates it with a rank-`L` SVD (`N x L` times `L x N`), and
+`scripts/latent_probabilities.py` measures ways of coping with the negative
+entries that factorisation introduces.
+
+`scripts/run_sweep.sh` runs the successor, code-length and factorisation
+analyses over a list of thresholds.
+
+```sh
+python3 scripts/sample_occurrences.py --outdir work/occ --per-eco 1200 --seed 1
+python3 scripts/normalise_counts.py work/occ/all.counts work/occ/all.camel.counts
+sh scripts/run_sweep.sh            # successor + code_lengths + pair_matrix
+```
+
+Headline numbers (budget 64 bits / 62 bits reserved for capitalisation) across
+thresholds 500–100000: the **static** success rate runs from **52% to 89%** and
+the **dynamic** rate saturates near **92%**; the adjacency matrix is
+low-rank for the frequent contexts but close to full-rank for the tail. The
+full method, tables and the negative-entry remedies are in
+[`docs/COMPRESSION_ESTIMATES.md`](docs/COMPRESSION_ESTIMATES.md).
 
 ## Reproducing
 
