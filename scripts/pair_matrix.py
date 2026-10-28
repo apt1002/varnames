@@ -13,10 +13,18 @@ and M[a, b] is incremented.  a is therefore a "left context" (never ending in
 may end in '$').  The empty common substring is included, as the backoff
 context on either side.
 
-M is then approximated by a rank-L factorisation.  By default a randomised
-SVD (Halko et al., with one power iteration) is used, which is the best rank-L
-approximation in Frobenius norm but whose factors U, V generally have negative
-entries (see the discussion in the README / report).
+M is then approximated by a rank-L factorisation.  By default the factorisation
+is applied to ``sqrt(M)`` elementwise, i.e. in the Hellinger / square-root
+domain: for probability vectors ``||sqrt(p) - sqrt(q)||^2 = 2 H^2 ~ 2 KL``, so a
+rank-L SVD there minimises the metric that matches KL rather than the count
+scale, and squaring the reconstruction back,
+``p_hat(b|a) ~ ((U S V^T)[a,b])^2``, is non-negative by construction.  Because
+``sqrt(M)[a,b] = sqrt(N_a) sqrt(p(b|a))``, ``sqrt(M)`` is also exactly the
+occurrence-weighted Hellinger embedding, so this is the recommended model; pass
+``--no-sqrt`` for the old count-space factorisation.  A randomised SVD
+(Halko et al., one power iteration) is used throughout.  Each saved
+``pair_factors_L*.npy`` records a ``sqrt`` flag so consumers know whether to
+square the reconstruction.
 
 Outputs (in --outdir):
     pair_matrix_L<L>.npy   the rank-L factors U (N x L), V (N x L), singular
@@ -162,19 +170,31 @@ def main():
     ap.add_argument('--nmf', type=int, default=0)
     ap.add_argument('--nmf-iters', type=int, default=100)
     ap.add_argument('--max-n', type=int, default=6000)
+    ap.add_argument('--no-sqrt', action='store_true',
+                    help='factorise M itself instead of sqrt(M) (the old '
+                         'count-space behaviour)')
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
-    M, vocab, empty_idx = build_matrix(args.corpus, args.substrings)
+    vocab = [ln.rstrip(b'\n') for ln in open(args.substrings, 'rb')]
+    cache = os.path.join(args.outdir, 'M.npz')
+    if os.path.exists(cache):
+        M = np.load(cache)['M']
+    else:
+        M = build_matrix(args.corpus, args.substrings)[0]
+        np.savez_compressed(cache, M=M)
     n = len(vocab)
-    fro = float(np.linalg.norm(M))
+    A = M if args.no_sqrt else np.sqrt(M)
+    domain = 'count' if args.no_sqrt else 'sqrt'
+    fro = float(np.linalg.norm(A))
     nnz = int((M > 0).sum())
     print(f"M: {n} x {n}  nnz {nnz}  density {100 * nnz / n / n:.3f}%  "
-          f"||M||_F {fro:.1f}")
+          f"||M||_F {float(np.linalg.norm(M)):.1f}  domain={domain}")
 
     lines = [f"N\t{n}", f"nnz\t{nnz}", f"density\t{nnz / n / n:.6f}",
-             f"frobenius\t{fro:.6f}", "L\tsvd_relerr\tnmf_relerr"]
+             f"frobenius\t{fro:.6f}", f"domain\t{domain}",
+             "L\tsvd_relerr\tnmf_relerr"]
     rng = np.random.default_rng(args.seed)
     if n > args.max_n:
         print(f"N = {n} exceeds --max-n {args.max_n}: skipping factorisation")
@@ -184,18 +204,19 @@ def main():
 
     nmf_relerr = {}
     if args.nmf:
-        W, H = nmf(M, args.nmf, rng, args.nmf_iters)
-        nmf_relerr[args.nmf] = float(np.linalg.norm(M - W @ H)) / fro
+        W, H = nmf(A, args.nmf, rng, args.nmf_iters)
+        nmf_relerr[args.nmf] = float(np.linalg.norm(A - W @ H)) / fro
 
     for L in [int(x) for x in args.lsvd.split(',') if int(x) <= n]:
-        U, s, Vt = randomized_svd(M, L, rng)
+        U, s, Vt = randomized_svd(A, L, rng)
         approx = (U * s) @ Vt
-        err = float(np.linalg.norm(M - approx)) / fro
+        err = float(np.linalg.norm(A - approx)) / fro
         neg = float((U < 0).mean()), float((Vt < 0).mean())
         print(f"L={L:3d}  svd relerr {err:.4f}  (neg entries U {neg[0]:.2f}, "
               f"V {neg[1]:.2f})", flush=True)
         np.save(os.path.join(args.outdir, f'pair_factors_L{L}.npy'),
-                {'U': U, 's': s, 'V': Vt, 'vocab': np.array(vocab, dtype=object)})
+                {'U': U, 's': s, 'V': Vt, 'sqrt': (not args.no_sqrt),
+                 'vocab': np.array(vocab, dtype=object)})
         lines.append(f"{L}\t{err:.6f}\t"
                      + (f"{nmf_relerr[L]:.6f}" if L in nmf_relerr else ''))
     with open(os.path.join(args.outdir, 'pair_stats.txt'), 'w') as f:

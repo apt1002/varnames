@@ -265,6 +265,11 @@ why it is now stated explicitly which one is meant.
 
 ## Coping with negative probabilities
 
+(This section analyses the *count-space* factorisation, i.e. `pair_matrix.py
+--no-sqrt`.  The default is now the square-root domain, where the model is
+non-negative by construction and the remedies below are unnecessary — see
+`docs/HELLINGER_FACTORISATION.md`.)
+
 The truncated SVD is the best rank-`L` approximation in Frobenius norm, but its
 factors `U`, `V` (and hence the reconstructed `M̂`) generally contain **negative
 entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
@@ -291,9 +296,13 @@ above.
 | Euclidean projection onto the simplex | 28.30 | 30.15 | 30.22 |
 | backoff mixture with the global marginal (λ=0.1) | 0.93 | 2.62 | 3.51 |
 | **NMF** (multiplicative updates, non-negative) | 0.97 | 2.72 | 3.66 |
+| **`hell`: square-root SVD, squared back** | **0.65** | **2.22** | — |
 | *(reference) empirical row entropy H(p(b|a))* | 4.77 bits | 5.03 bits | 5.01 bits |
 
-(cells are mean KL in bits)
+(cells are mean KL in bits; the `hell` row is the model recommended in
+`docs/HELLINGER_FACTORISATION.md`, 0.49 / 1.87 bits on the occurrence-weighted
+metric at T=100000 / 20000, and is computed by `latent_probabilities.py`
+alongside the count-space remedies.)
 
 (Softmax of the latent scores is not tabulated here because it needs a
 per-row temperature: with the raw score scale the exponent underflows and the
@@ -302,6 +311,11 @@ T = 50000, KL 2.68 bits.)
 
 Ranking and recommendation:
 
+0. **Square-root (Hellinger) factorisation** `p̂ ∝ (√M reconstruction)²` — the
+   recommended model and now the default; non-negative by construction and the
+   lowest KL by a wide margin.  The count-space remedies below are only for
+   when you are stuck with the old `--no-sqrt` factorisation.  See
+   `docs/HELLINGER_FACTORISATION.md`.
 1. **NMF (non-negative matrix factorisation)** — `p ∝ W H` with `W, H >= 0`.
    This is the principled fix: the factors are non-negative *by construction*,
    so no clipping is needed, and it is competitive on KL while never producing

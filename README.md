@@ -295,7 +295,10 @@ capitalisation style). Success rates are reported both **static** (percentage of
 occurrences, from `work/occ/`). `scripts/pair_matrix.py` builds the `N x N`
 prefix/suffix adjacency matrix `M` (longest common substring that is a suffix of
 the left half against the longest common substring that is a prefix of the right
-half) and approximates it with a rank-`L` SVD (`N x L` times `L x N`), and
+half) and approximates it with a rank-`L` factorisation — by default in the
+square-root (Hellinger) domain, `M ~ (√M)_L²`, which is non-negative by
+construction and minimises the metric that matches KL (`--no-sqrt` for the old
+count-space SVD), and
 `scripts/latent_probabilities.py` measures ways of coping with the negative
 entries that factorisation introduces, and `scripts/sqrt_and_smooth.py` explores
 a better fix: factorise `√M` (equivalently the occurrence-weighted Hellinger

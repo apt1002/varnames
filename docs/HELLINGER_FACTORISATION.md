@@ -1,8 +1,39 @@
 # Hellinger (square-root) factorisation of the adjacency matrix, and smoothing
 
-Status: draft. All numbers are the occurrence-weighted mean `KL(P_emp ‖ p̂)` in
-bits (lower is better) unless a column says otherwise; `P_emp` is the
-row-normalised empirical conditional `p(b|a)`, `p̂` the model.
+Status: the square-root (Hellinger) factorisation is now the **default** in
+`scripts/pair_matrix.py` (saved `pair_factors_L*.npy` carry a `sqrt` flag;
+`--no-sqrt` restores the old count-space behaviour).  All numbers below are the
+occurrence-weighted mean `KL(P_emp ‖ p̂)` in bits (lower is better) unless a
+column says otherwise; `P_emp` is the row-normalised empirical conditional
+`p(b|a)`, `p̂` the model.
+
+## Why the occurrence-weighted KL is the right one
+
+For the joint distribution over `(a, b)` the chain rule gives, exactly,
+
+    H(P(a,b))          = H(P(a))    + H(P(b|a))
+    KL(P(a,b)‖Q(a,b))  = KL(P(a)‖Q(a)) + Σ_a P(a)·KL(P(b|a)‖Q(b|a)).
+
+The joint KL therefore splits into a row-marginal term plus the
+*occurrence-weighted* conditional KL.  Two consequences:
+
+* The cross-entropy differs from this by the **model-independent constant**
+  `H(P(a,b))` (equivalently `H(P(a))`), so ranking models by the weighted
+  conditional KL, by the joint cross-entropy, or by `KL(M, M̂)` all agree.
+* Our model only fits the conditionals and keeps the empirical row marginal
+  `P(a)`, so `KL(P(a)‖Q(a))` is common to every model and cancels.  Ranking by
+  the weighted conditional KL is then *identical* to ranking by `KL(M, M̂)`.
+
+Verified numerically at `T = 100000` with the count-space SVD:
+
+    1.35269  =  0.0135  +  1.3392      (joint = row-marginal + weighted cond.)
+    11.912   =  6.766   +  5.146       (H(P(a,b)) = H(P(a)) + H(P(b|a)))
+
+The **uniform** mean over rows that the report used corresponds instead to a
+joint in which every prefix `a` is equiprobable — a different quantity (1.727 vs
+1.339 above) — which is why it could rank models differently.  So the
+occurrence weighting is not a preference: it is what makes the conditional KL
+equal to the joint KL.
 
 ## Big idea
 
@@ -110,6 +141,9 @@ are only in the latent scores, so it buys nothing worth the KL it costs.
 
 ## Tentative conclusions
 
+0. The square-root factorisation is now the default in `pair_matrix.py`
+   (`--no-sqrt` for the old count-space behaviour); saved factors carry a `sqrt`
+   flag, and squaring the reconstruction gives the model.
 1. Factorise `√M` (equivalently, the occurrence-weighted Hellinger embedding)
    and square back.  Best KL at every threshold and every rank; model is
    non-negative by construction; no extra hyper-parameters.

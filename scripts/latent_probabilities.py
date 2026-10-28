@@ -12,6 +12,9 @@ p(b | a), and score each against the row-normalised empirical distribution:
   nmf      non-negative factors W H (multiplicative updates) renormalised --
            non-negative by construction, evaluated at its own best rank
   svd-abs  p(b|a) ∝ |M_hat[a,b]| (uses the factorisation only for ranking)
+  hell     p(b|a) ∝ (reconstruction of sqrt(M))[a,b]^2 -- the non-negative
+           square-root / Hellinger model (docs/HELLINGER_FACTORISATION.md),
+           included as the yardstick the count-space remedies are judged by
 
 Metrics over the rows that occur in the corpus: mean KL(P_emp || P_pred)
 (bits).  Only rows with a positive empirical count are scored.
@@ -103,17 +106,30 @@ def main():
     nrows = int((M.sum(1) > 0).sum())
     print(f"N={n}  rows with counts: {nrows}  rank L={args.L}\n")
 
-    fac = os.path.join(args.outdir, f'pair_factors_L{args.L}.npy')
-    d = np.load(fac, allow_pickle=True).item()
-    U, s, V = d['U'], d['s'], d['V']      # V is L x N
+    # Count-space SVD of M (the "coping with negatives" analysis).
+    U, s, V = pair_matrix.randomized_svd(M, args.L,
+                                         np.random.default_rng(args.seed))
     Mh = (U * s) @ V
     neg = float((Mh < 0).mean())
-    print(f"SVD  L={args.L}: negative entries {100*neg:.1f}%  "
+    print(f"count-space SVD  L={args.L}: negative entries {100*neg:.1f}%  "
           f"rel.err {np.linalg.norm(M - Mh)/np.linalg.norm(M):.4f}")
+
+    # Hellinger / square-root SVD of sqrt(M) -- the recommended model
+    # (docs/HELLINGER_FACTORISATION.md).  Squaring the reconstruction back
+    # gives a non-negative model, so no remedy is needed.
+    Us, ss, Vs = pair_matrix.randomized_svd(np.sqrt(M), args.L,
+                                            np.random.default_rng(args.seed))
+    Sh = (Us * ss) @ Vs
+    Sn = Sh * Sh
+    hell = Sn / np.maximum(Sn.sum(1, keepdims=True), 1e-300)
+    print(f"sqrt-space  SVD  L={args.L}: latent negatives "
+          f"{100*float((Sh < 0).mean()):.1f}%  (model non-negative by "
+          f"construction)")
 
     rows = [("svd-raw(no floor)", np.maximum(Mh, 1e-12))]
     rows.append(("clip", np.maximum(Mh, 0.0)))
     rows.append(("svd-abs", np.abs(Mh)))
+    rows.append(("hell (sqrt-SVD)^2", hell))
     rows.append(("simplex-proj", project_simplex_rows(Mh)))
     for tau in (0.25, 1.0, 4.0):
         Z = Mh / tau
