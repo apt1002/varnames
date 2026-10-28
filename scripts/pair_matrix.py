@@ -150,6 +150,31 @@ def randomized_svd(M, rank, rng, n_iter=1):
     return U[:, :rank], s[:rank], Vt[:rank]
 
 
+def kl_joint(M, Mhat, eps=1e-12):
+    """KL(M/T || Mhat/ΣMhat) in bits -- the relative entropy between the
+    empirical *joint* distribution over (prefix, suffix) pairs and a
+    non-negative model reconstruction, each normalised to unit total mass.
+
+    The metric is on the joint, so no conditional p(b|a) is ever formed.  This
+    loses nothing: by the entropy chain rule
+
+        KL(P(a,b) || Q(a,b)) = KL(P(a) || Q(a))
+                               + Σ_a P(a) KL(P(b|a) || Q(b|a))
+
+    and the prefix-marginal term is a model-independent constant, so scoring
+    the joint carries exactly the same information as the old row-normalised
+    conditional metric -- it just avoids normalising rows of M and of every
+    model.  `eps` floors the model so that exact zeros stay finite.
+    """
+    Mj = M / float(M.sum())
+    Mh = np.maximum(Mhat, 0.0)
+    s = float(Mh.sum())
+    Mh = Mh / s if s > 0 else np.full(Mh.shape, 1.0 / Mh.size)
+    Mh = np.maximum(Mh, eps)
+    nz = Mj > 0
+    return float((Mj[nz] * np.log2(Mj[nz] / Mh[nz])).sum())
+
+
 def nmf(M, rank, rng, iters=100):
     n = M.shape[0]
     W = rng.random((n, rank)).astype(np.float32) + 1e-3

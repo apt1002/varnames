@@ -4,20 +4,21 @@ adjacency matrix M back into a *probability* model, despite the negative
 entries a truncated SVD introduces.
 
 Given M (N x N counts of (longest common suffix, longest common prefix) pairs)
-we compare, for a rank-L approximation, three ways of producing
-p(b | a), and score each against the row-normalised empirical distribution:
+we compare, for a rank-L approximation, several non-negative reconstructions
+M_hat, and score each as a *joint* distribution over (prefix, suffix) pairs:
 
-  clip     M_hat = (U s) V^T, replace negative entries by 0, renormalise rows
-  softmax  p(b|a) ∝ exp(M_hat[a,b] / tau), calibrated over a small grid of tau
-  nmf      non-negative factors W H (multiplicative updates) renormalised --
+  clip     M_hat = (U s) V^T, replace negative entries by 0
+  softmax  M_hat ∝ exp(M_hat[a,b] / tau), calibrated over a small grid of tau
+  nmf      non-negative factors W H (multiplicative updates) --
            non-negative by construction, evaluated at its own best rank
-  svd-abs  p(b|a) ∝ |M_hat[a,b]| (uses the factorisation only for ranking)
-  hell     p(b|a) ∝ (reconstruction of sqrt(M))[a,b]^2 -- the non-negative
+  svd-abs  M_hat = |M_hat[a,b]| (uses the factorisation only for ranking)
+  sqrtcnt  M_hat = (reconstruction of sqrt(M))[a,b]^2 -- the non-negative
            square-root / Hellinger model (docs/HELLINGER_FACTORISATION.md),
            included as the yardstick the count-space remedies are judged by
 
-Metrics over the rows that occur in the corpus: mean KL(P_emp || P_pred)
-(bits).  Only rows with a positive empirical count are scored.
+Metric: KL(M/T || M_hat/sum M_hat) in bits -- the relative entropy between the
+empirical joint and the (normalised) model (see pair_matrix.kl_joint).  No
+conditional p(b|a) is formed.
 
 Usage: latent_probabilities.py CORPUS SUBS [--outdir DIR] [--L 16]
 """
@@ -29,37 +30,7 @@ import numpy as np
 import pair_matrix
 
 
-def entropy_bits(p):
-    p = p[p > 0]
-    return float(-(p * np.log2(p)).sum())
-
-
-def kl_rows(P, Q, w=None):
-    """Mean KL(P_row || Q_row), in bits.
-
-    P is the row-normalised empirical conditional (unit row sums), so the
-    occurrence weight cannot be read off P -- pass the raw row counts as w for
-    the occurrence-weighted mean.  With w=None the mean is uniform over rows
-    that occur.  (This function previously multiplied by P.sum(1), which is 1
-    for every live row, so it silently returned the uniform mean.)
-    """
-    Qn = np.maximum(Q, 1e-12)
-    Qn = Qn / Qn.sum(1, keepdims=True)
-    live = P.sum(1) > 0
-    kl = (P * (np.log2(np.maximum(P, 1e-12)) - np.log2(Qn))).sum(1)
-    if w is None:
-        return float(kl[live].mean())
-    w = np.asarray(w, dtype=np.float64)
-    m = live & (w > 0)
-    return float((kl[m] * w[m]).sum() / w[m].sum())
-
-
-def row_entropy(P):
-    """Occurrence-weighted mean row entropy H(p(b|a)) in bits."""
-    tot = P.sum(1)
-    m = tot > 0
-    h = np.array([entropy_bits(r) for r in P[m]])
-    return float((h * tot[m]).sum() / tot[m].sum())
+KL = pair_matrix.kl_joint
 
 
 def project_simplex_rows(Z, iters=50):
@@ -100,9 +71,10 @@ def main():
         M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
         np.savez_compressed(cache, M=M)
     n = M.shape[0]
-    P = M.astype(np.float64)
-    P = P / np.maximum(P.sum(1, keepdims=True), 1)
-    Nw = M.sum(1).astype(np.float64)
+    T = float(M.sum())
+    r = M.sum(1).astype(np.float64)
+    c = M.sum(0).astype(np.float64)
+    M_mar = np.outer(r, c) / max(T, 1.0)          # independence model
     nrows = int((M.sum(1) > 0).sum())
     print(f"N={n}  rows with counts: {nrows}  rank L={args.L}\n")
 
@@ -120,8 +92,6 @@ def main():
     Us, ss, Vs = pair_matrix.randomized_svd(np.sqrt(M), args.L,
                                             np.random.default_rng(args.seed))
     Sh = (Us * ss) @ Vs
-    Sn = Sh * Sh
-    hell = Sn / np.maximum(Sn.sum(1, keepdims=True), 1e-300)
     print(f"sqrt-space  SVD  L={args.L}: latent negatives "
           f"{100*float((Sh < 0).mean()):.1f}%  (model non-negative by "
           f"construction)")
@@ -129,27 +99,24 @@ def main():
     rows = [("svd-raw(no floor)", np.maximum(Mh, 1e-12))]
     rows.append(("clip", np.maximum(Mh, 0.0)))
     rows.append(("svd-abs", np.abs(Mh)))
-    rows.append(("hell (sqrt-SVD)^2", hell))
+    rows.append(("sqrtcnt (sqrt-SVD)^2", Sh * Sh))
     rows.append(("simplex-proj", project_simplex_rows(Mh)))
     for tau in (0.25, 1.0, 4.0):
         Z = Mh / tau
-        Z -= Z.max(1, keepdims=True)
+        Z -= Z.max()
         rows.append((f"softmax tau={tau}", np.exp(Z)))
-    # calibrated softmax: per-row temperature scaled to the row's own dynamic
+    # calibrated softmax: temperature scaled to the matrix's own dynamic
     # range, so the exponent is O(1) instead of spanning hundreds of bits.
-    rowscale = np.maximum(np.abs(Mh).max(1, keepdims=True), 1e-12)
     for c in (0.5, 2.0, 8.0):
-        Z = Mh / (rowscale / c)
-        Z -= Z.max(1, keepdims=True)
+        Z = Mh / (np.abs(Mh).max() / c)
+        Z -= Z.max()
         rows.append((f"softmax cal c={c}", np.exp(Z)))
-    # marginal q_b, which is strictly positive -> repairs zero rows and
+    # mixing with the rank-1 independence model repairs zero rows and
     # guarantees full support while staying inside the latent model.
-    qb = M.sum(0).astype(np.float64)
-    qb = np.maximum(qb / max(qb.sum(), 1.0), 1e-12)
     for lam in (0.1, 0.3, 0.6):
-        base = np.maximum(Mh, 0.0)
-        base = base / np.maximum(base.sum(1, keepdims=True), 1e-12)
-        rows.append((f"backoff lambda={lam}", (1 - lam) * base + lam * qb))
+        rows.append((f"backoff lambda={lam}",
+                     (1 - lam) * np.maximum(Mh, 0.0) + lam * M_mar))
+    rows.append(("marginal (independence)", M_mar))
 
     rng = np.random.default_rng(args.seed)
     W, H = pair_matrix.nmf(M, args.L, rng, args.nmf_iters)
@@ -158,13 +125,12 @@ def main():
           f"rel.err {np.linalg.norm(M - Wh)/np.linalg.norm(M):.4f}")
     rows.append(("nmf", Wh))
 
-    print(f"\n{'method':22s} {'KL occ-wtd':>11s} {'KL uniform':>11s}")
+    print(f"\n{'method':22s} {'KL (bits)':>11s}")
     for name, Q in rows:
-        print(f"{name:22s} {kl_rows(P, Q, Nw):11.4f} {kl_rows(P, Q):11.4f}")
+        print(f"{name:22s} {KL(M, Q):11.4f}")
 
-    print(f"\nempirical row entropy H(p(b|a)) = {row_entropy(P):.4f} bits "
-          f"(the KL floor: no factorisation can go below 0 KL, but a "
-          f"model with KL > this is worse than uniform)")
+    print("\nKL(M/T || M_hat/sum M_hat): no conditional p(b|a) is formed; the "
+          "floor is 0 (M itself).")
 
 
 if __name__ == '__main__':

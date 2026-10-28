@@ -8,14 +8,14 @@ The marginal model is the rank-1 *maximum-likelihood* fit:
 
 i.e. "global distribution over prefixes times global distribution over
 suffixes".  The rank-1 *Frobenius* fit is the leading SVD term sigma_1 u_1 v_1^T.
-Both give a conditional p(b|a) that is independent of a, but the vectors differ
-in general.  This script reports
+Both give a model that is (in conditional terms) independent of a, but the
+vectors differ in general.  This script reports
 
   * cos(u_1, r/||r||) and cos(v_1, c/||c||)   -- how far the SVD rank-1 is
     from the marginals (1.0 = identical direction),
   * the relative Frobenius error of each rank-1 model,
-  * the mean KL(P_emp || p(b|a)) of each as a probability model, showing that
-    the objective decides which one wins.
+  * the joint KL(M/T || M_hat/sum M_hat) of each as a probability model,
+    showing that the objective decides which one wins.
 
 Usage: rank1_marginals.py CORPUS SUBS [--outdir DIR]
 """
@@ -26,28 +26,7 @@ import numpy as np
 
 import pair_matrix
 
-
-def _broadcast(Q, n):
-    return np.repeat(Q, n, axis=0) if Q.shape[0] == 1 else Q
-
-
-def kl_rows(P, Q, w=None):
-    """Mean KL(P_row || Q_row) in bits, weighted by w (default uniform).
-
-    P is a row-normalised conditional (unit row sums), so pass the raw row
-    counts (N_a) as w for the occurrence-weighted mean; P itself cannot supply
-    them.  (Previously this multiplied by P.sum(1) == 1, i.e. it was uniform.)
-    """
-    Q = _broadcast(Q, P.shape[0])
-    Qn = np.maximum(Q, 1e-12)
-    Qn = Qn / Qn.sum(1, keepdims=True)
-    live = P.sum(1) > 0
-    kl = (P * (np.log2(np.maximum(P, 1e-12)) - np.log2(Qn))).sum(1)
-    if w is None:
-        return float(kl[live].mean())
-    w = np.asarray(w, dtype=np.float64)
-    m = live & (w > 0)
-    return float((kl[m] * w[m]).sum() / w[m].sum())
+KL = pair_matrix.kl_joint
 
 
 def main():
@@ -73,15 +52,10 @@ def main():
     c = M.sum(0).astype(np.float64)
     T = float(M.sum())
 
-    # empirical conditional p(b|a)
-    rowsum = np.maximum(M.sum(1, keepdims=True), 1).astype(np.float32)
-    Pemp = Mf / rowsum
-
     # --- marginal (independence) model ----------------------------------
     Mmar = (np.outer(r, c) / T).astype(np.float32)
     rel_mar = float(np.linalg.norm(Mf - Mmar)) / fro
-    del Mmar
-    pmar_row = (c / T)[None, :]                       # p(b|a) = c_b / T
+    kl_mar = KL(Mf, Mmar)
 
     # --- leading SVD pair -------------------------------------------------
     rng = np.random.default_rng(args.seed)
@@ -91,10 +65,9 @@ def main():
         u1, v1 = -u1, -v1                              # consistent/non-neg.
     u1 = np.abs(u1) if u1.sum() < 0 else u1
     v1 = np.abs(v1) if v1.sum() < 0 else v1
-    Mr1 = (s[0] * np.outer(u1, v1)).astype(np.float32)
+    Mr1 = (s[0] * np.outer(np.abs(u1), np.abs(v1))).astype(np.float32)
     rel_r1 = float(np.linalg.norm(Mf - Mr1)) / fro
-    del Mr1
-    pr1_row = (np.abs(v1) / np.abs(v1).sum())[None, :]
+    kl_r1 = KL(Mf, Mr1)
 
     ru = r / np.linalg.norm(r)
     cu = c / np.linalg.norm(c)
@@ -104,12 +77,10 @@ def main():
     print(f"N={N}  ||M||_F={fro:.0f}  T={T:.0f}")
     print(f"  cos(u1, prefix marginal) = {cos_u:.4f}")
     print(f"  cos(v1, suffix marginal) = {cos_v:.4f}")
-    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'KL occ-wtd':>11s} "
-          f"{'KL uniform':>11s}")
-    for name, rel, P in (("marginal (KL-optimal)", rel_mar, pmar_row),
-                         ("SVD rank-1 (LS-optimal)", rel_r1, pr1_row)):
-        print(f"{name:22s} {rel:17.4f} {kl_rows(Pemp, P, r):11.4f} "
-              f"{kl_rows(Pemp, P):11.4f}")
+    print(f"\n{'model':22s} {'Frobenius relerr':>17s} {'KL (bits)':>11s}")
+    for name, rel, kl in (("marginal (KL-optimal)", rel_mar, kl_mar),
+                          ("SVD rank-1 (LS-optimal)", rel_r1, kl_r1)):
+        print(f"{name:22s} {rel:17.4f} {kl:11.4f}")
 
 
 if __name__ == '__main__':
