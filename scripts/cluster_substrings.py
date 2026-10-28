@@ -50,11 +50,13 @@ is wanted.
 
 Performance
 -----------
-The two hot operations (k-means assignment and accumulation) are O(n*k*d).  The
-host BLAS is reference (netlib) BLAS, which is far too slow for n ~ 1e4, so these
-are done by a small OpenMP kernel compiled from scripts/fastkern.c (falling back
-to NumPy if gcc is missing).  The ``kl`` method uses plain NumPy matmuls (fine
-for n ~ 1e3).
+The two hot operations (k-means assignment and accumulation) are O(n*k*d).  For
+n ~ 1e4 these run in a small OpenMP kernel compiled from scripts/fastkern.c
+(falling back to NumPy if gcc is missing).  The kernel was written when the host
+had only reference (netlib) BLAS -- far too slow for n ~ 1e4 -- but it is kept
+as a portable path that does not depend on a fast BLAS being installed; with
+OpenBLAS present the NumPy fallback is now competitive too.  The ``kl`` method
+uses plain NumPy matmuls in all cases.
 
 Input : <outdir>/successor_distributions.tsv
 Output: <outdir>/clusters.tsv          substring, sample_size, cluster

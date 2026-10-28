@@ -68,13 +68,22 @@ could be dropped: `hell` (unweighted), `hellw` (weighted) and the explicit
 |---|---:|---:|---:|---:|---:|---:|
 | 100000 (159) | 1.059 | 0.757 | 0.688 | 0.730 | **0.494** | 1.623 |
 | 50000 (316) | 1.547 | 1.298 | 1.213 | 1.290 | **0.990** | 2.329 |
-| 20000 (911)* | 2.528 | 2.423 | 2.256 | 2.367 | **2.016** | 3.475 |
+| 20000 (911) | 2.377 | 2.333 | 2.225 | 2.367 | **2.036** | 3.475 |
+| 10000 (2102) | 3.111 | 3.159 | 3.055 | 3.353 | 3.090 | 4.340 |
 
-\* randomised SVD (exact is ~30 s per factorisation on N=911 with reference
-BLAS).  The randomised values are within ~0.02 bits and keep the ordering.
+(All exact SVD.)  `sqrtcnt` wins comfortably down to `T = 20000`; at
+`T = 10000` the edge is gone at `L = 16` (the `backoff` mixture edges it,
+3.055 vs 3.090) and even `abs` falls behind `clip` — the count-space Hellinger
+subspace is no longer the best rank-16 KL model once the matrix is large and
+sparse (density 16.7%).  A higher `L` narrows this (the Hellinger advantage
+grows with rank at `T = 100000`), but we have not retested `T = 10000` at
+`L > 16`.
 
-`sqrtcnt` wins at every threshold — the Hellinger factorisation is worth more
-than any of the "cope with negatives" remedies, and it needs none.
+**Caveat on the randomised SVD.**  `pair_matrix.randomized_svd` uses one power
+iteration and float32, and at `N = 2102` that is *not* accurate enough: it gives
+`sqrtcnt` 3.020 vs the exact 3.090 (and higher `n_iter` overflows in float32).
+All numbers here are therefore the **exact** SVD; a fix to the randomised
+routine (orthonormalising each power iteration, float64) is still outstanding.
 
 ## Rank dependence (T = 100000, exact)
 

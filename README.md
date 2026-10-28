@@ -225,9 +225,11 @@ merely relocated the arbitrariness — the best compromise depends on how much
 pressure one feels to keep the model low-dimensional — so `k` is chosen by hand
 and the `H(next | cluster)` vs `k` curve is produced by sweeping `--k` yourself.
 The two clustering methods agree to within ~0.04 bits (over `k = 2..100` on the
-current corpus the gap is at most 0.034 bits, mean 0.017; `kl` a hair better at
-small `k`, the sphere method occasionally better at large `k`), so it does not
-matter which one you run. `scripts/cluster_entropy.py` reports `H(next)`,
+current corpus the gap is at most 0.035 bits, mean 0.015; `kl` is a hair better
+at small `k` (up to ~30), the sphere method a hair better at large `k`), so it
+does not matter which one you run. At threshold 2000 (10,890 contexts, `k`
+sampled on a coarse grid) the gap is at most 0.052 bits, mean 0.019.
+`scripts/cluster_entropy.py` reports `H(next)`,
 `H(next | substring)`, `H(next | cluster)` and the information retained.
 
 On the current corpus (1,950 analysable contexts), `H(next) = 4.966` and
@@ -270,10 +272,14 @@ entropies are: `H(next) = 4.935`, `H(next | substring) = 3.159`,
 
 `scripts/fastkern.c` holds the two O(n·k·d) inner loops (K-means assignment,
 cluster accumulation). It is compiled on demand with
-`gcc -O3 -march=native -fopenmp` and loaded through `ctypes`, because the host's
-BLAS is reference (netlib) BLAS (~0.2 GFLOP/s) which makes the NumPy fallback
-far too slow at this size; if compilation fails the script falls back to pure
-NumPy automatically.
+`gcc -O3 -march=native -fopenmp` and loaded through `ctypes`. It was written
+when the host had only reference (netlib) BLAS (~0.2 GFLOP/s), which made the
+NumPy fallback far too slow at this size; it is kept as a portable path that
+does not require a fast BLAS to be installed, and if compilation fails the
+script falls back to pure NumPy automatically. (With OpenBLAS installed --
+`apt install libopenblas0-pthread`, which registers the `libblas.so.3` /
+`liblapack.so.3` alternatives -- the NumPy fallback is competitive again, and
+the dense factorisations in `pair_matrix.py` are ~20× faster.)
 
 ```sh
 python3 scripts/common_substrings.py work/camel/merged.txt \
