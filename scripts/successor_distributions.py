@@ -45,6 +45,8 @@ import sys
 
 import numpy as np
 
+import winhash
+
 B = 0x9E3779B97F4A7C15            # same multiplier as common_substrings.py
 NUL = 0
 CHUNK = 1 << 21
@@ -106,14 +108,12 @@ def main():
     for i, c in enumerate(SYMS):
         sym_col[c] = i
 
-    Bpow = np.ones(max_len + 1, dtype=np.uint64)
-    for l in range(1, max_len + 1):
-        Bpow[l] = np.uint64((int(Bpow[l - 1]) * B) & 0xFFFFFFFFFFFFFFFF)
+    Bpow = winhash.bpow_table(max_len)
 
     # hashes of the common substrings, grouped by length
     by_len = {}
     for vi, s in enumerate(vocab):
-        by_len.setdefault(len(s), []).append((hash_bytes(s), vi))
+        by_len.setdefault(len(s), []).append((winhash.hash_bytes(s), vi))
     Hs, Imap = {}, {}
     for l, lst in by_len.items():
         a = np.array([h for h, _ in lst], dtype=np.uint64)
@@ -130,31 +130,29 @@ def main():
     glob = np.zeros(NSYM, dtype=np.int64)
     unassigned = 0
 
-    # pad so that a length-l window never starts before T[0]
-    Tpad = np.zeros(N + max_len, dtype=np.uint8)
-    Tpad[max_len:] = T
+    # pad on both sides so left/right windows never run off T
+    P = np.zeros(N + 2 * max_len, dtype=np.uint8)
+    P[max_len:max_len + N] = T
 
-    with np.errstate(over='ignore'):
-        for p0 in range(0, N, CHUNK):
-            p1 = min(p0 + CHUNK, N)
-            nchunk = p1 - p0
-            seg = Tpad[p0:p1 + max_len]          # local t -> global p0+t
-            ctxidx = np.full(nchunk, -1, dtype=np.int32)
+    for p0 in range(0, N, CHUNK):
+        p1 = min(p0 + CHUNK, N)
+        nchunk = p1 - p0
+        seg = P[p0:p1 + 2 * max_len]             # local s <-> T index p0+s-max_len
+        Q = winhash.prefix_q(seg)
+        ctxidx = np.full(nchunk, -1, dtype=np.int32)
+        with np.errstate(over='ignore'):
             for l in lengths:                    # longest first
-                hw = np.zeros(nchunk, dtype=np.uint64)
-                off = max_len - l
-                for k in range(l):
-                    sl = seg[off + k:off + k + nchunk].astype(np.uint64)
-                    hw += sl * Bpow[l - 1 - k]
+                hw = (Q[max_len:max_len + nchunk]
+                      - Q[max_len - l:max_len - l + nchunk] * Bpow[l])
                 Hs_l = Hs[l]
                 pos = np.searchsorted(Hs_l, hw)
                 np.minimum(pos, Hs_l.shape[0] - 1, out=pos)
                 match = (Hs_l[pos] == hw) & (ctxidx < 0)
                 if match.any():
                     ctxidx[match] = Imap[l][pos[match]]
-            # record the longest-suffix length distribution
-            hit = ctxidx >= 0
+        with np.errstate(over='ignore'):
             # succ + counts
+            hit = ctxidx >= 0
             succ = T[p0:p1]
             col = sym_col[succ]
             valid = col >= 0
