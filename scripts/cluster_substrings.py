@@ -40,8 +40,11 @@ Two clustering objectives are provided:
 Both weight every point by its occurrence count N_s and use k-means++ style
 seeding (the sphere method seeds proportional to N_s * d^2) with several restarts
 (the restart with the lowest H(next | cluster) is kept).  The number of clusters
-is chosen by the mean silhouette score unless --k is given.  The silhouette of
-every candidate k is estimated on a fixed random subsample of the points (all
+is chosen by the mean silhouette score unless --k is given.  The silhouette is
+occurrence-weighted too: point i counts as N_s[i] replicas, the per-cluster
+"size" is its total weight, and the mean is taken over points weighted by N_s
+(a singleton cluster scores 0, Rousseeuw's convention).  Silhouette for every
+candidate k is estimated on a fixed random subsample of the points (all
 points are still used as the reference set); this keeps the O(n^2) distance work
 bounded as k grows.
 
@@ -108,7 +111,7 @@ def load_kernel(dest):
     lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int,
                                F32P, F64P]
     lib.silhouette_rows.argtypes = [F32P, ctypes.c_int, F32P, ctypes.c_int, ctypes.c_int,
-                                    I32P, I32P, ctypes.c_int, I32P, F32P]
+                                    I32P, I32P, ctypes.c_int, F32P, F64P, F32P]
     return lib
 
 
@@ -256,45 +259,60 @@ def kmeans_kl(C, Ns, q, k, rng, alpha, iters=100):
     return labels, centers, h_given_cluster(C, labels)
 
 
-def silhouette(X32, labels, qidx=None, chunk=1024):
-    """Mean silhouette on the sphere (over qidx if given)."""
+def silhouette(X32, labels, w, qidx=None, chunk=1024):
+    """Occurrence-weighted mean silhouette on the sphere (over qidx if given).
+
+    Point i counts with weight w[i]: its score is the silhouette of a multiset in
+    which i is replicated w[i] times, and the mean is taken over the query points
+    weighted by w.  A singleton cluster (weight <= 1) scores 0, Rousseeuw's
+    convention.
+    """
     n, d = X32.shape
+    w = np.ascontiguousarray(w, dtype=np.float64)
     if qidx is None:
-        Q, lq = X32, labels
+        Q, lq, wq = X32, labels, w
     else:
         Q = np.ascontiguousarray(X32[qidx])
         lq = labels[qidx]
+        wq = w[qidx]
     nq = Q.shape[0]
     k = int(labels.max()) + 1
     lq = np.ascontiguousarray(lq, dtype=np.int32)
     labels = np.ascontiguousarray(labels, dtype=np.int32)
-    n_c = np.bincount(labels, minlength=k).astype(np.int32)
+    wc = np.bincount(labels, weights=w, minlength=k)     # cluster weights M_c
+    tot = float(wq.sum())
+    if tot <= 0:
+        return 0.0
     if KERN is not None:
+        wf = np.ascontiguousarray(w, dtype=np.float32)
         out = np.empty(nq, dtype=np.float32)
         KERN.silhouette_rows(_f(Q if Q.flags['C_CONTIGUOUS'] else np.ascontiguousarray(Q)),
-                             nq, _f(X32), n, d, _i(lq), _i(labels), k, _i(n_c), _f(out))
-        return float(out.mean())
+                             nq, _f(X32), n, d, _i(lq), _i(labels), k,
+                             _f(wf), _d(wc), _f(out))
+        return float(np.average(out.astype(np.float64), weights=wq))
     # ---- NumPy fallback ----
-    n_cf = np.maximum(n_c.astype(np.float64), 1.0)
+    nz = wc > 0
     M = np.zeros((n, k), dtype=np.float64)
-    M[np.arange(n), labels] = 1.0
-    M /= n_cf[None, :]
+    M[np.arange(n), labels] = w
+    M[:, nz] /= wc[nz][None, :]
     scores = np.empty(nq, dtype=np.float64)
     for s in range(0, nq, chunk):
         e = min(s + chunk, nq)
         D = 2.0 - 2.0 * (Q[s:e] @ X32.T)
         np.maximum(D, 0.0, out=D)
         np.sqrt(D, out=D)
-        S = D @ M
+        S = D @ M                       # S[i,c] = weighted mean distance to c
+        S[:, ~nz] = np.inf
         ri = np.arange(e - s)
         own = lq[s:e]
-        a = np.where(n_c[own] > 1,
-                     S[ri, own] * n_c[own] / np.maximum(n_c[own] - 1.0, 1.0), 0.0)
+        a = np.where(wc[own] > 1,
+                     S[ri, own] * wc[own] / np.maximum(wc[own] - 1.0, 1.0), 0.0)
         S[ri, own] = np.inf
         b = S.min(1)
         m = np.maximum(a, b)
-        scores[s:e] = np.where(m > 0, (b - a) / m, 0.0)
-    return float(scores.mean())
+        sc = np.where(np.isfinite(b) & (m > 0), (b - a) / m, 0.0)
+        scores[s:e] = np.where(wc[own] <= 1, 0.0, sc)
+    return float(np.average(scores, weights=wq))
 
 
 def main():
@@ -359,7 +377,7 @@ def main():
             bits = h_given_cluster(C, labels)
             if best_bits is None or bits < best_bits:
                 best_bits, best = bits, (labels, centers)
-        sil = silhouette(X, best[0], qidx)
+        sil = silhouette(X, best[0], Ns, qidx)
         results[k] = (best, sil, best_bits)
         print(f"k={k:3d}  H(next|cluster)={best_bits:.4f} bits  "
               f"silhouette={sil:+.4f}", flush=True)
