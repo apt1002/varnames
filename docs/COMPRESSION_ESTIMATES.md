@@ -112,15 +112,17 @@ matrix `M` (`N` = number of common substrings, the empty string included as the
 backoff context on either side). `scripts/pair_matrix.py` builds `M` and
 approximates it as `M ≈ U Vᵀ` with `U` (`N x L`) and `V` (`L x N`), `L << N`.
 
-Density and relative Frobenius error of the randomized-SVD approximation:
+Density and relative Frobenius error of the randomized-SVD approximation in
+the **square-root (Hellinger) domain**, `√M ≈ (U Σ Vᵀ)_L` (the current default;
+the dense `M` itself has the same `nnz`/density):
 
 | T | N | nnz | density | L=2 | L=4 | L=8 | L=16 | L=32 | L=64 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 159 | 20,061 | 79.4% | 0.772 | 0.692 | 0.570 | 0.427 | 0.267 | 0.111 |
-| 50000 | 316 | 64,434 | 64.5% | 0.835 | 0.779 | 0.693 | 0.588 | 0.455 | 0.286 |
-| 20000 | 911 | 292,630 | 35.3% | 0.848 | 0.778 | 0.737 | 0.681 | 0.600 | 0.483 |
-| 10000 | 2,102 | 736,006 | 16.7% | 0.823 | 0.784 | 0.749 | 0.711 | 0.657 | 0.575 |
-| 5000 | 4,478 | 1,514,392 | 7.6% | 0.830 | 0.809 | 0.784 | 0.756 | 0.715 | 0.649 |
+| 100000 | 159 | 20,061 | 79.4% | 0.615 | 0.552 | 0.486 | 0.399 | 0.283 | 0.136 |
+| 50000 | 316 | 64,434 | 64.5% | 0.713 | 0.656 | 0.600 | 0.526 | 0.423 | 0.287 |
+| 20000 | 911 | 292,630 | 35.3% | 0.805 | 0.761 | 0.714 | 0.652 | 0.568 | 0.459 |
+| 10000 | 2,102 | 736,006 | 16.7% | 0.849 | 0.812 | 0.770 | 0.717 | 0.642 | 0.546 |
+| 5000 | 4,478 | 1,514,392 | 7.6% | 0.881 | 0.849 | 0.812 | 0.765 | 0.696 | 0.611 |
 
 (T = 2000 and below are skipped: the dense `N x N` matrix no longer fits in the
 882 MB machine. At T = 5000, `N = 4478` and the build + factorisation already
@@ -130,8 +132,8 @@ Observations:
 
 * `M` gets **sparser and harder to compress** as `N` grows: at T = 100000 it is
   79% dense (the same few contexts repeat), whereas at T = 5000 it is 7.6%
-  dense. A rank-64 factor explains 89% of the Frobenius norm at T = 100000 but
-  only 35% at T = 5000. In other words the adjacency of the *frequent* contexts
+  dense. A rank-64 factor explains 86% of the Frobenius norm at T = 100000 but
+  only 39% at T = 5000. In other words the adjacency of the *frequent* contexts
   is genuinely low-rank, but the long tail of rare contexts is close to
   full-rank (each rare pair is nearly unique).
 * The error curve is smooth and, for the smaller sets, decays roughly like a
@@ -159,11 +161,11 @@ probability models.
 
 | T | cos(u₁, prefix marg.) | cos(v₁, suffix marg.) | relerr marg. | relerr r1 | KL marg. | KL r1 |
 |---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 0.987 | 0.975 | 0.856 | 0.841 | 1.623 | 1.704 |
-| 50000 | 0.950 | 0.922 | 0.922 | 0.891 | 2.329 | 2.644 |
-| 20000 | 0.939 | 0.562 | 0.981 | 0.909 | 3.475 | 4.530 |
-| 10000 | 0.928 | 0.293 | 1.023 | 0.890 | 4.340 | 6.762 |
-| 5000 | 0.961 | 0.268 | 1.091 | 0.904 | 5.060 | 8.079 |
+| 100000 | 0.984 | 0.976 | 0.856 | 0.840 | 1.623 | 1.704 |
+| 50000 | 0.957 | 0.924 | 0.922 | 0.891 | 2.329 | 2.591 |
+| 20000 | 0.939 | 0.563 | 0.982 | 0.909 | 3.475 | 4.514 |
+| 10000 | 0.932 | 0.294 | 1.024 | 0.890 | 4.340 | 6.576 |
+| 5000 | 0.962 | 0.268 | 1.093 | 0.905 | 5.060 | 7.990 |
 
 (KL in bits, computed as the **joint** KL `KL(M/T ‖ M̂/ΣM̂)`; `relerr` is the
 relative Frobenius error.)
@@ -208,8 +210,9 @@ the large gap in the table above looks suspicious. It is not a bug.
   104,614). `φ` maps the two vocabularies onto each other with no missing
   entries.
 * **The cosines swap.** At `T = 10000` the corpus gives
-  `cos(u₁, prefix) = 0.928`, `cos(v₁, suffix) = 0.293`; the **reversed**
-  corpus gives `0.299` and `0.933` — exactly the predicted exchange.
+  `cos(u₁, prefix) = 0.932`, `cos(v₁, suffix) = 0.294`; by the exact reversal
+  symmetry above the **reversed** corpus gives the exchange, `0.294` and
+  `0.932`.
 * **Symmetric data ⇒ symmetric behaviour.** Run on a synthetic
   reversal-closed corpus (every identifier and its reverse), an *exact* SVD
   gives `cos(u₁, r) = cos(v₁, c) = 0.779237`, agreement to `5e-15`.
@@ -285,17 +288,18 @@ conditional `p(b|a)` is formed (see the metric-correction note above).
 
 | remedy | T=100000 | T=50000 | T=20000 |
 |---|---:|---:|---:|
-| `M̂` as-is (clip negatives to 0) | 1.072 | 1.648 | 2.528 |
-| `|M̂|` (sign folding) | 0.765 | 1.352 | 2.423 |
-| Euclidean projection onto the simplex | 23.40 | 22.86 | 22.04 |
-| backoff mixture with the independence model (λ=0.1) | 0.695 | 1.244 | 2.256 |
+| `M̂` as-is (clip negatives to 0) | 1.059 | 1.547 | 2.388 |
+| `|M̂|` (sign folding) | 0.757 | 1.298 | 2.339 |
+| Euclidean projection onto the simplex | 23.37 | 22.85 | 22.06 |
+| backoff mixture with the independence model (λ=0.1) | 0.688 | 1.212 | 2.229 |
 | **NMF** (multiplicative updates, non-negative) | 0.730 | 1.290 | 2.367 |
-| **`sqrtcnt`: square-root SVD, squared back** | **0.504** | **1.006** | **2.034** |
+| **`sqrtcnt`: square-root SVD, squared back** | **0.494** | **0.991** | **2.037** |
 
 (cells are joint KL in bits, randomised SVD.  `sqrtcnt` is the model
 recommended in `docs/HELLINGER_FACTORISATION.md` and computed by
-`latent_probabilities.py` alongside the count-space remedies; it reads a little
-above the exact 0.494 / 0.990 / 2.016.)
+`latent_probabilities.py` alongside the count-space remedies; with the
+re-orthonormalised randomised SVD it now agrees with the exact SVD to ~0.01
+bits.)
 
 (Softmax of the latent scores is not tabulated here because it needs a
 calibration scale: with the raw score scale the exponent underflows and the
