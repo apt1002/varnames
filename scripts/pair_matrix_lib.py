@@ -139,16 +139,25 @@ def load_or_build_matrix(corpus, subs, outdir):
     return M
 
 
-def randomized_svd(M, rank, rng, n_iter=4):
+def randomized_svd(M, rank, rng, n_iter=8):
     """Randomised range finder (Halko-Martinsson-Tropp), range M(MᵀM)^n_iter Ω.
+
+    We only need the top ``rank`` directions, so instead of an O(N^3) exact SVD
+    we sample the range: draw a random N x (rank+p) block Ω, form the basis
+    Q = qr(A Ω) and do an exact SVD of the small B = QᵀA.  Each power step
+    replaces A by (A Aᵀ) A, amplifying the dominant directions by σ_i^{2q+1}
+    and so sharpening the subspace when the spectrum decays slowly.
 
     The range basis is re-orthonormalised (QR) after *every* power step.  The
     earlier version accumulated ``Y = A @ (A.T @ Y)`` without re-orthonormalising
     and then did a single QR, which both lost accuracy at moderate N (a single
     power iteration gave 3.02 vs the exact 3.09 bits at N=2102) and overflowed
     in float32 for n_iter ≳ 8.  With the per-step QR, float32 no longer
-    overflows and the default n_iter = 4 matches the exact SVD to ~0.005 bits
-    (n_iter = 8 to ~0.001).
+    overflows -- and is as accurate as float64, since the error is set by
+    n_iter, not the dtype.  At N = 2102 (sqrt domain) the default n_iter = 8
+    matches the exact SVD to ~0.001 bits (n_iter = 4 gave ~0.005, the old
+    single-iteration routine ~0.07); the count-space factorisation converges a
+    little more slowly.
     """
     n = M.shape[0]
     p = min(10, rank)

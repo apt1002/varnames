@@ -79,11 +79,15 @@ sparse (density 16.7%).  A higher `L` narrows this (the Hellinger advantage
 grows with rank at `T = 100000`), but we have not retested `T = 10000` at
 `L > 16`.
 
-**Caveat on the randomised SVD.**  `pair_matrix_lib.randomized_svd` uses one power
-iteration and float32, and at `N = 2102` that is *not* accurate enough: it gives
-`sqrtcnt` 3.020 vs the exact 3.090 (and higher `n_iter` overflows in float32).
-All numbers here are therefore the **exact** SVD; a fix to the randomised
-routine (orthonormalising each power iteration, float64) is still outstanding.
+**Accuracy of the randomised SVD.**  `pair_matrix_lib.randomized_svd` now
+re-orthonormalises the range basis (QR) after *every* power iteration and
+defaults to `n_iter = 8`.  At `N = 2102` this matches the exact SVD to ~0.001
+bits in the sqrt domain and ~0.003 bits in count space; the old
+single-iteration routine was ~0.07 bits off and overflowed in float32 (fixed in
+commit `24d74db`).  Float64 buys nothing — the residual error is set by
+`n_iter`, not the dtype, since the per-step QR keeps the basis
+well-conditioned.  The tables above use the **exact** SVD and therefore carry
+no approximation error.
 
 ## Rank dependence (T = 100000, exact)
 
@@ -105,8 +109,8 @@ count.  At L=2 the rank-1 backoff/marginal direction is marginally better.
 Add `alpha · M_mar`, `M_mar = r cᵀ / T`, before factorising.  It does what was
 hoped, and something was not:
 
-* it **reduces the latent negatives**, a lot — `sqrtcnt` goes 14.4% → 8.7% →
-  4.7% at `alpha = 0, 0.05, 0.2` (T=100000);
+* it **reduces the latent negatives**, a lot — `sqrtcnt` goes 11.2% → 5.1% → 1.4%
+  at `alpha = 0, 0.05, 0.2` (T=100000);
 * but it **raises the KL** for every good method.  At T=100000 (joint KL):
   `sqrtcnt` 0.494 → 0.498 → 0.549, `nmf` 0.730 → 0.726 → 0.742;
 * it does help the *naive* family: `clip` improves 1.059 → 0.994 → 0.908, but

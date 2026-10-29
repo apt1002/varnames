@@ -34,10 +34,10 @@ the dense `M` itself has the same `nnz`/density):
 | T | N | nnz | density | L=2 | L=4 | L=8 | L=16 | L=32 | L=64 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 100000 | 159 | 20,061 | 79.4% | 0.615 | 0.552 | 0.486 | 0.399 | 0.283 | 0.136 |
-| 50000 | 316 | 64,434 | 64.5% | 0.713 | 0.656 | 0.600 | 0.526 | 0.423 | 0.287 |
-| 20000 | 911 | 292,630 | 35.3% | 0.805 | 0.761 | 0.714 | 0.652 | 0.568 | 0.459 |
-| 10000 | 2,102 | 736,006 | 16.7% | 0.849 | 0.812 | 0.770 | 0.717 | 0.642 | 0.546 |
-| 5000 | 4,478 | 1,514,392 | 7.6% | 0.881 | 0.849 | 0.812 | 0.765 | 0.696 | 0.611 |
+| 50000 | 316 | 64,434 | 64.5% | 0.713 | 0.656 | 0.600 | 0.525 | 0.422 | 0.286 |
+| 20000 | 911 | 292,630 | 35.3% | 0.805 | 0.761 | 0.713 | 0.651 | 0.567 | 0.458 |
+| 10000 | 2,102 | 736,006 | 16.7% | 0.849 | 0.812 | 0.770 | 0.716 | 0.641 | 0.545 |
+| 5000 | 4,478 | 1,514,392 | 7.6% | 0.880 | 0.848 | 0.811 | 0.763 | 0.695 | 0.610 |
 
 (T = 2000 and below are skipped: the dense `N x N` matrix no longer fits in the
 882 MB machine. At T = 5000, `N = 4478` and the build + factorisation already
@@ -188,10 +188,10 @@ entries**. Measured on `M̂` at `L = 16`:
 
 | T | negative entries of M̂ |
 |---:|---:|
-| 100000 | 19.5% |
-| 50000 | 21.8% |
-| 20000 | 21.4% |
-| 10000 | 21.1% |
+| 100000 | 20.1% |
+| 50000 | 21.7% |
+| 20000 | 19.8% |
+| 10000 | 18.1% |
 
 `scripts/latent_probabilities.py` rebuilds `M`, reconstructs `M̂ = (UΣ)Vᵀ`, and
 scores several ways of turning it back into a non-negative probability model.
@@ -200,17 +200,17 @@ conditional `p(b|a)` is formed.
 
 | remedy | T=100000 | T=50000 | T=20000 |
 |---|---:|---:|---:|
-| `|M̂|` (sign folding) | 0.757 | 1.298 | 2.339 |
-| Euclidean projection onto the simplex | 23.37 | 22.85 | 22.06 |
-| backoff mixture with the independence model (λ=0.1) | 0.688 | 1.212 | 2.229 |
+| `|M̂|` (sign folding) | 0.757 | 1.298 | 2.333 |
+| Euclidean projection onto the simplex | 23.37 | 22.85 | 22.07 |
+| backoff mixture with the independence model (λ=0.1) | 0.688 | 1.213 | 2.225 |
 | **NMF** (multiplicative updates, non-negative) | 0.730 | 1.290 | 2.367 |
-| **`sqrtcnt`: square-root SVD, squared back** | **0.494** | **0.991** | **2.037** |
+| **`sqrtcnt`: square-root SVD, squared back** | **0.493** | **0.990** | **2.036** |
 
 (cells are joint KL in bits, randomised SVD.  `sqrtcnt` is the model
 recommended in `docs/HELLINGER_FACTORISATION.md` and computed by
 `latent_probabilities.py` alongside the count-space remedies; with the
-re-orthonormalised randomised SVD it now agrees with the exact SVD to ~0.01
-bits.)
+re-orthonormalised randomised SVD (`n_iter = 8`) it now agrees with the exact
+SVD to ~0.003 bits.)
 
 Ranking and recommendation:
 
