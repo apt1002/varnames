@@ -54,7 +54,7 @@ varnames/
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
 │   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
-│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation + smoothing
+│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation + unobserved-pairs prior
 │   └── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -73,7 +73,7 @@ varnames/
 │   ├── pair_matrix_lib.py               # adjacency M + SVD/NMF helpers (library)
 │   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
-│   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + smoothing
+│   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + unobserved-pairs prior
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── cluster_substrings_lib.py        # K-means helpers (library)
 │   ├── cluster_substrings.py            # CLI: K-means on the Hellinger embedding
@@ -251,14 +251,15 @@ entries that factorisation introduces, and `scripts/sqrt_and_smooth.py`
 explores a better fix: factorise `√M` (the occurrence-weighted Hellinger
 embedding — rooting the counts already builds in the weighting) and square the
 reconstruction back, which is both non-negative by construction and ~30% lower
-KL than any remedy; smoothing `M` towards the independence model is a trade of
-KL for fewer latent negatives.
+KL than any remedy. It also studies a *counting* fix for unobserved pairs — an
+independence-shaped prior of fixed mass (`M + c·N²·P_mar`) added to the
+reference matrix — in `docs/HELLINGER_FACTORISATION.md`.
 
 The adjacency matrix is low-rank for the frequent contexts but close to
 full-rank for the tail. The model, the rank-1 comparison, the reversal-symmetry
 check and the negative-entry remedies are in
 [`docs/ADJACENCY_MODEL.md`](docs/ADJACENCY_MODEL.md); the square-root
-factorisation and smoothing are in
+factorisation and the unobserved-pairs prior are in
 [`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md).
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation

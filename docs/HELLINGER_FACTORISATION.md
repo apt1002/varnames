@@ -1,4 +1,4 @@
-# Square-root (Hellinger) factorisation of the adjacency matrix, and smoothing
+# Square-root (Hellinger) factorisation of the adjacency matrix, and a prior on unobserved pairs
 
 Status: the square-root (Hellinger) factorisation is the **default** in
 `scripts/pair_matrix.py` (saved `pair_factors_L*.npy` carry a `sqrt` flag;
@@ -104,21 +104,68 @@ no approximation error.
 the best previous remedy at L=64): the Hellinger space makes the extra ranks
 count.  At L=2 the rank-1 backoff/marginal direction is marginally better.
 
-## Smoothing towards independence
+## A prior on unobserved pairs (the counting fix)
 
-Add `alpha · M_mar`, `M_mar = r cᵀ / T`, before factorising.  It does what was
-hoped, and something was not:
+`M` counts only the `(a, b)` pairs actually seen, so it is full of structural
+zeros — 21% of cells at `N = 159`, 83% at `N = 2102`.  A zero is not an
+impossibility, so we add a small amount of pseudo-count mass, shaped like the
+independence model, to form a **corrected reference**
 
-* it **reduces the latent negatives**, a lot — `sqrtcnt` goes 11.2% → 5.1% → 1.4%
-  at `alpha = 0, 0.05, 0.2` (T=100000);
-* but it **raises the KL** for every good method.  At T=100000 (joint KL):
-  `sqrtcnt` 0.494 → 0.498 → 0.549, `nmf` 0.730 → 0.726 → 0.742;
-* it does help the *naive* family: `clip` improves 1.059 → 0.994 → 0.908, but
-  never gets near `sqrtcnt` at `alpha = 0`.
+    M_ref = M + alpha · P_mar ,   P_mar = (r/T)(c/T)ᵀ   (sum 1),   alpha = c · N²
 
-So smoothing trades KL for fewer negatives — and since the squared
-reconstruction already gives a non-negative *model*, the negatives it removes
-are only in the latent scores, so it buys nothing worth the KL it costs.
+where `c` is the average pseudo-count per cell (`P_mar` is `M_mar` rescaled to
+unit mass).  The correction has a **fixed** total mass `alpha = c·N²`, not a
+fraction of the corpus, so it is a prior on *unseen pairs* that washes out as the
+corpus grows.  (Adding the *unnormalised* `alpha · M_mar`, `M_mar = r cᵀ/T`,
+would instead inject `alpha·T` pseudo-counts — at `alpha = 1`, half the matrix —
+and never vanish; that was an earlier error.)  `M_ref` is the reference for the
+whole analysis: every model is fitted to `M_ref` and scored against it, so
+results are **not comparable across `c`** by design — `c` is a counting fix, not
+a reconstruction knob (the reconstruction-side counterpart is the `backoff`
+remedy above, which keeps using the sum-`T` `M_mar` for its convex mixture).
+
+`L = 16`, joint KL `KL(M_ref ‖ M̂/ΣM̂)` in bits (lower is better).
+
+**T = 100000 (N = 159), 21% of cells unobserved** — the fix is negligible:
+
+| method | c=0 | c=0.1 | c=0.5 | c=1 | c=2 |
+|---|---:|---:|---:|---:|---:|
+| clip | 1.059 | 1.059 | 1.059 | 1.059 | 1.058 |
+| abs | 0.757 | 0.757 | 0.756 | 0.755 | 0.754 |
+| backoff .1 | 0.688 | 0.688 | 0.688 | 0.687 | 0.686 |
+| nmf | 0.730 | 0.730 | 0.730 | 0.729 | 0.728 |
+| **sqrtcnt** | 0.494 | 0.493 | 0.493 | 0.493 | 0.492 |
+
+**T = 10000 (N = 2102), 83% of cells unobserved** — the fix is material:
+
+| method | c=0 | c=0.1 | c=0.5 | c=1 | c=2 |
+|---|---:|---:|---:|---:|---:|
+| clip | 3.114 | 3.064 | 2.921 | 2.772 | 2.509 |
+| abs | 3.160 | 3.080 | 2.848 | 2.623 | 2.279 |
+| backoff .1 | 3.055 | 2.979 | 2.761 | 2.551 | 2.229 |
+| nmf | 3.353 | 3.246 | 2.844 | 2.673 | 2.400 |
+| **sqrtcnt** | 3.091 | 2.891 | 2.609 | 2.383 | 2.058 |
+
+It also cuts the *latent* negatives (the model is non-negative anyway, so this is
+a side benefit): at `N = 2102`, `sqrtcnt` goes 25.8% → 10.8% → 3.5% → 1.7% → 0.8%
+over `c = 0 … 2`, while `clip`/`abs`/`backoff` go 18.1% → 10.3%; `T = 20000`
+(`N = 911`) interpolates (`sqrtcnt` 2.036 → 1.827 bits, negatives 20.5% → 5.2%).
+
+Two things to read off carefully:
+
+* **The effect is a property of the vocabulary, not the corpus.**  It is driven
+  by the *fraction of unobserved cells* (21% at `N = 159`, 83% at `N = 2102`):
+  a given `c` fills the same average per-cell count, but it only matters when the
+  matrix is sparse.  At `N = 159` the whole sweep moves `sqrtcnt` by 0.002 bits;
+  at `N = 2102` it moves it by over a bit.
+* **Do not choose `c` by this KL.**  It decreases monotonically in `c` for
+  *every* method, because as `c → ∞` the reference `M_ref` tends to the rank-1
+  `P_mar`, which any rank-`L` model fits nearly exactly, so the KL tends to 0.
+  `c` is a *prior strength* and must be fixed independently — e.g. by held-out
+  predictive log-likelihood (binomial-thin the counts, fit on train, score on
+  test), with `c ≈ ½–1` (half a to one pseudo-count per cell) as the natural
+  default.  The earlier draft's conclusion that "smoothing raises the KL" was an
+  artefact of the unnormalised, `T`-sized correction.
 
 ## Conclusions
 
@@ -131,5 +178,8 @@ are only in the latent scores, so it buys nothing worth the KL it costs.
 2. Score with the **joint** KL `KL(M/T ‖ M̂/ΣM̂)`.  It differs from the old
    occurrence-weighted conditional KL only by a model-independent constant, so
    the conditional `p(b|a)` is not needed and has been removed from the code.
-3. Don't smooth `M` towards independence unless you specifically need the latent
-   scores to be non-negative; it costs KL.
+3. Put a small independence-shaped prior on unobserved pairs,
+   `M_ref = M + c·N²·P_mar`, with `c` a fixed pseudo-count *rate* per cell (not
+   a fraction of the corpus).  It changes the reference, so fix `c`
+   independently (held-out likelihood), not by the KL — which decreases
+   monotonically in `c` as `M_ref → P_mar`.
