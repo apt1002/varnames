@@ -1,8 +1,8 @@
 # Study: choosing the number of clusters `k` and the vocabulary size `N`
 
-Status: **plan**.  This note sets out a study to find the `(k, N)` pairs that give
-a good successor model for their size, and to test the hypothesis that the
-frontier sits on a *constant ratio* `k / N`.
+Status: **results** (extended sweep completed 2026-10-29).  This note reports
+the `(k, N)` pairs that give a good successor model for their size, and tests
+the hypothesis that the frontier sits on a *constant ratio* `k / N`.
 
 The model is built once and reused on a very large corpus, so its byte size is a
 resource we choose to spend rather than a cost to amortise; the question is
@@ -83,15 +83,22 @@ bends, and the `k/N` it implies) is the whole question.
 
 Per threshold `T` we need the `H(next | cluster)` vs `k` curve, together with
 `N`, `n_ctx`, `H(next)` and `H(next | substring)` (the `k = 1` and `k = n_ctx`
-limits).  All thresholds `100000 … 500` already have
-`successor_distributions.tsv`.  A first pass over the cached thresholds
-(`100000, 50000, 20000, 10000, 5000, 2000`) spans `N = 159 … 11758`, enough for
-a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
+limits).  All thresholds `100000 … 500` have `successor_distributions.tsv`, and
+the sweep covers all eight, spanning `N = 159 … 46346`.  The grid is a
+log-spaced `k` set (`2, 3, …, 2048`), capped per threshold to keep the runs
+tractable.  The first pass covered `T = 100000 … 5000`, reaching `k = 128` and
+`256` where `n_ctx` is small (`T = 100000, 50000`) and `640` for `T = 20000,
+10000`; the extended run covered `T = 5000, 2000, 1000, 500` up to `k = 2048,
+2048, 1536, 1024`.  Because these caps are well below `n_ctx` for the tail
+thresholds, the frontier does not reach the `H(next|substring)` floor there; the
+lowest swept entropy is `2.5614` bits at `T = 500, k = 1024`, against a floor of
+`2.363`.
 
 ## Method
 
-1. **Grid.**  For each `T`, sweep `k` over a log-spaced grid from 2 up to
-   `n_ctx` (clip at `n_ctx`).  Record `(N, n_ctx, k, H)`.
+1. **Grid.**  For each `T`, sweep `k` over a log-spaced grid from 2 up to a
+   per-threshold cap (`2048` for `T ≥ 2000`, `1536` for `T = 1000`, `1024` for
+   `T = 500`), clipped at `n_ctx` where smaller.  Record `(N, n_ctx, k, H)`.
 2. **Points.**  Map each run to `(S = 16N + 128k, H)`.
 3. **Frontier.**  Sort by `S`, take the lower envelope of `H`.
 4. **Fit** the frontier, e.g. `H ≈ a − b·S^{-c}`, and tabulate the `(N, k)`
@@ -104,7 +111,7 @@ a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
 6. **Budget table.**  For a few model-size budgets `S`, report the frontier's
    best `(N, k)` — the practical form of the answer.
 
-## Sensitivity and controls
+## Sensitivity and controls (optional follow-ups; not run here)
 
 * **Ratio.**  Rerun the frontier with cluster costs 32/64/128/512 bytes (ratio
   2…32) and report how the `k/N` ratio scales — expect `k / N ∝ 1 / (cluster
@@ -118,16 +125,22 @@ a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
 
 ## Deliverables
 
-1. A figure: `S` (bytes, log axis) against bits/character, one curve per `N`,
-   with the Pareto frontier drawn through them.
-2. A table of frontier `(T, N, k, S, H)`, `k / N`, and `dH/dlog₂S`.
-3. A budget table: the best `(N, k)` at a few model sizes, and the `k / N` it
-   implies.
+1. A table of frontier `(T, N, k, S, H)`, `k / N` and `dH/dlog₂S` — produced by
+   `scripts/cluster_size_frontier.py` (77 points; the script's stdout is the
+   table).
+2. A budget table: the best `(N, k)` at a few model sizes and the implied
+   `k / N` — in the Results section below.
+3. A figure: `S` (bytes, log axis) against bits/character, one curve per `N`,
+   with the Pareto frontier drawn through them.  Not yet plotted; the table in
+   (1) is the data for it.
 
-## First pass (done) and what it says
+## Results
 
-`scripts/cluster_size_frontier.py` turns a sweep log into the frontier.  Sweeping
-`k` over a log grid for `T = 100000 … 5000` gives, at the endpoints,
+`scripts/cluster_size_frontier.py` turns the merged sweep log into the frontier.
+All eight thresholds are covered, producing **77 frontier points** spanning
+`S ≈ 2.8 kB` to `S ≈ 873 kB`.
+
+At the endpoints the exact-context floors are:
 
 | T | N | n_ctx | H(next) | H(next\|substring) |
 |---:|---:|---:|---:|---:|
@@ -136,37 +149,39 @@ a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
 | 20000 | 911 | 849 | 4.966 | 3.344 |
 | 10000 | 2102 | 1950 | 4.966 | 3.070 |
 | 5000 | 4478 | 4162 | 4.966 | 2.856 |
+| 2000 | 11758 | 10890 | 4.966 | 2.611 |
+| 1000 | 23284 | 21479 | 4.966 | 2.477 |
+| 500 | 46346 | 42895 | 4.966 | 2.363 |
 
-The `(S, H)` frontier is well populated between `S ≈ 3 kB` and `S ≈ 150 kB`.
-Taken pointwise along the frontier, `k / N` spans 0.01–0.35, but those extremes
-are at the very bottom of the range (tiny models) and at the top (where the grid
-runs out).  The *budget-optimal* points — the ones that actually answer the
-question — are far more stable:
+The best model within a size budget — the practical answer — is:
 
 | budget `S` | `T` | `N` | `k` | `k/N` | `H` |
 |---:|---:|---:|---:|---:|---:|
 | 20 kB | 20000 | 911 | 40 | 0.044 | 3.891 |
 | 50 kB | 10000 | 2102 | 100 | 0.048 | 3.505 |
 | 100 kB | 5000 | 4478 | 200 | 0.045 | 3.191 |
-| 150 kB | 5000 | 4478 | 512 | 0.114 | 3.058 |
+| 200 kB | 5000 | 4478 | 768 | 0.172 | 3.004 |
+| 400 kB | 2000 | 11758 | 1536 | 0.131 | 2.736 |
+| 600 kB | 1000 | 23284 | 1536 | 0.066 | 2.628 |
+| 800 kB | 1000 | 23284 | 1536 | 0.066 | 2.628 |
 
-So over `S = 20–100 kB` the answer is **`k / N ≈ 0.045`**, essentially
-constant — encouraging for the hypothesis; it only drifts at the top where the
-grid runs out.  Two gaps to close:
+**Answer to the hypothesis.**  The *budget-optimal* `k/N` is stable at
+**≈ 0.045** across the 20–100 kB band, where the model size is genuinely a mix
+of both terms.  It is **not** constant over the whole frontier: above ~150 kB
+the frontier switches to a larger `N` (a lower threshold `T`) and the optimal
+`k/N` jumps to 0.13–0.17 before falling back to 0.066 as `N` comes to dominate
+`S = 16N + 128k`.  The frontier is therefore a staircase of per-`T` curves
+rather than a single power law, and "constant `k/N`" is only an approximation
+valid in the mid range where both terms are comparable.  The raw pointwise span
+along the frontier is 0.011–0.352, but those extremes are artefacts of the very
+small models at the bottom and the capped grid at the top.
 
-* **The grid is too small to see the interesting part.**  The sweep only went
-  to `k = 640` and `T = 5000`, so the frontier ends at `S ≈ 150 kB` right where
-  `k/N` is still climbing.  We need `k` up to `n_ctx` (so the frontier reaches
-  the `H(next|substring)` floor) and the tail thresholds `T = 1000, 500` (and a
-  couple more, e.g. 4000), which span larger `N`.
-* **`common2000`'s table was stale** (built from the pre-longest-suffix
-  successor count; it gave `H(next|substring) = 3.159 > 2.856`, breaking
-  monotonicity); it has now been regenerated (2.611) and should be included in
-  the sweep.
-
-The held-out check (above) says overfitting is not the limiter, so the frontier
-is a genuine curve; extending the grid is what will reveal whether its `k/N`
-settles to a constant.
+**Remaining limitation.**  The sweep caps `k` at 2048/1536/1024, well short of
+`n_ctx` for the tail thresholds, so the frontier does not reach the substring
+floor: the lowest swept `H` is 2.5614 (`T = 500, k = 1024`) against 2.363.
+Extending `k` further would lower the large-`S` end but cannot change the
+mid-range `k/N ≈ 0.045` result.  The `common2000` table has been regenerated
+(2.611 bits) and is monotone, so the earlier monotonicity break is fixed.
 
 ## Notes for the "distant future" encoding
 
