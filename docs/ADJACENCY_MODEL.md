@@ -1,106 +1,21 @@
-# Fixed-budget compressibility of identifiers
+# The low-rank prefix/suffix adjacency model
 
-This note estimates how many identifiers can be represented in a fixed budget
-(say 64 bits, with ~2 bits reserved for capitalisation style, so also 62 bits)
-by a statistical model of identifiers, and studies a low-rank model of which
-prefixes and suffixes may sit next to each other.
+This note studies a low-rank model of which prefixes and suffixes may sit next
+to each other — a richer structure than the character successor model of
+[`CODE_LENGTHS.md`](CODE_LENGTHS.md). It is an independent line of research:
+the question is whether the adjacency of left and right contexts can be captured
+by a small number of latent dimensions, and how best to turn a low-rank
+factorisation back into a probability model.
 
-No concrete bit-packing is proposed here; the aim is a *rate* estimate: the
-ideal arithmetic-code length of an identifier under the model, and the fraction
-of identifiers (and of real occurrences in source code) whose length fits the
-budget. Identifiers that do not fit fall back to a hash + global-dictionary
-scheme, so they are counted as failures.
+The square-root (Hellinger) factorisation, now the default, is developed in its
+own companion report [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md).
 
 ## The model
 
-Case-normalise the corpus to CamelCase (see *CamelCase normalisation* in the
-README), wrap each identifier as `^identifier$`, and enumerate the **common
-substrings** — substrings of the wrapped identifiers occurring at least *T*
-times — for a threshold *T*. The model is the **longest-suffix
-(variable-order) successor model**: at each split of `^identifier$` the next
-character is predicted by the longest common substring that is a *suffix* of
-the prefix, e.g. after `^Ac` the successor is credited to `^Ac` rather than to
-`Ac` or `c`. Sparse contexts are smoothed toward the global successor marginal
-`q` with a Dirichlet prior (`alpha = 1`):
-
-```
-p(c | ctx) = (n_{ctx,c} + alpha * q_c) / (n_ctx + alpha).
-```
-
-`scripts/code_lengths.py` computes, for every identifier, the ideal arithmetic
-code length
-
-```
-L(id) = sum_j  -log2 P(c_j | longest common substring that is a suffix of
-                              ^ c_1 ... c_{j-1})
-```
-
-which is the number of bits a coder based on the model would spend.
-
-* **Static success rate** = percentage of distinct identifiers in
-  `work/camel/merged.txt` (2,295,340 after normalisation) with `L(id) <= budget`.
-* **Dynamic success rate** = percentage of *occurrences* in real source code
-  with `L(id) <= budget`, weighting each identifier by how often it occurs.
-  Occurrences are sampled by `scripts/sample_occurrences.py` (see below); the
-  counts are case-normalised by `scripts/normalise_counts.py` so they can be
-  joined with the normalised corpus.
-
-### Occurrence sample
-
-`scripts/sample_occurrences.py` draws a random sample of source files per
-ecosystem, scrubs each with `extract.scrub`, and counts every identifier
-occurrence with `extract.IDENT_RX`:
-
-| ecosystem | files | occurrences | distinct |
-|---|---:|---:|---:|
-| ruby | 1,200 | 208,015 | 15,599 |
-| rust | 1,200 | 1,148,532 | 57,402 |
-| go | 1,200 | 936,887 | 52,705 |
-| python | 1,200 | 922,232 | 51,873 |
-| javascript | 1,200 | 593,413 | 8,526 |
-| perl | 752 | 274,601 | 17,304 |
-| **all** | | **4,083,680** | **184,414** |
-
-After case normalisation these 184,414 distinct spellings become 174,215
-normalised identifiers; 92.65% of the 4,083,680 occurrences match a normalised
-corpus identifier. The remaining 7.35% are spellings absent from the corpus
-(chiefly keywords, tokens with characters we do not keep, and identifiers from
-packages not in the corpus) and would need the fallback.
-
-## Results: success rates vs threshold
-
-| T | common substrings | max len | mean bits | static ≤64 | static ≤62 | dyn ≤64 | dyn ≤62 |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100000 | 159 | 5 | 71.45 | 52.3% | 49.6% | 90.5% | 90.2% |
-| 50000 | 316 | 5 | 67.03 | 57.8% | 55.2% | 90.9% | 90.7% |
-| 20000 | 911 | 7 | 60.17 | 66.4% | 64.1% | 91.3% | 91.2% |
-| 10000 | 2,102 | 9 | 55.19 | 72.6% | 70.4% | 91.6% | 91.5% |
-| 5000 | 4,478 | 13 | 51.35 | 77.4% | 75.4% | 91.8% | 91.7% |
-| 2000 | 11,758 | 14 | 49.21 | 79.8% | 78.0% | 91.9% | 91.8% |
-| 1000 | 23,284 | 25 | 44.55 | 86.0% | 84.4% | 92.2% | 92.2% |
-| 500 | 46,346 | 33 | 42.51 | 88.7% | 87.3% | 92.3% | 92.3% |
-
-Observations:
-
-* **More contexts keep helping, with diminishing returns.** Each halving of the
-  threshold buys a few more points of static coverage; 500→100000 spans
-  88.7%→52.3%. The gain is concentrated in the *long tail*: the common, short
-  identifiers are already cheap at every threshold.
-* **Dynamic coverage saturates near 92%.** Because occurrences are dominated by
-  short, highly predictable names, the dynamic rate is essentially flat (90.5%
-  → 92.3%) and barely moved by the extra contexts. The last few points of
-  *static* coverage are the hardest.
-* **~2 bits for capitalisation costs ~1.5–2 points** (compare the ≤64 and ≤62
-  columns): reserving capitalisation style is cheap, and cheaper at larger T
-  because the model is sharper.
-* These are *model-based* numbers. A real coder also needs to spend bits on
-  choosing the model, on the fact that the model is fixed, and so on; treat them
-  as an upper bound on the achievable rate.
-
-## Prefix/suffix adjacency and its low-rank factorisation
-
-A richer structure than the successor model is the **adjacency of a left and a
-right context**. For every split of `^identifier$` define
+Case-normalise the corpus to CamelCase (see `docs/CASE_NORMALISATION.md`), wrap
+each identifier as `^identifier$`, and enumerate the **common substrings**
+(substrings occurring at least *T* times). For every split of `^identifier$`
+define
 
 * `a` = the longest common substring that is a **suffix of the left half**
   (the "left context"; never ends in `$`), and
@@ -142,7 +57,7 @@ Observations:
   modest, not tiny, `L` (tens), and benefits from keeping the backoff ("empty")
   context explicitly.
 
-### L = 1: the independence model vs the leading singular pair
+## L = 1: the independence model vs the leading singular pair
 
 The rank-1 factorisation has a clean interpretation. Write `M ≈ σ u vᵀ` with
 unit `u, v`; then the implied conditional is `p(b | a) = v_b / Σ_b v_b`, a
@@ -195,7 +110,7 @@ This is the concrete form of the "the objective decides the answer" point, and
 it is the sharpest argument for fitting the adjacency model in **KL/Poisson**
 rather than least squares.
 
-#### Is the row/column asymmetry a bug? (no)
+### Is the row/column asymmetry a bug? (no)
 
 The construction is symmetric under *reversing* the identifiers: a left
 context (longest common **suffix of the left half**) becomes a right context
@@ -242,37 +157,34 @@ asymmetry; (ii) the effect is a property of *identifier* corpora in general —
 English-like word structure — and would largely vanish on reversal-symmetric
 data.
 
-### Metric correction: from the conditional to the joint
+## Metric: the joint KL
 
-The KL metric used throughout this report was for a while documented as
+The KL metric used throughout is the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` in bits,
+computed by `pair_matrix.kl_joint`. It was for a while documented as
 "occurrence-weighted" but was actually a plain **uniform** mean over the rows
-that occur (it multiplied each row by `P.sum(1)` where `P` is the
-*row-normalised* conditional, so every weight was 1).  That was fixed, and the
-conditional itself has now been dropped entirely.  By the chain rule
+that occur; and for a while a conditional `p(b|a)` was formed. Both are gone.
+By the chain rule
 
     KL(P(a,b)‖Q(a,b)) = KL(P(a)‖Q(a)) + Σ_a P(a)·KL(P(b|a)‖Q(b|a))
 
 the joint KL splits into a row-marginal term plus the occurrence-weighted
 conditional KL; the models leave the prefix marginal `P(a)` fixed, so the
-row-marginal term is a **model-independent constant**.  So the weighted
+row-marginal term is a **model-independent constant**. So the weighted
 conditional KL, the joint cross-entropy, and the **joint KL
 `KL(M/T ‖ M̂/ΣM̂)`** all give the same ranking — and the conditional `p(b|a)`
-need never be built.  All KL figures in this report are now the joint KL
-`KL(M/T ‖ M̂/ΣM̂)` in bits, computed by `pair_matrix.kl_joint` (see
-`docs/HELLINGER_FACTORISATION.md`).  It differs from the old occurrence-weighted
-conditional KL only by the small row-marginal mismatch, model by model (`sqrtcnt`
-0.480 → 0.494 at T=100000), so every ordering below is unchanged.
+need never be built (`sqrtcnt` 0.480 → 0.494 at T=100000). See
+`docs/HELLINGER_FACTORISATION.md`.
 
 ## Coping with negative probabilities
 
 (This section analyses the *count-space* factorisation, i.e. `pair_matrix.py
---no-sqrt`.  The default is now the square-root domain, where the model is
+--no-sqrt`. The default is now the square-root domain, where the model is
 non-negative by construction and the remedies below are unnecessary — see
 `docs/HELLINGER_FACTORISATION.md`.)
 
 The truncated SVD is the best rank-`L` approximation in Frobenius norm, but its
 factors `U`, `V` (and hence the reconstructed `M̂`) generally contain **negative
-entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
+entries**. Measured on `M̂` at `L = 16`:
 
 | T | negative entries of M̂ |
 |---:|---:|
@@ -284,11 +196,10 @@ entries** — the problem the brief anticipated. Measured on `M̂` at `L = 16`:
 `scripts/latent_probabilities.py` rebuilds `M`, reconstructs `M̂ = (UΣ)Vᵀ`, and
 scores several ways of turning it back into a non-negative probability model.
 Metric: the joint KL `KL(M/T ‖ M̂/ΣM̂)` in bits (lower is better) — no
-conditional `p(b|a)` is formed (see the metric-correction note above).
+conditional `p(b|a)` is formed.
 
 | remedy | T=100000 | T=50000 | T=20000 |
 |---|---:|---:|---:|
-| `M̂` as-is (clip negatives to 0) | 1.059 | 1.547 | 2.388 |
 | `|M̂|` (sign folding) | 0.757 | 1.298 | 2.339 |
 | Euclidean projection onto the simplex | 23.37 | 22.85 | 22.06 |
 | backoff mixture with the independence model (λ=0.1) | 0.688 | 1.212 | 2.229 |
@@ -300,11 +211,6 @@ recommended in `docs/HELLINGER_FACTORISATION.md` and computed by
 `latent_probabilities.py` alongside the count-space remedies; with the
 re-orthonormalised randomised SVD it now agrees with the exact SVD to ~0.01
 bits.)
-
-(Softmax of the latent scores is not tabulated here because it needs a
-calibration scale: with the raw score scale the exponent underflows and the
-matrix collapses to a one-hot.  Calibrated it lands mid-pack — at T = 50000,
-joint KL ≈ 2.93.)
 
 Ranking and recommendation:
 
@@ -318,22 +224,16 @@ Ranking and recommendation:
    so no clipping is needed, and it is competitive on KL while never producing
    a negative entry. For counts, prefer a **KL-divergence / Poisson NMF**
    whose objective matches the multinomial likelihood rather than least squares.
-2. **Backoff mixture** — take the clipped factorisation and mix it with the
-   rank-1 independence model `M_mar = r cᵀ / T`, `(1-λ)·clip(M̂) + λ·M_mar`
-   with small λ. This repairs entries whose reconstruction is negative and
-   guarantees full support (useful when the model must never assign zero
-   probability). Think of it as Dirichlet smoothing of the latent model.
+2. **Backoff mixture** — take the reconstructed factorisation and mix it with
+   the rank-1 independence model `M_mar = r cᵀ / T`,
+   `(1-λ)·M̂ + λ·M_mar` with small λ. This repairs entries whose reconstruction
+   is negative and guarantees full support. Think of it as Dirichlet smoothing
+   of the latent model; it trades some sharpness for robustness.
 3. **Sign folding** `|M̂|` — preserves the ordering of the latent scores and is
-   much better than clipping, at zero extra cost. Good if the goal is only "can
-   `a` and `b` be adjacent?" rather than a calibrated probability.
-4. **softmax of the latent scores** — a log-bilinear model
-   `M̂ ∝ exp(⟨u_a, v_b⟩ / τ)`. Attractive (it is the natural exponential
-   family for this bilinear form) but the temperature must be calibrated; the
-   raw score scale makes the exponent underflow and collapses the model to a
-   one-hot.
-5. **clip negatives to 0** — simple but mediocre: zeroing ~20% of the entries
-   hurts.
-6. **Euclidean projection onto the simplex** — do **not** use: it is optimal in
+   much better than discarding negative entries, at zero extra cost. Good if the
+   goal is only "can `a` and `b` be adjacent?" rather than a calibrated
+   probability.
+4. **Euclidean projection onto the simplex** — do **not** use: it is optimal in
    Euclidean distance but catastrophic in KL (the true successor is often
    projected to zero).
 
@@ -342,4 +242,21 @@ prefixes and suffixes may be adjacent, use a non-negative bilinear
 factorisation (NMF, ideally KL/Poisson NMF) optionally blended with the global
 marginal as a backoff. If only a *score* for adjacency is needed, the
 sign-folded SVD is a cheap and effective alternative. Avoid Euclidean
-projection; avoid uncalibrated softmax.
+projection.
+
+## Reproducing
+
+```sh
+python3 scripts/pair_matrix.py work/camel/merged.txt \
+        work/common10000/common_substrings.txt --outdir work/common10000 \
+        --lsvd 2,4,8,16,32,64
+python3 scripts/rank1_marginals.py work/camel/merged.txt \
+        work/common10000/common_substrings.txt --outdir work/common10000
+python3 scripts/latent_probabilities.py work/camel/merged.txt \
+        work/common10000/common_substrings.txt --outdir work/common10000 --L 16
+python3 scripts/symmetry_check.py work/camel/merged.txt \
+        work/common10000/common_substrings.txt \
+        work/rev/merged_rev.txt work/rev/common10000/common_substrings.txt
+```
+
+`scripts/run_sweep.sh` runs the factorisation over a list of thresholds.

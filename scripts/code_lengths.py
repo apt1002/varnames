@@ -56,10 +56,6 @@ def main():
     ap.add_argument('--outdir', default='work/common10000')
     ap.add_argument('--alpha', type=float, default=1.0)
     ap.add_argument('--lengths', default='')
-    ap.add_argument('--weights', default='',
-                    help='optional identifier<TAB>count file (e.g. work/occ/'
-                         'all.camel.counts); enables occurrence-weighted '
-                         '(dynamic) success rates')
     args = ap.parse_args()
 
     # ---- vocabulary and per-context probabilities ------------------------
@@ -179,50 +175,11 @@ def main():
     print(f"identifiers: {len(bits)}")
     print(f"bits: mean {bits.mean():.2f}  median {np.median(bits):.2f}  "
           f"p90 {np.percentile(bits, 90):.2f}  max {bits.max():.2f}")
-    for budget in (64, 62):
+    for budget in (64, 128):
         frac = float((bits <= budget).mean())
         print(f"  fit in {budget} bits: {100 * frac:.2f}%  "
               f"({int((bits <= budget).sum())} identifiers)")
     print(f"wrote {out}")
-
-    # ---- dynamic (occurrence-weighted) success rate ----------------------
-    if args.weights:
-        w = {}
-        with open(args.weights, 'rb') as f:
-            for line in f:
-                parts = line.rstrip(b'\n').split(b'\t')
-                if len(parts) != 2:
-                    continue
-                k = parts[0].decode('latin1')
-                try:
-                    v = int(parts[1])
-                except ValueError:
-                    continue
-                w[k] = w.get(k, 0) + v
-        wtot = float(sum(w.values()))
-        wfit = {64: 0.0, 62: 0.0}
-        cov = 0.0
-        with open(args.idlist, 'rb') as fi:
-            i = 0
-            for line in fi:
-                ident = line.rstrip(b'\n')
-                if not ident:
-                    continue
-                c = w.get(ident.decode('latin1'))
-                if c is not None:
-                    cov += c
-                    if bits[i] <= 64:
-                        wfit[64] += c
-                    if bits[i] <= 62:
-                        wfit[62] += c
-                i += 1
-        print(f"weights: {int(wtot)} sampled occurrences, "
-              f"{int(cov)} ({100 * cov / wtot:.2f}%) matched a normalised "
-              f"corpus identifier")
-        for budget in (64, 62):
-            print(f"  fit in {budget} bits (dynamic): "
-                  f"{100 * wfit[budget] / wtot:.2f}% of all occurrences  "
-                  f"(matched only {100 * wfit[budget] / cov:.2f}%)")
 
 
 if __name__ == '__main__':

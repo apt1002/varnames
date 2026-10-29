@@ -22,7 +22,7 @@ are:
   carries one successor distribution.
 
 Under the dense representation we intend (see
-[the brief](COMPRESSION_ESTIMATES.md)), a substring costs **16 bytes** (its
+[the brief](CODE_LENGTHS.md)), a substring costs **16 bytes** (its
 hash / index) and a cluster costs **128 bytes** (its dense distribution over the
 `d ≈ 64` successor symbols).  So the model size is
 

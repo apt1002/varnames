@@ -7,11 +7,16 @@ Given M (N x N counts of (longest common suffix, longest common prefix) pairs)
 we compare, for a rank-L approximation, several non-negative reconstructions
 M_hat, and score each as a *joint* distribution over (prefix, suffix) pairs:
 
-  clip     M_hat = (U s) V^T, replace negative entries by 0
-  softmax  M_hat ∝ exp(M_hat[a,b] / tau), calibrated over a small grid of tau
+  svd-raw  M_hat = (U s) V^T with negative entries floored to a tiny epsilon
+           (the raw factorisation, kept only as a KL floor to compare against)
+  svd-abs  M_hat = |M_hat[a,b]| (uses the factorisation only for ranking)
+  backoff  mix the rectified factorisation with the rank-1 independence model,
+           (1-lambda) * max(M_hat, 0) + lambda * M_mar.  This guarantees full
+           support and repairs the rows whose reconstruction went negative, at
+           the cost of some entropy: it trades model sharpness for robustness,
+           and is retained as a way to avoid over-training the latent model.
   nmf      non-negative factors W H (multiplicative updates) --
            non-negative by construction, evaluated at its own best rank
-  svd-abs  M_hat = |M_hat[a,b]| (uses the factorisation only for ranking)
   sqrtcnt  M_hat = (reconstruction of sqrt(M))[a,b]^2 -- the non-negative
            square-root / Hellinger model (docs/HELLINGER_FACTORISATION.md),
            included as the yardstick the count-space remedies are judged by
@@ -23,7 +28,6 @@ conditional p(b|a) is formed.
 Usage: latent_probabilities.py CORPUS SUBS [--outdir DIR] [--L 16]
 """
 import argparse
-import os
 
 import numpy as np
 
@@ -64,12 +68,7 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    cache = os.path.join(args.outdir, 'M.npz')
-    if os.path.exists(cache):
-        M = np.load(cache)['M']
-    else:
-        M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
-        np.savez_compressed(cache, M=M)
+    M = pair_matrix.load_or_build_matrix(args.corpus, args.substrings, args.outdir)
     n = M.shape[0]
     T = float(M.sum())
     r = M.sum(1).astype(np.float64)
@@ -97,20 +96,9 @@ def main():
           f"construction)")
 
     rows = [("svd-raw(no floor)", np.maximum(Mh, 1e-12))]
-    rows.append(("clip", np.maximum(Mh, 0.0)))
     rows.append(("svd-abs", np.abs(Mh)))
     rows.append(("sqrtcnt (sqrt-SVD)^2", Sh * Sh))
     rows.append(("simplex-proj", project_simplex_rows(Mh)))
-    for tau in (0.25, 1.0, 4.0):
-        Z = Mh / tau
-        Z -= Z.max()
-        rows.append((f"softmax tau={tau}", np.exp(Z)))
-    # calibrated softmax: temperature scaled to the matrix's own dynamic
-    # range, so the exponent is O(1) instead of spanning hundreds of bits.
-    for c in (0.5, 2.0, 8.0):
-        Z = Mh / (np.abs(Mh).max() / c)
-        Z -= Z.max()
-        rows.append((f"softmax cal c={c}", np.exp(Z)))
     # mixing with the rank-1 independence model repairs zero rows and
     # guarantees full support while staying inside the latent model.
     for lam in (0.1, 0.3, 0.6):

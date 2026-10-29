@@ -112,13 +112,8 @@ def main():
     Ls = [int(x) for x in args.ls.split(',')]
 
     for outdir in args.outdirs.split(','):
-        cache = os.path.join(outdir, 'M.npz')
-        if os.path.exists(cache):
-            M = np.load(cache)['M']
-        else:
-            M, _, _ = pair_matrix.build_matrix(
-                args.corpus, os.path.join(outdir, 'common_substrings.txt'))
-            np.savez_compressed(cache, M=M)
+        M = pair_matrix.load_or_build_matrix(
+            args.corpus, os.path.join(outdir, 'common_substrings.txt'), outdir)
         n = M.shape[0]
         krows = int((M.sum(1) > 0).sum())
         print(f"\n=== {outdir}  N={n}  rows={krows}  "

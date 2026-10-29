@@ -135,6 +135,21 @@ def build_matrix(corpus, subs):
     return M, vocab, empty_idx
 
 
+def load_or_build_matrix(corpus, subs, outdir):
+    """Return the N x N count matrix for `outdir`, caching it as M.npz.
+
+    Building M rescans the whole corpus (~5 min), so every script that needs it
+    shares this cache instead of rebuilding.
+    """
+    cache = os.path.join(outdir, 'M.npz')
+    if os.path.exists(cache):
+        return np.load(cache)['M']
+    M = build_matrix(corpus, subs)[0]
+    os.makedirs(outdir, exist_ok=True)
+    np.savez_compressed(cache, M=M)
+    return M
+
+
 def randomized_svd(M, rank, rng, n_iter=4):
     """Randomised range finder (Halko-Martinsson-Tropp), range M(MᵀM)^n_iter Ω.
 
@@ -213,12 +228,7 @@ def main():
 
     os.makedirs(args.outdir, exist_ok=True)
     vocab = [ln.rstrip(b'\n') for ln in open(args.substrings, 'rb')]
-    cache = os.path.join(args.outdir, 'M.npz')
-    if os.path.exists(cache):
-        M = np.load(cache)['M']
-    else:
-        M = build_matrix(args.corpus, args.substrings)[0]
-        np.savez_compressed(cache, M=M)
+    M = load_or_build_matrix(args.corpus, args.substrings, args.outdir)
     n = len(vocab)
     A = M if args.no_sqrt else np.sqrt(M)
     domain = 'count' if args.no_sqrt else 'sqrt'

@@ -19,13 +19,12 @@ prefixing conventions (`gl_`, `SDL_`, …), which distort identifier statistics.
 | File | Distinct identifiers | Description |
 |---|---|---|
 | `corpus/identifiers.multilang.txt` | **2,365,468** | **Recommended.** Union across 6 ecosystems, sorted, unique, lexically scrubbed. |
-| `corpus/identifiers.multilang.max128.txt` | 2,365,179 | Same union, tokens >128 chars removed. |
-| `corpus/identifiers.txt` | 710,477 | Ruby-only corpus (cleaned). |
-| `corpus/identifiers.max128.txt` | 710,236 | Ruby-only, length-capped. |
 | `corpus/by_language/*.txt` | — | Per-ecosystem lists: `ruby`, `rust`, `python`, `go`, `javascript`, `perl`. |
 
-Statistics: [`docs/CORPUS_STATS_MULTILANG.md`](docs/CORPUS_STATS_MULTILANG.md)
-(combined) and [`docs/CORPUS_STATS.md`](docs/CORPUS_STATS.md) (Ruby-only detail).
+Statistics and full reproduction instructions: [`docs/CORPUS.md`](docs/CORPUS.md).
+(The old Ruby-only `corpus/identifiers.txt` was byte-identical with
+`by_language/ruby.txt`, and the length-capped `*.max128.*` variants were never
+used; all three have been removed.)
 
 ### Composition
 
@@ -39,55 +38,8 @@ Statistics: [`docs/CORPUS_STATS_MULTILANG.md`](docs/CORPUS_STATS_MULTILANG.md)
 | Perl | 17,304 | 10.0 | 9 | local Perl 5 module tree, 752 files |
 | **union** | **2,365,468** | | | 180,712 overlaps removed |
 
-### Method
-
-* **Lexical scrubbing first.** Before identifiers are collected, each source file is
-  lexically scrubbed by `scripts/extract.py`: string literals (single/double quoted,
-  triple-quoted, raw strings, backtick/template strings, Ruby `%`-literals, Perl
-  `q`/`qq`/`qw` forms), regex literals (`/.../`, `m//`, `qr//`, `s///`, `tr///`, `y///`),
-  comments (`#`, `//`, `/* ... */`, Ruby `=begin`/`=end`, Perl POD), heredocs
-  (`<<TAG`, including markers followed by trailing code), Perl `__DATA__`/`__END__`,
-  numeric literals (`0x…`/`0b…`/`0o…`, decimals, floats, exponents, digit
-  separators and integer/float type suffixes), and non-ASCII runs are all replaced
-  by spaces. The scrubbed buffer is then tokenised with a single regex
-  (`[A-Za-z_][A-Za-z0-9_]*`), so base64 blobs, PEM certificates, hex dumps, URLs,
-  the tails of hex/binary/decimal literals and English prose inside literals never
-  reach the corpus. Scrubbing is per-extension, so Rust attributes are not mistaken
-  for comments, Ruby percent-literals are not mistaken for modulo, and Rust
-  lifetimes and char literals (`'a`, `'_`, `'static`, `b'\x41'`) are not mistaken
-  for string delimiters.
-* **Identifier extraction** is lexical: after scrubbing, everything matching
-  `[A-Za-z_][A-Za-z0-9_]*` is kept, then sorted and de-duplicated. Files containing
-  NUL bytes are skipped as binary.
-* **Ruby** came from a uniform random sample of 10,000 gems drawn from the full
-  RubyGems catalogue (`https://rubygems.org/versions`, ~219,777 gems), taking the
-  latest version of each. 9,023 archives downloaded (~1.9 GB); 8,423 unpacked and scanned.
-* **Rust** came from the first 2,500 crates by download count on crates.io (~374 MB
-  of `.crate` archives, ~2.4 GB unpacked).
-* **Python / Go / JavaScript / Perl** were harvested offline from sources already
-  installed on the host, so they cost no network bandwidth.
-
-### What is — and is not — in here
-
-* ✅ Real identifiers from real shipped code: method/class/module/constant names,
-  including long generated names (GHC-mangled Haskell symbols, verbose XBRL/GAAP
-  accounting terms, protobuf/OpenAPI-generated Rust) — good material for compression.
-* ✅ String literals, regex literals, comments, heredocs, POD and non-ASCII text are
-  scrubbed *before* tokenisation. The corpus therefore contains no base64 payloads,
-  PEM certificates, hex dumps, URLs or English prose from literals, and no non-ASCII
-  identifiers. Validation on the union reports 0 tokens containing `+`, `/` or `=` and
-  0 non-ASCII tokens.
-* ⚠️ Scrubbing is *lexical, not a full parser*. Exotic syntax (unusual heredoc
-  markers, interpolated regexes, generated data embedded outside any literal) may
-  still leak in rare edge cases. Language keywords (`def`, `end`, `class`, `fn`,
-  `impl`, …) are retained, as are genuine long generated identifiers.
-* ⚠️ A residual 15 tokens (<0.001%) look like pure hex strings. Most are genuine
-  fixture data embedded in string/heredoc bodies (e.g. UUID fragments in Ruby test
-  fixtures, `deadbeef…` markers); the numeric-literal scrubber removed the former
-  310k-token `x…`/`b…`/`e…`/`_…` hex-suffix flood. The `.max128` variants remove
-  tokens longer than 128 characters.
-* ⚠️ The per-language files are lexical extractions from file trees; they do not
-  record which token came from which file or how often it occurred.
+How each ecosystem was harvested, the lexing rules, and what the corpus
+does and does not contain are documented in [`docs/CORPUS.md`](docs/CORPUS.md).
 
 ## Layout
 
@@ -95,17 +47,15 @@ Statistics: [`docs/CORPUS_STATS_MULTILANG.md`](docs/CORPUS_STATS_MULTILANG.md)
 varnames/
 ├── corpus/
 │   ├── identifiers.multilang.txt        # union of all 6 ecosystems (2,365,468)
-│   ├── identifiers.multilang.max128.txt # union, length-capped
-│   ├── identifiers.txt                  # Ruby-only (710,477)
-│   ├── identifiers.max128.txt           # Ruby-only, length-capped
 │   └── by_language/
 │       ├── ruby.txt  rust.txt  python.txt  go.txt  javascript.txt  perl.txt
 ├── docs/
-│   ├── CORPUS_STATS_MULTILANG.md        # combined statistics
-│   ├── CORPUS_STATS.md                  # Ruby-only statistics
-│   ├── CORPUS_STATS_LOCAL.md            # Python/Go/JS/Perl harvest report
-│   ├── CORPUS_STATS_RUST.md             # Rust harvest report
-│   └── COMPRESSION_ESTIMATES.md         # fixed-budget rate + low-rank adjacency
+│   ├── CORPUS.md                        # corpus statistics + reproduction
+│   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
+│   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
+│   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
+│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation + smoothing
+│   └── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
 │   ├── fetch_gems.py                    # parallel RubyGem downloader
@@ -119,17 +69,16 @@ varnames/
 │   ├── run_camel_pipeline.sh            # run the four steps end to end
 │   ├── winhash.py                       # 64-bit rolling-hash helpers (shared)
 │   ├── successor_distributions.py       # P(next character | common substring)
-│   ├── code_lengths.py                  # ideal code length + 64/62-bit fit rates
-│   ├── sample_occurrences.py            # per-ecosystem identifier occurrence counts
-│   ├── normalise_counts.py              # case-normalise an occurrence-count file
+│   ├── code_lengths.py                  # ideal code length + 64/128-bit fit rates
 │   ├── pair_matrix.py                   # prefix/suffix adjacency M + low-rank SVD/NMF
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
 │   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + smoothing
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
-│   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   ├── cluster_substrings.py            # K-means on the Hellinger embedding
-│   ├── fastkern.c                       # OpenMP kernels (assignment/accumulation)
-│   └── cluster_entropy.py               # successor entropy (bits) per cluster
+│   ├── cluster_entropy.py               # successor entropy (bits) per cluster
+│   ├── cluster_size_frontier.py         # (model size, entropy) frontier + k/N
+│   ├── symmetry_check.py                # left/right reversal-symmetry sanity check
+│   └── run_sweep.sh                     # run the analyses over all thresholds
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
@@ -144,8 +93,6 @@ work/common10000/   # common substrings (threshold 10000) + successor
 work/common2000/    # the same, at threshold 2000
 work/common<T>/     # ... one directory per threshold T
                     #   (500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
-work/occ/           # per-ecosystem identifier occurrence counts
-                    #   (<eco>.counts, all.counts, all.camel.counts)
 ```
 
 `work/` also holds the corpus-build intermediates (`gems_dl/`, `*_src/`,
@@ -153,41 +100,29 @@ work/occ/           # per-ecosystem identifier occurrence counts
 
 ## CamelCase normalisation and common substrings
 
-`scripts/run_camel_pipeline.sh` (or the four scripts individually) derives a
-normalised corpus and its frequent substrings from `corpus/identifiers.multilang.txt`:
-
-1. **classify** — split into `lower_case` (has lower-case letters, no
-   upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both).
-2. **camelize** — rewrite the non-CamelCase lists in CamelCase: the first
-   letter after a run of underscores is upper-cased and all other letters,
-   including the leading letter of the identifier, are lower-cased, so `a`, `_a`
-   and `__a` stay distinct (`a`, `A`, `_A`); a run of underscores before a
-   letter gives up exactly one underscore (its word separator) and keeps the
-   rest, so `a_b` → `aB` but `a__b` → `a_B` (underscores before a digit, or at
-   the end, are kept as-is).
-3. **merge** — concatenate the CamelCase list with the two converted lists and
-   de-duplicate (`LC_ALL=C sort -u`).
-4. **common substrings** — wrap every identifier as `^identifier$`, then
-   enumerate all substrings occurring at least 10000 times (Apriori/BFS over
-   length with a 64-bit rolling-hash count). The empty string is common by
-   definition.
-
+The successor and adjacency models are built on a **case-normalised** copy of
+the corpus and on its **common substrings**. `scripts/run_camel_pipeline.sh`
+derives both from `corpus/identifiers.multilang.txt` in four steps — classify,
+camelize, merge, and enumerate the substrings occurring at least *T* times.
 On the current union (2,365,468 identifiers → 2,295,340 after normalisation and
-de-duplication) this yields 2,102 common substrings, the longest being 9
-characters (`Attribute`, `Response$`). The empty string, `^`, `$` and all 65
-single characters (`a-z`, `A-Z`, `0-9`, `_`, `^`, `$`) occur at least 10000
-times.
+de-duplication) the common-substring set grows quickly as the threshold falls:
+
+| threshold T | common substrings | max length |
+|---:|---:|---:|
+| 100000 | 159 | 5 |
+| 10000 | 2,102 | 9 |
+| 2000 | 11,758 | 14 |
+| 500 | 46,346 | 33 |
+
+The empty string, `^`, `$` and all 65 single characters (`a-z`, `A-Z`, `0-9`,
+`_`, `^`, `$`) are common at every threshold. Full details, the exact
+CamelCase rules and the complete threshold table are in
+[`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md).
 
 ```sh
 sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt work/camel
+# a non-default threshold: THRESHOLD=2000 produces work/common2000
 ```
-
-The pipeline writes the case-normalisation artefacts (`lower_case.txt`,
-`upper_case.txt`, `camel_case.txt`, `camel_from_lower.txt`,
-`camel_from_upper.txt`, `merged.txt`) into the CamelCase directory
-(`work/camel`) and the common-substring artefacts into `work/common<THRESHOLD>`;
-`THRESHOLD=2000 sh scripts/run_camel_pipeline.sh` therefore produces
-`work/common2000`.
 
 ## Successor clustering
 
@@ -265,16 +200,11 @@ entropies are: `H(next) = 4.966`, `H(next | substring) = 2.611`,
 `H(next | cluster) = 3.547` bits, so the clustering retains 1.419 bits
 (28.6% of `H(next)`).
 
-`scripts/fastkern.c` holds the two O(n·k·d) inner loops (K-means assignment,
-cluster accumulation). It is compiled on demand with
-`gcc -O3 -march=native -fopenmp` and loaded through `ctypes`. It was written
-when the host had only reference (netlib) BLAS (~0.2 GFLOP/s), which made the
-NumPy fallback far too slow at this size; it is kept as a portable path that
-does not require a fast BLAS to be installed, and if compilation fails the
-script falls back to pure NumPy automatically. (With OpenBLAS installed --
+The clustering runs on plain NumPy matmuls; with a tuned BLAS (e.g. OpenBLAS:
 `apt install libopenblas0-pthread`, which registers the `libblas.so.3` /
-`liblapack.so.3` alternatives -- the NumPy fallback is competitive again, and
-the dense factorisations in `pair_matrix.py` are ~20× faster.)
+`liblapack.so.3` alternatives) these are fast at this size, so no compiled
+kernel is needed. (An earlier OpenMP kernel, `fastkern.c`, was removed once
+OpenBLAS became a standing requirement; it remains in the git history.)
 
 ```sh
 python3 scripts/common_substrings.py work/camel/merged.txt \
@@ -286,87 +216,54 @@ python3 scripts/cluster_substrings.py --outdir work/common2000 \
 python3 scripts/cluster_entropy.py --outdir work/common2000
 ```
 
-## Fixed-budget compressibility and the low-rank adjacency model
+## Fixed-budget compressibility
 
 `scripts/code_lengths.py` computes the ideal arithmetic-code length of each
-identifier under the longest-suffix successor model — the natural estimate of
-whether an identifier fits a 64-bit budget (with ~2 bits reserved for
-capitalisation style). Success rates are reported both **static** (percentage of
-`camel/merged` identifiers) and **dynamic** (percentage of real source-code
-occurrences, from `work/occ/`). `scripts/pair_matrix.py` builds the `N x N`
-prefix/suffix adjacency matrix `M` (longest common substring that is a suffix of
-the left half against the longest common substring that is a prefix of the right
-half) and approximates it with a rank-`L` factorisation — by default in the
-square-root (Hellinger) domain, `M ~ (√M)_L²`, which is non-negative by
-construction and minimises the metric that matches KL (`--no-sqrt` for the old
-count-space SVD). All of these are scored by the **joint** KL
-`KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix.kl_joint`), which differs from the older
-occurrence-weighted *conditional* KL only by a model-independent constant, so
-no conditional `p(b|a)` is formed.
+identifier under the longest-suffix successor model. It is the natural estimate
+of whether an identifier fits a fixed budget (64 or 128 bits; no separate
+capitalisation allowance is charged here). Scoring is on the `camel/merged`
+identifiers — a **static** success rate. The method, the full threshold table,
+and the finding that **the 64-bit threshold accounted for about 92% of
+identifier occurrences in real source code, a proportion relatively insensitive
+to improvements in compression**, are in
+[`docs/CODE_LENGTHS.md`](docs/CODE_LENGTHS.md). The occurrence-weighted study
+that produced that 92% figure has been retired (it is easy to reproduce if the
+exact curve is ever wanted), but the qualitative result stands.
+
+Headline: the static 64-bit success rate runs from **52% to 89%** across
+thresholds 500–100000 (and 93%–99% at 128 bits).
+
+## The low-rank prefix/suffix adjacency model
+
+`scripts/pair_matrix.py` builds the `N x N` prefix/suffix adjacency matrix `M`
+(longest common substring that is a suffix of the left half against the longest
+common substring that is a prefix of the right half) and approximates it with a
+rank-`L` factorisation — by default in the square-root (Hellinger) domain,
+`M ~ (√M)_L²`, which is non-negative by construction and minimises the metric
+that matches KL (`--no-sqrt` for the old count-space SVD). All of these are
+scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix.kl_joint`), which
+differs from the older occurrence-weighted *conditional* KL only by a
+model-independent constant, so no conditional `p(b|a)` is formed.
 `scripts/latent_probabilities.py` measures ways of coping with the negative
 entries that factorisation introduces, and `scripts/sqrt_and_smooth.py`
 explores a better fix: factorise `√M` (the occurrence-weighted Hellinger
 embedding — rooting the counts already builds in the weighting) and square the
 reconstruction back, which is both non-negative by construction and ~30% lower
 KL than any remedy; smoothing `M` towards the independence model is a trade of
-KL for fewer latent negatives. See `docs/HELLINGER_FACTORISATION.md`.
+KL for fewer latent negatives.
+
+The adjacency matrix is low-rank for the frequent contexts but close to
+full-rank for the tail. The model, the rank-1 comparison, the reversal-symmetry
+check and the negative-entry remedies are in
+[`docs/ADJACENCY_MODEL.md`](docs/ADJACENCY_MODEL.md); the square-root
+factorisation and smoothing are in
+[`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md).
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
-analyses over a list of thresholds.
+analyses over a list of thresholds:
 
 ```sh
-python3 scripts/sample_occurrences.py --outdir work/occ --per-eco 1200 --seed 1
-python3 scripts/normalise_counts.py work/occ/all.counts work/occ/all.camel.counts
 sh scripts/run_sweep.sh            # successor + code_lengths + pair_matrix
-```
-
-Headline numbers (budget 64 bits / 62 bits reserved for capitalisation) across
-thresholds 500–100000: the **static** success rate runs from **52% to 89%** and
-the **dynamic** rate saturates near **92%**; the adjacency matrix is
-low-rank for the frequent contexts but close to full-rank for the tail. The
-full method, tables and the negative-entry remedies are in
-[`docs/COMPRESSION_ESTIMATES.md`](docs/COMPRESSION_ESTIMATES.md).
-
-## Reproducing
-
-### Ruby (network)
-
-```bash
-curl -s -o data/rubygems_versions.txt https://rubygems.org/versions
-python3 scripts/fetch_gems.py data/rubygems_versions.txt work/gems_dl --limit 10000 --seed 42
-python3 scripts/unpack_gems.py work/gems_dl work/gems_src
-python3 scripts/extract.py work/clean_ids/ruby.shards work/gems_src \
-    --exts .rb,.rake,.gemspec,.erb --threshold 400000
-LC_ALL=C sort -u work/clean_ids/ruby.shards > corpus/identifiers.txt
-awk 'length($0)>=1 && length($0)<=128' corpus/identifiers.txt > corpus/identifiers.max128.txt
-```
-
-### Rust (network)
-
-```bash
-# collect up to 2,500 crate name/version pairs from the crates.io API, then
-# download https://static.crates.io/crates/NAME/NAME-VERSION.crate and unpack.
-# See docs/CORPUS_STATS_RUST.md for the exact figures used here.
-python3 scripts/extract.py work/clean_ids/rust.shards work/rust_src --exts .rs --threshold 400000
-LC_ALL=C sort -u work/clean_ids/rust.shards > corpus/by_language/rust.txt
-```
-
-### Local ecosystems (offline)
-
-```bash
-python3 scripts/extract.py work/clean_ids/go.shards     /usr/share/go-1.24/src              --exts .go        --threshold 400000
-python3 scripts/extract.py work/clean_ids/python.shards /usr/lib/python3.13 /usr/lib/python3/dist-packages --exts .py,.pyi,.pyx --threshold 400000
-python3 scripts/extract.py work/clean_ids/javascript.shards /usr/share/javascript             --exts .js,.mjs,.jsx --threshold 400000
-python3 scripts/extract.py work/clean_ids/perl.shards   /usr/share/perl5 /usr/lib/aarch64-linux-gnu/perl5 --exts .pl,.pm --threshold 400000
-for f in work/clean_ids/*.shards; do LC_ALL=C sort -u "$f" > "corpus/by_language/$(basename "$f" .shards).txt"; done
-```
-
-### Rebuild the union
-
-```bash
-LC_ALL=C sort -m -u corpus/by_language/*.txt > corpus/identifiers.multilang.txt
-awk 'length($0)<=128' corpus/identifiers.multilang.txt > corpus/identifiers.multilang.max128.txt
-python3 scripts/stats.py corpus/identifiers.multilang.txt > docs/CORPUS_STATS_MULTILANG.md
 ```
 
 ## Extending the corpus

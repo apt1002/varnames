@@ -50,13 +50,10 @@ is wanted.
 
 Performance
 -----------
-The two hot operations (k-means assignment and accumulation) are O(n*k*d).  For
-n ~ 1e4 these run in a small OpenMP kernel compiled from scripts/fastkern.c
-(falling back to NumPy if gcc is missing).  The kernel was written when the host
-had only reference (netlib) BLAS -- far too slow for n ~ 1e4 -- but it is kept
-as a portable path that does not depend on a fast BLAS being installed; with
-OpenBLAS present the NumPy fallback is now competitive too.  The ``kl`` method
-uses plain NumPy matmuls in all cases.
+k-means on the Hellinger embedding needs two O(n*k*d) NumPy operations per
+iteration: assignment is a single ``X @ C.T`` matmul and accumulation a handful
+of ``bincount``s.  With a tuned BLAS (e.g. OpenBLAS) these are fast enough at
+n ~ 1e4; the ``kl`` method likewise uses plain NumPy matmuls.
 
 Input : <outdir>/successor_distributions.tsv
 Output: <outdir>/clusters.tsv          substring, sample_size, cluster
@@ -67,80 +64,25 @@ Usage: cluster_substrings.py --k K [--outdir work/common10000]
                              [--restarts 20] [--examples 25]
 """
 import argparse
-import ctypes
 import os
-import subprocess
-import sys
 
 import numpy as np
-
-KERN = None
-
-F32P = ctypes.POINTER(ctypes.c_float)
-I32P = ctypes.POINTER(ctypes.c_int32)
-F64P = ctypes.POINTER(ctypes.c_double)
-
-
-def _f(a):
-    return a.ctypes.data_as(F32P)
-
-
-def _i(a):
-    return a.ctypes.data_as(I32P)
-
-
-def _d(a):
-    return a.ctypes.data_as(F64P)
-
-
-def load_kernel(dest):
-    """Compile and load scripts/fastkern.c; return None on failure."""
-    csrc = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fastkern.c')
-    try:
-        if not os.path.exists(dest) or os.path.getmtime(dest) < os.path.getmtime(csrc):
-            subprocess.run(['gcc', '-O3', '-march=native', '-ffast-math', '-fopenmp',
-                            '-shared', '-fPIC', '-o', dest, csrc],
-                           check=True, capture_output=True)
-        lib = ctypes.CDLL(dest)
-    except Exception as exc:                                     # pragma: no cover
-        print(f"fastkern unavailable ({exc}); falling back to NumPy",
-              file=sys.stderr)
-        return None
-    lib.assign.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, ctypes.c_int, I32P]
-    lib.matvec.argtypes = [F32P, ctypes.c_int, ctypes.c_int, F32P, F32P]
-    lib.accumulate.argtypes = [F32P, ctypes.c_int, ctypes.c_int, I32P, ctypes.c_int,
-                               F32P, F64P]
-    return lib
 
 
 # ---------------------------------------------------------------- core ops ---
 def assign(X32, C32, k):
-    n, d = X32.shape
-    labels = np.empty(n, dtype=np.int32)
-    if KERN is not None:
-        KERN.assign(_f(X32), n, d, _f(C32), k, _i(labels))
-    else:
-        labels[:] = (X32 @ C32.T).argmax(1).astype(np.int32)
+    labels = (X32 @ C32.T).argmax(1).astype(np.int32)
     return labels
 
 
 def matvec(X32, c32):
-    n, d = X32.shape
-    out = np.empty(n, dtype=np.float32)
-    if KERN is not None:
-        KERN.matvec(_f(X32), n, d, _f(c32), _f(out))
-    else:
-        out[:] = X32 @ c32
-    return out
+    return X32 @ c32
 
 
 def accumulate(X32, labels, k, w):
     """Count-weighted cluster sums: sums[j,t] = sum_{i in j} w[i] * X32[i,t]."""
     n, d = X32.shape
     sums = np.empty((k, d), dtype=np.float64)
-    if KERN is not None:
-        KERN.accumulate(_f(X32), n, d, _i(labels), k, _f(w), _d(sums))
-        return sums
     for t in range(d):
         sums[:, t] = np.bincount(labels, weights=w * X32[:, t], minlength=k)
     return sums
@@ -258,7 +200,6 @@ def kmeans_kl(C, Ns, q, k, rng, alpha, iters=100):
 
 
 def main():
-    global KERN
     ap = argparse.ArgumentParser()
     ap.add_argument('--outdir', default='work/common10000')
     ap.add_argument('--k', type=int, required=True,
@@ -274,9 +215,6 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
-    KERN = load_kernel(os.path.join(args.outdir, 'fastkern.so'))
-    if KERN is not None:
-        print("using compiled OpenMP kernel scripts/fastkern.c")
 
     syms, names, C, glob = read_table(
         os.path.join(args.outdir, 'successor_distributions.tsv'))

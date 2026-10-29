@@ -1,18 +1,17 @@
 #!/bin/bash
 # Sweep the successor-model analyses over all common-substring thresholds.
 #
-#   run_sweep.sh [CORPUS] [WEIGHTS]
+#   run_sweep.sh [CORPUS]
 #
 # For each threshold T (work/common$T):
 #   * successor_distributions  -> successor_distributions.tsv
-#   * code_lengths             -> code_lengths.tsv  (static + dynamic fit rates)
+#   * code_lengths             -> code_lengths.tsv  (64/128-bit fit rates)
 #   * pair_matrix              -> pair_stats.txt / pair_factors_L*.npy
 # (the latter only for thresholds whose N is small enough to hold the dense
 #  N x N matrix in memory; pair_matrix skips the factorisation itself.)
 set -u
 cd "$(dirname "$0")/.."
 CORPUS="${1:-work/camel/merged.txt}"
-WEIGHTS="${2:-work/occ/all.camel.counts}"
 THRESHOLDS="${THRESHOLDS:-100000 50000 20000 10000 5000 2000 1000 500}"
 PAIR_THRESHOLDS="${PAIR_THRESHOLDS:-100000 50000 20000 10000 5000}"
 
@@ -26,8 +25,7 @@ for T in $THRESHOLDS; do
         time python3 scripts/successor_distributions.py "$CORPUS" "$S" --outdir "$D"
     fi
     echo "--- code_lengths"
-    time python3 scripts/code_lengths.py "$CORPUS" "$S" --outdir "$D" \
-         --weights "$WEIGHTS"
+    time python3 scripts/code_lengths.py "$CORPUS" "$S" --outdir "$D"
 done
 
 for T in $PAIR_THRESHOLDS; do

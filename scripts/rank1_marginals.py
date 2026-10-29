@@ -20,7 +20,6 @@ vectors differ in general.  This script reports
 Usage: rank1_marginals.py CORPUS SUBS [--outdir DIR]
 """
 import argparse
-import os
 
 import numpy as np
 
@@ -37,12 +36,7 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    cache = os.path.join(args.outdir, 'M.npz')
-    if os.path.exists(cache):
-        M = np.load(cache)['M']
-    else:
-        M, vocab, empty_idx = pair_matrix.build_matrix(args.corpus, args.substrings)
-        np.savez_compressed(cache, M=M)
+    M = pair_matrix.load_or_build_matrix(args.corpus, args.substrings, args.outdir)
     N = M.shape[0]
     # work in float32 for the big matrices: at large N the float64 copies of
     # M, its reconstruction and their difference do not fit in memory.
