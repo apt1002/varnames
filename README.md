@@ -67,14 +67,16 @@ varnames/
 │   ├── merge_identifiers.py             # merge the three lists, de-duplicate
 │   ├── common_substrings.py             # ^id$ substrings occurring ≥ N times
 │   ├── run_camel_pipeline.sh            # run the four steps end to end
-│   ├── winhash.py                       # 64-bit rolling-hash helpers (shared)
+│   ├── winhash.py                       # 64-bit rolling-hash helpers (library)
 │   ├── successor_distributions.py       # P(next character | common substring)
 │   ├── code_lengths.py                  # ideal code length + 64/128-bit fit rates
-│   ├── pair_matrix.py                   # prefix/suffix adjacency M + low-rank SVD/NMF
+│   ├── pair_matrix_lib.py               # adjacency M + SVD/NMF helpers (library)
+│   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
 │   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + smoothing
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
-│   ├── cluster_substrings.py            # K-means on the Hellinger embedding
+│   ├── cluster_substrings_lib.py        # K-means helpers (library)
+│   ├── cluster_substrings.py            # CLI: K-means on the Hellinger embedding
 │   ├── cluster_entropy.py               # successor entropy (bits) per cluster
 │   ├── cluster_size_frontier.py         # (model size, entropy) frontier + k/N
 │   ├── symmetry_check.py                # left/right reversal-symmetry sanity check
@@ -241,7 +243,7 @@ common substring that is a prefix of the right half) and approximates it with a
 rank-`L` factorisation — by default in the square-root (Hellinger) domain,
 `M ~ (√M)_L²`, which is non-negative by construction and minimises the metric
 that matches KL (`--no-sqrt` for the old count-space SVD). All of these are
-scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix.kl_joint`), which
+scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix_lib.kl_joint`), which
 differs from the older occurrence-weighted *conditional* KL only by a
 model-independent constant, so no conditional `p(b|a)` is formed.
 `scripts/latent_probabilities.py` measures ways of coping with the negative

@@ -27,7 +27,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cluster_substrings import read_table, h_given_cluster, entropy_bits
+from cluster_substrings_lib import read_table, h_given_cluster, entropy_bits
 
 HDR_RE = re.compile(r'## H\(next\) etc for (\d+)')
 NCTX_RE = re.compile(r'## nctx=(\d+)\s+N=(\d+)')

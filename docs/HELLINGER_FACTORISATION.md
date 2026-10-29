@@ -4,7 +4,7 @@ Status: the square-root (Hellinger) factorisation is the **default** in
 `scripts/pair_matrix.py` (saved `pair_factors_L*.npy` carry a `sqrt` flag;
 `--no-sqrt` restores the old count-space behaviour).  The metric is now the
 **joint** KL, `KL(M/T ‖ M̂/ΣM̂)` in bits (lower is better), computed by
-`pair_matrix.kl_joint`; no conditional `p(b|a)` is formed anywhere any more.
+`pair_matrix_lib.kl_joint`; no conditional `p(b|a)` is formed anywhere any more.
 
 ## Why the joint KL is the right metric (and why the conditional is unnecessary)
 
@@ -79,7 +79,7 @@ sparse (density 16.7%).  A higher `L` narrows this (the Hellinger advantage
 grows with rank at `T = 100000`), but we have not retested `T = 10000` at
 `L > 16`.
 
-**Caveat on the randomised SVD.**  `pair_matrix.randomized_svd` uses one power
+**Caveat on the randomised SVD.**  `pair_matrix_lib.randomized_svd` uses one power
 iteration and float32, and at `N = 2102` that is *not* accurate enough: it gives
 `sqrtcnt` 3.020 vs the exact 3.090 (and higher `n_iter` overflows in float32).
 All numbers here are therefore the **exact** SVD; a fix to the randomised

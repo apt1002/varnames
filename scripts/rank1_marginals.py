@@ -23,7 +23,7 @@ import argparse
 
 import numpy as np
 
-import pair_matrix
+import pair_matrix_lib as pair_matrix
 
 KL = pair_matrix.kl_joint
 

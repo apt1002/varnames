@@ -160,7 +160,7 @@ data.
 ## Metric: the joint KL
 
 The KL metric used throughout is the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` in bits,
-computed by `pair_matrix.kl_joint`. It was for a while documented as
+computed by `pair_matrix_lib.kl_joint`. It was for a while documented as
 "occurrence-weighted" but was actually a plain **uniform** mean over the rows
 that occur; and for a while a conditional `p(b|a)` was formed. Both are gone.
 By the chain rule

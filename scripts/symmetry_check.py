@@ -28,7 +28,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, 'scripts')
-import pair_matrix
+import pair_matrix_lib as pair_matrix
 
 
 def phi_vocab(vocab):

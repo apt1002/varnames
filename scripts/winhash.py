@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Shared 64-bit rolling-hash helpers for the substring / successor scripts.
 
 Window hashes are computed with the standard polynomial hash

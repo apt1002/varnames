@@ -22,16 +22,21 @@ M_hat, and score each as a *joint* distribution over (prefix, suffix) pairs:
            included as the yardstick the count-space remedies are judged by
 
 Metric: KL(M/T || M_hat/sum M_hat) in bits -- the relative entropy between the
-empirical joint and the (normalised) model (see pair_matrix.kl_joint).  No
+empirical joint and the (normalised) model (see pair_matrix_lib.kl_joint).  No
 conditional p(b|a) is formed.
 
 Usage: latent_probabilities.py CORPUS SUBS [--outdir DIR] [--L 16]
+
+Memory: the script holds M plus several N x N reconstructions at once, so the
+peak is a handful of N^2 arrays (8 bytes each in float64).  At N = 4500 that
+is over 1 GB and the process is OOM-killed on a small host; keep N to a few
+thousand or raise RAM.
 """
 import argparse
 
 import numpy as np
 
-import pair_matrix
+import pair_matrix_lib as pair_matrix
 
 
 KL = pair_matrix.kl_joint
