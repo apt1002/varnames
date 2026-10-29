@@ -255,20 +255,15 @@ python3 scripts/cluster_entropy.py --outdir work/common10000
 ### Scaling up: more substrings, more clusters
 
 Lowering the common-substring threshold to 2000 gives 11,758 common substrings
-(max length 14) and 10,890 analysable successor distributions. (The numbers in
-this subsection predate the longest-suffix model — they use the plain
-"character after substring" count — and predate the count-weighting of the
-clustering, so treat them as indicative only; `k` is now chosen by hand rather
-than by silhouette.)
+(max length 14) and 10,890 analysable successor distributions. (`k` is chosen by
+hand rather than by silhouette.)
 
 At a hand-picked `k = 17` the successor structure sharpens considerably: many
-clusters are near-deterministic, each pinned to a single likely next character —
-`t:0.96`, `o:0.95`, `e:0.94`, `r:0.94`, `l:0.94`, `d:0.93`, `a:0.91`, `g:0.91`,
-`s:0.89`, `n:0.87`, `i:0.85` — plus a digit/underscore cluster
-(`1:0.16 _:0.14 2:0.12 …`) and a large mixed "junk drawer". The measured
-entropies are: `H(next) = 4.935`, `H(next | substring) = 3.159`,
-`H(next | cluster) = 3.941` bits, so the clustering retains 0.993 bits (20.1% of
-`H(next)`).
+clusters are near-deterministic, each pinned to a single likely next character,
+plus a digit/underscore cluster and a large mixed "junk drawer". The measured
+entropies are: `H(next) = 4.966`, `H(next | substring) = 2.611`,
+`H(next | cluster) = 3.547` bits, so the clustering retains 1.419 bits
+(28.6% of `H(next)`).
 
 `scripts/fastkern.c` holds the two O(n·k·d) inner loops (K-means assignment,
 cluster accumulation). It is compiled on demand with
