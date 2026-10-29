@@ -2,7 +2,12 @@
 
 Status: **plan**.  This note sets out a study to find the `(k, N)` pairs that give
 a good successor model for their size, and to test the hypothesis that the
-optimum sits on a *constant ratio* `k / N`.
+frontier sits on a *constant ratio* `k / N`.
+
+The model is built once and reused on a very large corpus, so its byte size is a
+resource we choose to spend rather than a cost to amortise; the question is
+purely "what is the smallest `H(next | cluster)` for a given model size?" (the
+Pareto frontier), **not** a minimum-description-length total.
 
 ## The two knobs and what they cost
 
@@ -29,18 +34,19 @@ should be reported as a function of it, and checked for sensitivity.
 ## What "good for its size" means
 
 Both knobs reduce the code length per character, `H(next | cluster)` in bits,
-but at a byte cost.  Two equivalent framings:
+but at a byte cost.  **The model is paid for once and then used on a very large
+corpus**, so its size is a *resource we choose to spend*, not a cost amortised
+against the data — we do not add it to a data-coding cost (no MDL).  The study
+is therefore a pure **Pareto** question:
 
-1. **Pareto frontier (fixed budget).**  In the `(S, H)` plane, keep only points
-   not dominated (smaller `S`, smaller `H`).  The frontier answers "given `S`
-   bytes, what is the best `H`?", and each frontier point is a `(N, k)` pair.
-2. **MDL / total cost.**  For a corpus of `C` characters,
-
-        total_bits = 8 · S(N, k)  +  C · H(next | cluster)   (+ fixed bits)
-
-   minimise over `(N, k)`.  This has an interior optimum: each extra cluster
-   costs 8·128 = 1024 bits of model, worth it only while it saves `C · ΔH`
-   data bits — and `ΔH` shrinks as `k` grows.
+* In the `(S, H)` plane keep only the **frontier** — points not dominated
+  (smaller `S`, smaller `H`).  It answers "given an `S`-byte budget, what is the
+  best `H`?", and each frontier point is a `(N, k)` pair.
+* Because the data is effectively unlimited, there is **no interior optimum from
+  a trade-off with the data**: for any fixed `S` the question is just which
+  split of that budget between `N` and `k` minimises `H`, and whether the answer
+  is the same at every scale (the constant-ratio hypothesis).  What limits us in
+  practice is only the largest `N` and `k` we can build and afford.
 
 ## Do we need held-out entropy?  (checked — barely)
 
@@ -68,15 +74,16 @@ training `H` is a sound proxy here**, with the caveat that a low threshold
 (rare contexts) would eventually overfit and then the held-out harness must be
 used.  Keep the harness as a check anyway.
 
-Consequently the interior optimum does **not** come from overfitting; it comes
-from the **model-size term** in the total cost (below): adding clusters lowers
-`H` only slightly once `k` is large, while costing 1024 bits each.
+Consequence for the study: the raw `H(next | cluster)` curve keeps falling as
+`k` grows all the way to `k = n_ctx` with no penalty, so every point on the
+`(S, H)` frontier is a genuine data point, and the frontier's *shape* (where it
+bends, and the `k/N` it implies) is the whole question.
 
 ## Data
 
-Per threshold `T` we need the training/held-out curve `H(next | cluster)` vs
-`k`, together with `N`, `n_ctx`, `H(next)` and `H(next | substring)` (the `k = 1`
-and `k = n_ctx` limits).  All thresholds `100000 … 500` already have
+Per threshold `T` we need the `H(next | cluster)` vs `k` curve, together with
+`N`, `n_ctx`, `H(next)` and `H(next | substring)` (the `k = 1` and `k = n_ctx`
+limits).  All thresholds `100000 … 500` already have
 `successor_distributions.tsv`.  A first pass over the cached thresholds
 (`100000, 50000, 20000, 10000, 5000, 2000`) spans `N = 159 … 11758`, enough for
 a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
@@ -84,41 +91,43 @@ a first frontier; the tail (`1000, 500`) needs a corpus rescan (~6 min each).
 ## Method
 
 1. **Grid.**  For each `T`, sweep `k` over a log-spaced grid from 2 up to
-   `n_ctx` (clip at `n_ctx`).  Record `(N, n_ctx, k, H_train, H_held)`.
-2. **Points.**  Map each run to `(S = 16N + 128k, H_held)`.
-3. **Frontier.**  Sort by `S`, take the lower envelope of `H_held`.
-4. **Fit** the frontier, e.g. `H_held ≈ a − b·S^{-c}`, and tabulate the
-   `(N, k)` pairs and their ratio `k / N` along it.
+   `n_ctx` (clip at `n_ctx`).  Record `(N, n_ctx, k, H)`.
+2. **Points.**  Map each run to `(S = 16N + 128k, H)`.
+3. **Frontier.**  Sort by `S`, take the lower envelope of `H`.
+4. **Fit** the frontier, e.g. `H ≈ a − b·S^{-c}`, and tabulate the `(N, k)`
+   pairs and their ratio `k / N` along it; also report the local slope
+   `dH/dlog₂S` (bits saved per doubling of the model) to expose diminishing
+   returns.
 5. **Test the hypothesis** `k / N ≈ const`: regress `log k` on `log N` along the
    frontier; a slope near 1 with a tight intercept supports it.  Report the
    ratio and its spread, and whether it drifts with `S`.
-6. **MDL overlay.**  For corpus sizes `C` spanning a grid, mark the optimal
-   `(N, k)` from the total-cost formula and compare the implied `k / N`.
+6. **Budget table.**  For a few model-size budgets `S`, report the frontier's
+   best `(N, k)` — the practical form of the answer.
 
 ## Sensitivity and controls
 
-* **Ratio.**  Rerun step 5 with cluster costs 32/64/128/512 bytes (ratio 2…32)
-  and report how the frontier ratio scales — expect `k / N ∝ 1 / (cluster
+* **Ratio.**  Rerun the frontier with cluster costs 32/64/128/512 bytes (ratio
+  2…32) and report how the `k/N` ratio scales — expect `k / N ∝ 1 / (cluster
   cost)`.
 * **Restarts.**  Report the best-of-`R` spread; flag grid points where restarts
   disagree by more than ~0.01 bits.
-* **Corpus size.**  Held-out folds of different sizes show whether the optimum
-  drifts as data grows (the model term is fixed, the data term grows).
-* **`k ≤ n_ctx`.**  Near the cap the model approaches the exact context model;
-  this is a corner, not an interior optimum — mark it.
+* **`k ≤ n_ctx`.**  Near the cap the model approaches the exact context model
+  (`H → H(next|substring)`); mark this corner, since the frontier flattens there.
+* **Tail thresholds.**  Confirm `H(next|substring)` stays monotone in `N`
+  (a stale table once broke this — see below).
 
 ## Deliverables
 
-1. A figure: `S` (bytes, log axis) against held-out bits/character, one curve
-   per `N`, with the Pareto frontier drawn through them.
-2. A table of frontier `(T, N, k, S, H)` and the `k / N` ratio.
-3. A one-line recommendation: the ratio and the `(N, k)` at a few budgets.
+1. A figure: `S` (bytes, log axis) against bits/character, one curve per `N`,
+   with the Pareto frontier drawn through them.
+2. A table of frontier `(T, N, k, S, H)`, `k / N`, and `dH/dlog₂S`.
+3. A budget table: the best `(N, k)` at a few model sizes, and the `k / N` it
+   implies.
 
 ## First pass (done) and what it says
 
-`scripts/cluster_size_frontier.py` turns a sweep log into the frontier and the
-MDL optimum.  Sweeping `k` over a log grid for `T = 100000 … 5000` gives, at the
-endpoints,
+`scripts/cluster_size_frontier.py` turns a sweep log into the frontier.  Sweeping
+`k` over a log grid for `T = 100000 … 5000` gives, at the endpoints,
 
 | T | N | n_ctx | H(next) | H(next\|substring) |
 |---:|---:|---:|---:|---:|
@@ -128,24 +137,36 @@ endpoints,
 | 10000 | 2102 | 1950 | 4.966 | 3.070 |
 | 5000 | 4478 | 4162 | 4.966 | 2.856 |
 
-The `(S, H)` frontier is well populated between `S ≈ 3 kB` and `S ≈ 150 kB`, and
-the ratio `k / N` along it **rises with `S`** (roughly 0.01 → 0.35 across that
-range) rather than being constant — so the constant-ratio hypothesis is *not*
-supported by this first cut, and the interesting regime (large `k`) is where the
-data runs out.  Two concrete gaps to close:
+The `(S, H)` frontier is well populated between `S ≈ 3 kB` and `S ≈ 150 kB`.
+Taken pointwise along the frontier, `k / N` spans 0.01–0.35, but those extremes
+are at the very bottom of the range (tiny models) and at the top (where the grid
+runs out).  The *budget-optimal* points — the ones that actually answer the
+question — are far more stable:
 
-* **The grid is truncated.**  For every corpus size `C ≳ 10^7` the MDL optimum
-  sits at the largest `k` and the lowest `T` we tried (`k = 640`, `T = 5000`),
-  i.e. at the corner of the data.  We need `k` up to `n_ctx` and the tail
-  thresholds `T = 1000, 500` (and a couple more, e.g. 4000) to see the optimum
-  move inside the range.
+| budget `S` | `T` | `N` | `k` | `k/N` | `H` |
+|---:|---:|---:|---:|---:|---:|
+| 20 kB | 20000 | 911 | 40 | 0.044 | 3.891 |
+| 50 kB | 10000 | 2102 | 100 | 0.048 | 3.505 |
+| 100 kB | 5000 | 4478 | 200 | 0.045 | 3.191 |
+| 150 kB | 5000 | 4478 | 512 | 0.114 | 3.058 |
+
+So over `S = 20–100 kB` the answer is **`k / N ≈ 0.045`**, essentially
+constant — encouraging for the hypothesis; it only drifts at the top where the
+grid runs out.  Two gaps to close:
+
+* **The grid is too small to see the interesting part.**  The sweep only went
+  to `k = 640` and `T = 5000`, so the frontier ends at `S ≈ 150 kB` right where
+  `k/N` is still climbing.  We need `k` up to `n_ctx` (so the frontier reaches
+  the `H(next|substring)` floor) and the tail thresholds `T = 1000, 500` (and a
+  couple more, e.g. 4000), which span larger `N`.
 * **`common2000`'s table was stale** (built from the pre-longest-suffix
   successor count; it gave `H(next|substring) = 3.159 > 2.856`, breaking
-  monotonicity), so it was excluded and is being regenerated.
+  monotonicity); it has now been regenerated (2.611) and should be included in
+  the sweep.
 
-The held-out check (above) says overfitting is not the limiter, so the shape of
-the frontier is driven by the model-cost trade-off, which is what the extended
-grid should settle.
+The held-out check (above) says overfitting is not the limiter, so the frontier
+is a genuine curve; extending the grid is what will reveal whether its `k/N`
+settles to a constant.
 
 ## Notes for the "distant future" encoding
 

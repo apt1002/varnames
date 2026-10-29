@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """Turn a k-sweep log into the (model size, entropy) frontier of the study.
 
-Reads a log of the form produced by sweeping ``cluster_substrings.py --k`` over
-several thresholds, e.g.::
+Reads a log produced by sweeping ``cluster_substrings.py --k`` over several
+thresholds, e.g.::
 
     ## H(next) etc for 10000
-    substrings: 1950   ...
-    H(next)             = 4.966 bits
-    H(next | substring) = 3.070 bits
     ## nctx=1950  N=2102
     10000 1950 22 k = 22  H(next|cluster) = 3.8213 bits ...
 
-and reports, for the cost model
+The model is paid for once and then used on a very large corpus, so the model
+size is a *resource*, not a term to be amortised against the data: we do not add
+it to a data-coding cost (no MDL).  The study is therefore a pure Pareto
+question -- for the cost model
 
     S(N, k) = 16 N + 128 k    bytes           (dense representation)
 
-the Pareto frontier of (S, H) and the ratio k / N along it, plus the MDL
-optimum for a corpus of C split positions.
+report the frontier (min H for a given S) and the ratio k / N along it.
 
-Usage: cluster_size_frontier.py LOG [--C 41272149] [--bytes-sub 16] [--bytes-cl 128]
+Usage: cluster_size_frontier.py LOG [--bytes-sub 16] [--bytes-cl 128]
 """
 import argparse
 import os
@@ -85,10 +84,10 @@ def frontier(points):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('log')
-    ap.add_argument('--C', type=float, default=41_272_149.0,
-                    help='number of split positions coded (corpus size)')
     ap.add_argument('--bytes-sub', type=int, default=16)
     ap.add_argument('--bytes-cl', type=int, default=128)
+    ap.add_argument('--budgets', default='20000,50000,100000',
+                    help='model-size budgets (bytes) to report the best (N,k)')
     ap.add_argument('--workdir', default='work',
                     help='root holding common$T/successor_distributions.tsv')
     args = ap.parse_args()
@@ -96,9 +95,9 @@ def main():
 
     d = read_log(args.log)
     print(f"cost model: {bs} bytes/substring, {bc} bytes/cluster  "
-          f"(ratio {bc/bs:.0f});  corpus C = {args.C:.3g} positions\n")
+          f"(ratio {bc/bs:.0f}); model paid once (no data term)\n")
     print(f"{'T':>8} {'N':>6} {'nctx':>6} {'H(next)':>8} {'H|sub':>7} "
-          f"{'k=nctx H':>9} {'S@k=nctx':>9}")
+          f"{'H@k=nctx':>9} {'S@k=nctx':>9}")
     allpts = []
     for T in sorted(d, key=lambda x: -int(x)):
         e = d[T]
@@ -115,21 +114,39 @@ def main():
             allpts.append((bs * e['N'] + bc * kk, h, (int(T), e['N'], kk)))
 
     fr = frontier(allpts)
-    print(f"\nPareto frontier ({len(fr)} points):")
-    print(f"{'T':>8} {'N':>6} {'k':>6} {'k/N':>6} {'S bytes':>9} {'H bits':>7}")
-    for s, h, (T, N, k) in fr:
-        print(f"{T:>8} {N:>6} {k:>6} {k/N:>6.3f} {s:>9} {h:>7.4f}")
+    print(f"\nPareto frontier ({len(fr)} points).  'bits/doubling' = local "
+          f"dH/dlog2(S); 'B per 0.01 bit' = extra bytes for the next "
+          f"0.01 bits saved:")
+    print(f"{'T':>8} {'N':>6} {'k':>6} {'k/N':>6} {'S bytes':>9} {'H bits':>7} "
+          f"{'bits/dbl':>9} {'B/0.01b':>8}")
+    for i, (s, h, (T, N, k)) in enumerate(fr):
+        if i + 1 < len(fr):
+            s2, h2, _ = fr[i + 1]
+            dlog = np.log2(s2) - np.log2(s)
+            slope = (h - h2) / dlog if dlog > 0 else np.nan
+            bpc = (s2 - s) / max((h - h2) / 0.01, 1e-12) if h > h2 else np.nan
+        else:
+            slope = bpc = np.nan
+        print(f"{T:>8} {N:>6} {k:>6} {k/N:>6.3f} {s:>9} {h:>7.4f} "
+              f"{slope:>9.4f} {bpc:>8.0f}")
 
-    # MDL optimum for a few corpus sizes
-    print("\nMDL optimum  argmin[8 S + C H]:")
-    print(f"{'C':>12} {'T':>8} {'N':>6} {'k':>6} {'k/N':>6} {'S':>8} "
-          f"{'H':>7} {'model%':>7}")
-    for C in (1e5, 1e6, 1e7, args.C, 1e8, 1e9):
-        best = min(allpts, key=lambda p: 8 * p[0] + C * p[1])
-        s, h, (T, N, k) = best
-        tot = 8 * s + C * h
-        print(f"{C:>12.0e} {T:>8} {N:>6} {k:>6} {k/N:>6.3f} {s:>8} "
-              f"{h:>7.4f} {100*8*s/tot:>6.2f}%")
+    # best (N,k) for a given model-size budget: lowest H with S <= budget
+    print(f"\nBest model within a size budget (min H with S <= budget):")
+    print(f"{'budget B':>9} {'T':>8} {'N':>6} {'k':>6} {'k/N':>6} {'S':>8} "
+          f"{'H':>7}")
+    for b in [int(x) for x in args.budgets.split(',')]:
+        cand = [p for p in allpts if p[0] <= b]
+        if not cand:
+            continue
+        s, h, (T, N, k) = min(cand, key=lambda p: p[1])
+        print(f"{b:>9} {T:>8} {N:>6} {k:>6} {k/N:>6.3f} {s:>8} {h:>7.4f}")
+
+    # summary of the k/N ratio along the frontier
+    ratios = [k / N for _, _, (T, N, k) in fr]
+    if ratios:
+        print(f"\nk/N along the frontier: min {min(ratios):.3f}, "
+              f"max {max(ratios):.3f}, first {ratios[0]:.3f}, "
+              f"last {ratios[-1]:.3f}")
 
 
 if __name__ == '__main__':
