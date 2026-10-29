@@ -135,15 +135,25 @@ def build_matrix(corpus, subs):
     return M, vocab, empty_idx
 
 
-def randomized_svd(M, rank, rng, n_iter=1):
+def randomized_svd(M, rank, rng, n_iter=4):
+    """Randomised range finder (Halko-Martinsson-Tropp), range M(MᵀM)^n_iter Ω.
+
+    The range basis is re-orthonormalised (QR) after *every* power step.  The
+    earlier version accumulated ``Y = A @ (A.T @ Y)`` without re-orthonormalising
+    and then did a single QR, which both lost accuracy at moderate N (a single
+    power iteration gave 3.02 vs the exact 3.09 bits at N=2102) and overflowed
+    in float32 for n_iter ≳ 8.  With the per-step QR, float32 no longer
+    overflows and the default n_iter = 4 matches the exact SVD to ~0.005 bits
+    (n_iter = 8 to ~0.001).
+    """
     n = M.shape[0]
     p = min(10, rank)
     A = M.astype(np.float32)
     Om = rng.standard_normal((n, rank + p)).astype(np.float32)
-    Y = A @ Om
+    Q, _ = np.linalg.qr(A @ Om)
     for _ in range(n_iter):
-        Y = A @ (A.T @ Y)
-    Q, _ = np.linalg.qr(Y)
+        Z = A.T @ Q
+        Q, _ = np.linalg.qr(A @ Z)
     Bm = Q.T @ A
     Ub, s, Vt = np.linalg.svd(Bm, full_matrices=False)
     U = Q @ Ub
