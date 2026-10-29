@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Exploring a better low-rank prefix/suffix model: square-root (Hellinger)
-factorisation of the count matrix, and smoothing towards independence.
+factorisation of the count matrix, and a prior on unobserved pairs.
 
 Idea 1 -- Hellinger factorisation
 ---------------------------------
@@ -25,19 +25,31 @@ identical to rooting a row-normalised p(b|a) and weighting by sqrt(N_a) (the
 `hellw` of earlier versions).  We therefore never form the conditional p(b|a);
 the model and the empirical matrix are both compared as *joints*.
 
-Idea 2 -- smoothing towards independence
-----------------------------------------
+Idea 2 -- a prior on unobserved pairs (the counting fix)
+--------------------------------------------------------
 M counts only observed (a, b) pairs; a structural zero is not an impossibility.
-Add alpha * M_mar = alpha * r c^T / T before factorising (rank 1 and
-non-negative, so it lifts the floor without adding much rank).
+We add a fixed amount of pseudo-count mass, shaped like the independence model,
 
-Scored by KL(M/T || M_hat/sum M_hat) in bits -- the relative entropy between the
-empirical joint over (prefix, suffix) pairs and the (normalised) model, plus the
-negative fraction of the latent reconstruction (the model itself is
-non-negative for the sqrt variant).
+    M_ref = M + alpha * P_mar ,   P_mar = (r/T)(c/T)^T   (sum 1),
+
+with ``alpha = c * N^2`` (so ``c`` is the average number of pseudo-counts per
+cell; --cs sweeps it).  The correction has a *fixed* total mass, not a fraction
+of the corpus ``T``: that makes it a genuine prior on unseen pairs which washes
+out as the corpus grows (adding ``alpha * M_mar`` with ``M_mar`` unnormalised
+would instead inject ``alpha * T`` and never vanish).
+
+M_ref *is* the reference for the whole analysis: every model is a
+reconstruction of M_ref and is scored against M_ref.  Results are therefore not
+comparable across ``c`` -- by design.  ``c`` is a *counting* fix, not a
+reconstruction knob; the reconstruction version of "mix in the independence
+model" already exists as the ``backoff`` remedy below.
+
+Scored by KL(M_ref/ΣM_ref || M_hat/sum M_hat) in bits, plus the negative
+fraction of the latent reconstruction (the model itself is non-negative for the
+sqrt variant).
 
 Usage: sqrt_and_smooth.py CORPUS --outdirs work/common100000,... [--ls 8,16,32]
-       [--alphas 0,0.01,0.05,0.2,1.0] [--exact]
+       [--cs 0,0.1,0.5,1,2] [--exact]
 """
 import argparse
 import os
@@ -64,18 +76,30 @@ def lowrank(M, L, rng, exact):
 METHODS = ('clip', 'abs', 'backoff .1', 'nmf', 'sqrtcnt')
 
 
-def models_for(M, L, alpha, rng, exact, nmf_iters):
-    """Return (name -> model matrix M_hat, name -> latent negative fraction).
+def priors(M, alpha):
+    """Return (M_mar, P_mar, M_ref).
 
-    All models are non-negative count-scale reconstructions of M; the metric
-    normalises them, so their absolute scale does not matter.
+    ``M_mar = r c^T / T`` has total mass ``T`` and is kept for the convex
+    ``backoff`` mixture.  ``P_mar = (r/T)(c/T)^T`` has total mass 1 and is the
+    shape of the counting prior.  ``M_ref = M + alpha * P_mar`` is the
+    corrected reference for scoring.
     """
     r = M.sum(1)
-    c = M.sum(0)
+    cc = M.sum(0)
     T = float(M.sum())
-    M_mar = np.outer(r, c) / max(T, 1.0)
+    M_mar = np.outer(r, cc) / max(T, 1.0)
+    P_mar = np.outer(r / T, cc / T)
+    return M_mar, P_mar, M.astype(np.float64) + alpha * P_mar
 
-    Ma = M.astype(np.float64) + alpha * M_mar
+
+def models_for(M, L, alpha, rng, exact, nmf_iters):
+    """Return (name -> model matrix M_hat, name -> latent negative fraction,
+    M_mar, M_ref).
+
+    All models are non-negative count-scale reconstructions of ``M_ref``; the
+    metric normalises them, so their absolute scale does not matter.
+    """
+    M_mar, P_mar, Ma = priors(M, alpha)
     out, neg = {}, {}
 
     U, s, V = lowrank(Ma, L, rng, exact)
@@ -93,7 +117,7 @@ def models_for(M, L, alpha, rng, exact, nmf_iters):
     Wh = W @ H
     out['nmf'] = Wh
     neg['nmf'] = float((Wh < 0).mean())
-    return out, neg, M_mar
+    return out, neg, M_mar, Ma
 
 
 def main():
@@ -101,14 +125,17 @@ def main():
     ap.add_argument('corpus')
     ap.add_argument('--outdirs', required=True)
     ap.add_argument('--ls', default='16', help='comma-separated ranks')
-    ap.add_argument('--alphas', default='0,0.01,0.05,0.2,1.0')
+    ap.add_argument('--cs', default='0,0.1,0.5,1,2',
+                    help='prior strength as multiples of N^2 (average '
+                         'pseudo-counts per cell, independence-shaped); '
+                         'alpha = c * N^2')
     ap.add_argument('--nmf-iters', type=int, default=200)
     ap.add_argument('--exact', action='store_true',
                     help='use the exact SVD (small N only)')
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    alphas = [float(a) for a in args.alphas.split(',')]
+    cs = [float(x) for x in args.cs.split(',')]
     Ls = [int(x) for x in args.ls.split(',')]
 
     for outdir in args.outdirs.split(','):
@@ -119,28 +146,34 @@ def main():
         print(f"\n=== {outdir}  N={n}  rows={krows}  "
               f"svd={'exact' if args.exact else 'randomised'} ===", flush=True)
         for L in Ls:
-            hdr = 'method'.ljust(12) + ''.join(f"a={a:<9g}" for a in alphas)
+            hdr = 'method'.ljust(12) + ''.join(f"c={c:<9g}" for c in cs)
             tk, negtab = {}, {}
-            for alpha in alphas:
+            for c in cs:
+                alpha = c * n * n
                 rng = np.random.default_rng(args.seed)
-                out, neg, M_mar = models_for(M, L, alpha, rng, args.exact,
-                                             args.nmf_iters)
+                out, neg, M_mar, Ma = models_for(M, L, alpha, rng, args.exact,
+                                                 args.nmf_iters)
                 for name in METHODS:
-                    tk.setdefault(name, {})[alpha] = KL(M, out[name])
-                    negtab.setdefault(name, {})[alpha] = neg[name]
+                    tk.setdefault(name, {})[c] = KL(Ma, out[name])
+                    negtab.setdefault(name, {})[c] = neg[name]
 
-            print(f"\n-- L = {L} --  KL(M/T || M_hat/sum M_hat) in bits "
-                  f"(lower is better)")
+            print(f"\n-- L = {L} --  KL(M_ref || M_hat/sum M_hat) in bits "
+                  f"(lower is better); M_ref = M + c*N^2*P_mar")
             print(hdr)
             for name in METHODS:
                 print(name.ljust(12) +
-                      ''.join(f"{tk[name][a]:<11.4f}" for a in alphas))
+                      ''.join(f"{tk[name][c]:<11.4f}" for c in cs))
             print("   latent negative fraction (%)")
             for name in METHODS:
                 print(name.ljust(12) +
-                      ''.join(f"{100*negtab[name][a]:<11.4f}" for a in alphas))
+                      ''.join(f"{100*negtab[name][c]:<11.4f}" for c in cs))
 
-        print(f"\nindependence model: KL {KL(M, M_mar):.4f} bits")
+        print("\nindependence model KL(M_ref || P_mar) by c:")
+        for c in cs:
+            alpha = c * n * n
+            M_mar, P_mar, Ma = priors(M, alpha)
+            print(f"  c={c:<6g}  alpha={alpha:<12.4g}  "
+                  f"KL {KL(Ma, M_mar):.4f} bits")
 
 
 if __name__ == '__main__':
