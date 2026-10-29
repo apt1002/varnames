@@ -74,6 +74,7 @@ varnames/
 │   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
 │   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
 │   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + unobserved-pairs prior
+│   ├── choose_c.py                      # choose the prior strength c by held-out likelihood
 │   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── cluster_substrings_lib.py        # K-means helpers (library)
 │   ├── cluster_substrings.py            # CLI: K-means on the Hellinger embedding

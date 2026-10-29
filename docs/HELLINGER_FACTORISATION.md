@@ -161,11 +161,49 @@ Two things to read off carefully:
 * **Do not choose `c` by this KL.**  It decreases monotonically in `c` for
   *every* method, because as `c → ∞` the reference `M_ref` tends to the rank-1
   `P_mar`, which any rank-`L` model fits nearly exactly, so the KL tends to 0.
-  `c` is a *prior strength* and must be fixed independently — e.g. by held-out
-  predictive log-likelihood (binomial-thin the counts, fit on train, score on
-  test), with `c ≈ ½–1` (half a to one pseudo-count per cell) as the natural
-  default.  The earlier draft's conclusion that "smoothing raises the KL" was an
-  artefact of the unnormalised, `T`-sized correction.
+  `c` is a *prior strength* and must be fixed independently — by held-out
+  predictive log-likelihood (see below).  The earlier draft's conclusion that
+  "smoothing raises the KL" was an artefact of the unnormalised, `T`-sized
+  correction.
+
+### Choosing `c` by held-out likelihood
+
+`scripts/choose_c.py` selects the prior by *predictive* performance:
+binomial-thin the counts into train/test (`p_train = 0.5`), fit the `sqrtcnt`
+model to `M_train + alpha·P_mar(train)`, and score the test counts as
+cross-entropy in bits per held-out event (lower is better; mean over 5–10
+splits).  The test set contains pairs that are *unseen in train*, so this is the
+criterion that can reward the prior.
+
+| T (N) | cells unobs. | best `c` | best `alpha` | `alpha/N` | CE\* best | CE `c=0` | CE indep. |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100000 (159) | 21% | 7 | 1.8×10⁵ | 1.1×10³ | 12.405 | 12.406 | 13.535 |
+| 50000 (316) | 36% | 5 | 5.0×10⁵ | 1.6×10³ | 14.067 | 14.075 | 15.413 |
+| 20000 (911) | 65% | 1 | 8.3×10⁵ | 0.9×10³ | 16.643 | 16.723 | 18.155 |
+| 10000 (2102) | 83% | 0.5 | 2.2×10⁶ | 1.0×10³ | 18.656 | 18.929 | 20.161 |
+| 5000 (4478) | 92% | 0.2 | 4.0×10⁶ | 0.9×10³ | 20.526 | 21.097 | 21.992 |
+
+(\*cross-entropy of the test table under the model, bits/event; the "CE indep."
+column is the no-latent-structure baseline `P_mar(train)`.)
+
+Reading it:
+
+* **The prior helps, and the benefit grows with sparsity** — from 0.001
+  bits/event at `N = 159` (few unobserved cells; the whole `c` sweep is within
+  noise) to 0.57 bits/event at `N = 4478` (`sqrtcnt` still beats the independence
+  model by a further 1.5 bits).  Every `c > 0` beats `c = 0`.
+* **The invariant is prior mass *per context*, not per cell.**  `alpha/N` is
+  roughly constant at ≈10³ (0.9–1.6×10³) across a 28× range of `N`, so
+  `alpha ≈ 10³·N` and in the `c·N²` form the optimal `c` falls like `1/N`
+  (7 → 0.2).  A *fixed* `c` is therefore not scale-invariant: `c ≈ ½–1` is
+  near-optimal for `N ≈ 900–2100` but too strong at `N = 4478` and too weak at
+  `N = 159`.
+* Caveat: with a single corpus we cannot separate the `N`- from the corpus-size
+  dependence; ≈10³ is an empirical constant for this corpus.
+
+So either tune `c` per corpus with `choose_c.py`, or parameterise the mass
+per context, `alpha = kappa·N` with `kappa` ≈ 10³, which a single constant
+serves across the whole range.
 
 ## Conclusions
 
