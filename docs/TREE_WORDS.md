@@ -81,17 +81,12 @@ We believe this is equal to sum over u of N(u) log(N(u)) - sum over u, v of N(u,
 
 # Effect of incrementing `NUM_PAIRS`
 
-One increment merges a single pair of words `u`, `v` into a new word `w`.
-Write
+One increment merges a single pair of words `u`, `v` into a new word `w`.  Each
+occurrence of `uv` sits in a context `a u v b`, with `a` the predecessor word and
+`b` the successor word.  The *only* aggregates that enter are
 
-    m    = N(u, v)      the number of merges
-
-and note that each occurrence of `uv` sits in a context `a u v b`, with `a` the
-predecessor word and `b` the successor word.  The *only* aggregates that enter
-are
-
-    A(x) = N(x, u, v)   occurrences of uv whose predecessor is x   (sum_x A = m)
-    B(y) = N(u, v, y)   occurrences of uv whose successor   is y   (sum_y B = m)
+    A(x) = N(x, u, v)     occurrences of uv whose predecessor is x  (sum_x A = N(u,v))
+    B(y) = N(u, v, y)     occurrences of uv whose successor   is y  (sum_y B = N(u,v))
     Q    = N(u, v, u, v)  adjacent uvuv patterns                    (see below)
 
 `Q` is the one awkward piece: two *adjacent* occurrences of `uv` (pattern
@@ -105,9 +100,9 @@ that *improves* compression gives `Δ < 0`):
 
     Δ = ΔU − ΔB
 
-    ΔU = L(N(u)−m) − L(N(u))  +  L(N(v)−m) − L(N(v))  +  L(m)
+    ΔU = L(N(u)−N(u,v)) − L(N(u))  +  L(N(v)−N(u,v)) − L(N(v))  +  L(N(u,v))
 
-    ΔB =  −L(m)                                            (u,v)  -> gone
+    ΔB =  −L(N(u,v))                                       (u,v)  -> gone
         + Σ_{x≠v} [ L(N(x,u) − A(x)) − L(N(x,u)) ]         (x,u)  decremented
         +       [ L(N(v,u) − A(v) − B(u) + Q) − L(N(v,u)) ]  (v,u)  both decrements
         + Σ_{y≠u} [ L(N(v,y) − B(y)) − L(N(v,y)) ]         (v,y)  decremented
@@ -120,7 +115,7 @@ that *improves* compression gives `Δ < 0`):
 (`Σ_{x≠v}` is over all words in the current vocabulary; `w` itself is new, so
 it never appears in the "decremented" sums.)
 
-Reading the cases.  The pair `(u,v)` disappears, hence `−L(m)`.  Every bigram
+Reading the cases.  The pair `(u,v)` disappears, hence `−L(N(u,v))`.  Every bigram
 `(x,u)` whose `u` is consumed loses one per matching occurrence, hence `A(x)`;
 symmetrically `(v,y)` loses `B(y)`.  Where a `w` token appears it contributes a
 *new* bigram, hence the `L(A(·))` and `L(B(·))` terms.
@@ -137,9 +132,9 @@ occurs, only `uuu` is forbidden) is a special case, because one merge consumes
 *two* copies of `z`, and the three-repeats assumption forces
 `Q = A(z) = B(z) = 0`:
 
-    ΔU = L(N(z)−2m) − L(N(z)) + L(m)
+    ΔU = L(N(z)−2N(z,z)) − L(N(z)) + L(N(z,z))
 
-    ΔB =  −L(m)                                        (z,z)  -> gone
+    ΔB =  −L(N(z,z))                                   (z,z)  -> gone
         + Σ_{x≠z} [ L(N(x,z) − A(x)) − L(N(x,z)) ]     (x,z)
         + Σ_{y≠z} [ L(N(z,y) − B(y)) − L(N(z,y)) ]     (z,y)
         + Σ_{a≠z} L(A(a)) + Σ_{b≠z} L(B(b))            (a,w), (w,b)
@@ -158,15 +153,15 @@ With the definition
 i.e. `N(a,b,c) = m(a,b,c) · N(a,b) · N(b,c) / N(b)`, the aggregates become pure
 functions of the bigram counts and the `m`'s:
 
-    A(x) = m(x,u,v) · N(x,u) · m / N(u)
-    B(y) = m(u,v,y) · m · N(v,y) / N(v)
-    A(v) = m(v,u,v) · N(v,u) · m / N(u)
-    B(u) = m(u,v,u) · m · N(v,u) / N(v)
+    A(x) = m(x,u,v) · N(x,u) · N(u,v) / N(u)
+    B(y) = m(u,v,y) · N(u,v) · N(v,y) / N(v)
+    A(v) = m(v,u,v) · N(v,u) · N(u,v) / N(u)
+    B(u) = m(u,v,u) · N(u,v) · N(v,u) / N(v)
 
 and `Q` needs the 4-gram analogue,
 `m(a,b,c,d) = N(a,b,c,d) N(b,c) / ( N(a,b,c) N(b,c,d) )`:
 
-    Q    = m(u,v,u,v) · B(u) · A(v) / m .
+    Q    = m(u,v,u,v) · B(u) · A(v) / N(u,v) .
 
 `m(a,b,c) = 1` is exactly the statement that the 3-gram is fixed by the pair
 counts — that the next word depends on the previous one but not on the one
@@ -180,9 +175,9 @@ Substituting the `m`'s into `Δ` splits it cleanly:
 
 * **`Δ⁽¹⁾`** is `Δ` with every `m(·)` set to 1:
 
-      A₁(x) = N(x,u) · m / N(u)          B₁(y) = m · N(v,y) / N(v)
-      A₁(v) = N(v,u) · m / N(u)          B₁(u) = m · N(v,u) / N(v)
-      Q₁    = N(v,u)² · m / ( N(u) N(v) )
+      A₁(x) = N(x,u) · N(u,v) / N(u)    B₁(y) = N(u,v) · N(v,y) / N(v)
+      A₁(v) = N(v,u) · N(u,v) / N(u)    B₁(u) = N(u,v) · N(v,u) / N(v)
+      Q₁    = N(v,u)² · N(u,v) / ( N(u) N(v) )
 
   It depends **only on the unigram and bigram counts** — that is the `NUM_PAIRS`
   contribution: the change you would see if the corpus were first-order
@@ -205,10 +200,9 @@ Two remarks:
   deterministic alternation `ab ab` changes `CS` by nothing, though its PMI is
   positive — the whole effect is already in the pair counts, and `CS` is an
   entropy, not a likelihood ratio.
-* The greedy rule picks the pair with the largest `N(u,v)`, i.e. the largest
-  `m`.  That is a *proxy* for the smallest `Δ`; `Δ` also depends on how the pair
-  is embedded (`A`, `B`, `Q`), so a "greedy by gain" variant would rank
-  candidates by `Δ` instead.
+* The greedy rule picks the pair with the largest `N(u,v)`.  That is a *proxy*
+  for the smallest `Δ`; `Δ` also depends on how the pair is embedded (`A`, `B`,
+  `Q`), so a "greedy by gain" variant would rank candidates by `Δ` instead.
 
 **Checked numerically.** `scripts/check_merge_delta.py` merges a pair by brute
 force (recount, then recompute `CS`) and compares against the formula above, on

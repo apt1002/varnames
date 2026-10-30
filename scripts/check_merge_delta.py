@@ -65,8 +65,8 @@ def delta_formula(seq, u, v):
     T3 = ngram_counts(seq, 3)
     F4 = ngram_counts(seq, 4)
     U = Counter(seq)
-    m = B2.get((u, v), 0)
-    if m == 0:
+    n_uv = B2.get((u, v), 0)
+    if n_uv == 0:
         return 0.0
 
     alpha = sorted(set(seq) | {u, v})
@@ -76,8 +76,8 @@ def delta_formula(seq, u, v):
 
     if u == v:                               # merging a doubled word (z, z)
         z = u
-        dU = L(U[z] - 2 * m) - L(U[z]) + L(m)
-        dB = L(0) - L(m)                                    # (z,z) -> gone
+        dU = L(U[z] - 2 * n_uv) - L(U[z]) + L(n_uv)
+        dB = L(0) - L(n_uv)                                 # (z,z) -> gone
         for x in alpha:
             if x != z:
                 dB += L(B2.get((x, z), 0) - A(x)) - L(B2.get((x, z), 0))
@@ -92,9 +92,9 @@ def delta_formula(seq, u, v):
                 dB += L(B(b))
         return dU - dB
 
-    dU = (L(U[u] - m) - L(U[u])
-          + L(U[v] - m) - L(U[v]) + L(m))
-    dB = L(0) - L(m)                                        # (u,v) -> gone
+    dU = (L(U[u] - n_uv) - L(U[u])
+          + L(U[v] - n_uv) - L(U[v]) + L(n_uv))
+    dB = L(0) - L(n_uv)                                     # (u,v) -> gone
     for x in alpha:
         if x != v:
             dB += L(B2.get((x, u), 0) - A(x)) - L(B2.get((x, u), 0))
