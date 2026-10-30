@@ -81,14 +81,146 @@ We believe this is equal to sum over u of N(u) log(N(u)) - sum over u, v of N(u,
 
 # Effect of incrementing `NUM_PAIRS`
 
-TODO!
+One increment merges a single pair of words `u`, `v` into a new word `w`.
+Write
+
+    m    = N(u, v)      the number of merges
+
+and note that each occurrence of `uv` sits in a context `a u v b`, with `a` the
+predecessor word and `b` the successor word.  The *only* aggregates that enter
+are
+
+    A(x) = N(x, u, v)   occurrences of uv whose predecessor is x   (sum_x A = m)
+    B(y) = N(u, v, y)   occurrences of uv whose successor   is y   (sum_y B = m)
+    Q    = N(u, v, u, v)  adjacent uvuv patterns                    (see below)
+
+`Q` is the one awkward piece: two *adjacent* occurrences of `uv` (pattern
+`uvuv`) merge into the bigram `ww`.  It is a 4-gram count.  Under the
+three-consecutive-repeats assumption each `uvuv` is isolated (three consecutive
+`uv` pairs would be `(uv)³`, which is forbidden), so `Q` counts every adjacency
+exactly once.  If the adjacency is ignored (`Q = 0`) only 3-gram counts remain.
+
+With `L(z) = z·log z` (any base; `L(0) = 0`), and `Δ = CS' − CS` (so a merge
+that *improves* compression gives `Δ < 0`):
+
+    Δ = ΔU − ΔB
+
+    ΔU = L(N(u)−m) − L(N(u))  +  L(N(v)−m) − L(N(v))  +  L(m)
+
+    ΔB =  −L(m)                                            (u,v)  -> gone
+        + Σ_{x≠v} [ L(N(x,u) − A(x)) − L(N(x,u)) ]         (x,u)  decremented
+        +       [ L(N(v,u) − A(v) − B(u) + Q) − L(N(v,u)) ]  (v,u)  both decrements
+        + Σ_{y≠u} [ L(N(v,y) − B(y)) − L(N(v,y)) ]         (v,y)  decremented
+        + Σ_{a≠v} L(A(a))                                  (a,w)  created
+        +       L(A(v) − Q)                                (v,w)
+        +       L(B(u) − Q)                                (w,u)
+        + Σ_{b≠u} L(B(b))                                  (w,b)  created
+        +       L(Q)                                       (w,w)  created
+
+(`Σ_{x≠v}` is over all words in the current vocabulary; `w` itself is new, so
+it never appears in the "decremented" sums.)
+
+Reading the cases.  The pair `(u,v)` disappears, hence `−L(m)`.  Every bigram
+`(x,u)` whose `u` is consumed loses one per matching occurrence, hence `A(x)`;
+symmetrically `(v,y)` loses `B(y)`.  Where a `w` token appears it contributes a
+*new* bigram, hence the `L(A(·))` and `L(B(·))` terms.
+
+The `(v,u)` line is the only place the two decrements collide: a `(v,u)` bigram
+is removed both because its `u` is matched (giving `A(v)`) and because its `v`
+is matched (giving `B(u)`), and the pattern in which both are true — `uvuv` —
+has been counted twice, hence `+Q`.  The same `uvuv` patterns are what produce
+the `(w,w)` bigram, hence the paired `−Q` in the `(v,w)` and `(w,u)` lines and
+`+L(Q)` at the end: mass is moved from `(v,w)` and `(w,u)` into `(w,w)`.
+
+**The pair can be `(u,u)`.**  Merging a doubled word `(z,z)` (allowed: `uu`
+occurs, only `uuu` is forbidden) is a special case, because one merge consumes
+*two* copies of `z`, and the three-repeats assumption forces
+`Q = A(z) = B(z) = 0`:
+
+    ΔU = L(N(z)−2m) − L(N(z)) + L(m)
+
+    ΔB =  −L(m)                                        (z,z)  -> gone
+        + Σ_{x≠z} [ L(N(x,z) − A(x)) − L(N(x,z)) ]     (x,z)
+        + Σ_{y≠z} [ L(N(z,y) − B(y)) − L(N(z,y)) ]     (z,y)
+        + Σ_{a≠z} L(A(a)) + Σ_{b≠z} L(B(b))            (a,w), (w,b)
+
+(No `(w,w)` term: a `ww` would need `uuuu`.)
+
+Total effect of incrementing `NUM_PAIRS` by `K` is the sum of `Δ` over the `K`
+successive merges.
+
+## In terms of the trigram factor `m(a,b,c)`
+
+With the definition
+
+    m(a,b,c) = N(a,b,c) N(b) / ( N(a,b) N(b,c) )
+
+i.e. `N(a,b,c) = m(a,b,c) · N(a,b) · N(b,c) / N(b)`, the aggregates become pure
+functions of the bigram counts and the `m`'s:
+
+    A(x) = m(x,u,v) · N(x,u) · m / N(u)
+    B(y) = m(u,v,y) · m · N(v,y) / N(v)
+    A(v) = m(v,u,v) · N(v,u) · m / N(u)
+    B(u) = m(u,v,u) · m · N(v,u) / N(v)
+
+and `Q` needs the 4-gram analogue,
+`m(a,b,c,d) = N(a,b,c,d) N(b,c) / ( N(a,b,c) N(b,c,d) )`:
+
+    Q    = m(u,v,u,v) · B(u) · A(v) / m .
+
+`m(a,b,c) = 1` is exactly the statement that the 3-gram is fixed by the pair
+counts — that the next word depends on the previous one but not on the one
+before it.
+
+## Separating the `NUM_PAIRS` part from the `m` part
+
+Substituting the `m`'s into `Δ` splits it cleanly:
+
+    Δ = Δ⁽¹⁾ + Δ⁽ᵐ⁾
+
+* **`Δ⁽¹⁾`** is `Δ` with every `m(·)` set to 1:
+
+      A₁(x) = N(x,u) · m / N(u)          B₁(y) = m · N(v,y) / N(v)
+      A₁(v) = N(v,u) · m / N(u)          B₁(u) = m · N(v,u) / N(v)
+      Q₁    = N(v,u)² · m / ( N(u) N(v) )
+
+  It depends **only on the unigram and bigram counts** — that is the `NUM_PAIRS`
+  contribution: the change you would see if the corpus were first-order
+  consistent under its own pair counts.
+* **`Δ⁽ᵐ⁾ = Δ − Δ⁽¹⁾`** is the correction.  The `m`'s enter only through `A`,
+  `B`, `Q`, so `Δ⁽ᵐ⁾` is a function of the deviations `m(a,b,c) − 1` (and
+  `m(u,v,u,v) − 1`), and it vanishes identically when the corpus is
+  first-order-consistent.
+
+To first order, since `L(n+δ) − L(n) ≈ (1 + ln n)·δ`, `Δ⁽ᵐ⁾` is *linear* in
+`m − 1`, with each perturbed count `n` contributing a weight `(1 + ln n)` and
+the sign read off `ΔB`.  So the exact statement is: the merge's effect on the
+description length is a piece fixed by the unigram/bigram table, plus a weighted
+sum of the trigram (and one 4-gram) dependence factors, whose weights are
+`1 + ln(count)`.
+
+Two remarks:
+
+* The gain is **not** a pointwise-mutual-information term.  Merging a
+  deterministic alternation `ab ab` changes `CS` by nothing, though its PMI is
+  positive — the whole effect is already in the pair counts, and `CS` is an
+  entropy, not a likelihood ratio.
+* The greedy rule picks the pair with the largest `N(u,v)`, i.e. the largest
+  `m`.  That is a *proxy* for the smallest `Δ`; `Δ` also depends on how the pair
+  is embedded (`A`, `B`, `Q`), so a "greedy by gain" variant would rank
+  candidates by `Δ` instead.
+
+**Checked numerically.** `scripts/check_merge_delta.py` merges a pair by brute
+force (recount, then recompute `CS`) and compares against the formula above, on
+random cyclic corpora, for every pair (including `u = v`, and including corpora
+that contain `uvuv` so that `Q > 0`).  It agrees to `1e−9` on ~22k cases.
 
 
 # Notes
 
-*Explanatory notes added 2026-10-29. The sections above are the specification;
-this is commentary on why they work, what is assumed, and what is deliberately
-left out.*
+*Explanatory notes added 2026-10-29. The sections above are the specification and
+the merge-delta derivation; this is commentary on why they work, what is assumed,
+and what is deliberately left out.*
 
 ## Why the three-consecutive-repeats assumption is there
 
@@ -181,22 +313,3 @@ pure Pareto one — *smallest score at a given model size*. In this document the
 size knob is `NUM_PAIRS` (the dictionary) and the score should be the
 **held-out** code length (bits/string) rather than in-sample `CS`; plot
 held-out bits/string against dictionary bytes and keep the frontier.
-
-## On incrementing `NUM_PAIRS` (the TODO)
-
-A merge changes the tokenisation, hence both `N` (down: one token per merged
-occurrence disappears) and `H(next | word)` (up or down), and `CS = N . H`.
-For a single merge of `(p, q) -> w`, repeating `m = N(p,q)` times, the exact
-change is a finite difference
-
-    delta = N . H  -  N' . H'
-
-in which the unigram counts shift (`N(p)` and `N(q)` each drop by `m`, while
-`N(w) = m`) *and* the
-context bigrams are rewired: each occurrence `(a, p, q, b)` loses `(a,p)`, `(p,q)`,
-`(q,b)` and gains `(a,r)`, `(r,b)`. There is no clean closed form — the gain
-depends on the joint of the surrounding contexts — and in particular it is *not*
-simply a pointwise-mutual-information term (merging a deterministic alternation
-`ab ab` gains nothing, though its PMI is positive). The greedy "most frequent
-pair" rule is therefore a heuristic proxy for `delta`; the honest statement is
-the frontier of held-out bits/string against `NUM_PAIRS`.

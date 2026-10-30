@@ -55,7 +55,8 @@ varnames/
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
 │   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation + unobserved-pairs prior
-│   └── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
+│   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
+│   └── TREE_WORDS.md                    # dictionary (pair-merge) model + merge delta
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
 │   ├── fetch_gems.py                    # parallel RubyGem downloader
@@ -81,6 +82,7 @@ varnames/
 │   ├── cluster_entropy.py               # successor entropy (bits) per cluster
 │   ├── cluster_size_frontier.py         # (model size, entropy) frontier + k/N
 │   ├── symmetry_check.py                # left/right reversal-symmetry sanity check
+│   ├── check_merge_delta.py             # regression test for the tree-words merge delta
 │   └── run_sweep.sh                     # run the analyses over all thresholds
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
@@ -262,6 +264,13 @@ check and the negative-entry remedies are in
 [`docs/ADJACENCY_MODEL.md`](docs/ADJACENCY_MODEL.md); the square-root
 factorisation and the unobserved-pairs prior are in
 [`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md).
+
+A separate line of work builds a **dictionary by repeatedly merging the most
+common adjacent word pair** and models the tokenised corpus with a first-order
+Markov chain; the description length of that code has a closed form, and the
+exact change from one merge is derived (and regression-tested by
+`scripts/check_merge_delta.py`) in
+[`docs/TREE_WORDS.md`](docs/TREE_WORDS.md).
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds:
