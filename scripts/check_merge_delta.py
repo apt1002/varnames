@@ -21,7 +21,9 @@ It also checks the `m = 1` part of the same document, `delta^(1)`:
     the four counts `N(u), N(v), N(u,v), N(v,u)` (`delta_first_order_closed`);
   * that closed form is identically zero for a distinct-pair merge, and for a
     doubled word it is the two-count form `delta_first_order_doubled_closed`;
-  * a perfectly bigram-Markov corpus has `delta = 0` for every merge.
+  * a *genuinely* first-order Markov corpus has `delta = 0` for every merge.
+    (Trigram consistency `m = 1` alone is not enough — see
+    `check_trigram_markov_counterexample`.)
 
 and the `m != 1` part (`delta = delta^(m)`):
   * the exact conditional-entropy form (`delta_entropy`) matches the brute force;
@@ -356,8 +358,9 @@ def usable(seq, u, v):
 
 
 def check_markov_corpora(w):
-    """A perfectly first-order (bigram-Markov) corpus has `delta = 0` for every
-    merge.  The periodic corpora below have all trigram factors `m = 1`."""
+    """A genuinely first-order Markov corpus has `delta = 0` for every merge.
+    The periodic corpora below are first-order Markov at every order (trigram
+    factors `m = 1` *and* 4-gram factors `m4 = 1`)."""
     bad = 0
     for base in ([0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 1, 2, 3]):
         seq = base * 6
@@ -370,6 +373,69 @@ def check_markov_corpora(w):
                         bad += 1
                         print(f"MARKOV MISMATCH base={base} u={u} v={v} d={d!r}")
     return bad
+
+
+def _multi_counts(cycles, k):
+    from collections import Counter
+    C = Counter()
+    for c in cycles:
+        n = len(c)
+        for i in range(n):
+            C[tuple(c[(i + j) % n] for j in range(k))] += 1
+    return C
+
+
+def check_trigram_markov_counterexample():
+    """`m = 1` everywhere is *not* enough for `delta = 0`.
+
+    The three-string corpus "01", "01", "00111010100011" (each bent into a
+    cycle) has every trigram factor exactly 1, yet merging (0,1) reduces CS.
+    The whole delta is the four-way (4-gram) term.  Returns the number of
+    failures (0 = the document's claim is as stated)."""
+    cycles = [list(s) + ['\n'] for s in ('01', '01', '00111010100011')]
+    U = _multi_counts(cycles, 1)
+    B = _multi_counts(cycles, 2)
+    T = _multi_counts(cycles, 3)
+    F = _multi_counts(cycles, 4)
+    fails = 0
+
+    # (i) every trigram factor m = N(a,b,c) N(b) / (N(a,b) N(b,c)) equals 1
+    for (a, b, c), nabc in T.items():
+        m = nabc * U[(b,)] / (B[(a, b)] * B[(b, c)])
+        if abs(m - 1) > 1e-12:
+            fails += 1
+
+    # (ii) the merge (0,1) nevertheless reduces CS (brute force on the cycles)
+    def score(cyc):
+        u, b = _multi_counts(cyc, 1), _multi_counts(cyc, 2)
+        return sum(L(v) for v in u.values()) - sum(L(v) for v in b.values())
+
+    def merge_cycle(c, u, v, w):
+        n = len(c); out = []; i = 0
+        while i < n:
+            if i + 1 < n and c[i] == u and c[i + 1] == v:
+                out.append(w); i += 2
+            else:
+                out.append(c[i]); i += 1
+        return out
+
+    merged = [merge_cycle(c, '0', '1', 'w') for c in cycles]
+    d = score(merged) - score(cycles)
+    if not d < -1e-9:
+        fails += 1
+
+    # (iii) the whole delta is the four-way term -N(v,u)[H(lam)+H(mu)-H(p)]
+    def h(x):
+        return 0.0 if x <= 0 or x >= 1 else -x * math.log(x) - (1 - x) * math.log(1 - x)
+    M = B[('0', '1')]; R = B[('1', '0')]
+    lam = M / U[('0',)]; mu = M / U[('1',)]
+    a = T[('1', '0', '1')]; b = T[('0', '1', '0')]; q = F[('0', '1', '0', '1')]
+    parts = [(R - a - b + q) / R, (a - q) / R, (b - q) / R, q / R]
+    Hp = -sum(p * math.log(p) for p in parts if p > 0)
+    four = -R * (h(lam) + h(mu) - Hp)
+    if abs(four - d) > 1e-9 * max(1.0, abs(d)):
+        fails += 1
+    return fails
 
 
 def check_delta_sign_exhaustive(cap=20000):
@@ -488,6 +554,7 @@ def main():
                                           f"numeric={num!r} formula={qd!r}")
 
     markov_bad = check_markov_corpora(w)
+    trig_bad = check_trigram_markov_counterexample()
 
     ex_bad = 0
     if args.exhaustive:
@@ -503,7 +570,10 @@ def main():
     print(f"m-part checked {mexp}, mismatches {mexpbad} "
           f"(entropy form, sum rule, quadratic expansion)")
     print(f"bigram-Markov corpora: mismatches {markov_bad} (delta is zero)")
-    raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad) else 0)
+    print(f"trigram-Markov counterexample: failures {trig_bad} "
+          f"(all m=1 yet delta<0, from the 4-gram term)")
+    raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad
+                           or trig_bad) else 0)
 
 
 if __name__ == '__main__':

@@ -220,8 +220,10 @@ Consequences:
 
 * `Δ = Δ⁽ᵐ⁾` **exactly**.  A merge changes the corpus size only through the part
   of the trigram (and 4-gram) statistics that the bigram table does not already
-  determine.  In a perfectly first-order (bigram-Markov) corpus `Δ = 0`: no merge
-  changes the description length.
+  determine.  In a corpus that is **genuinely first-order Markov** — no trigram
+  *and* no 4-gram dependence — `Δ = 0`: no merge changes the description length.
+  Consistency of the trigram factors *alone* (`m ≡ 1`) is **not** enough; see
+  "`Δ` can be negative with all trigram factors `m = 1`" below.
 * The four-count dependence means the greedy "most frequent pair" rule, which
   sees only bigrams, is a proxy for greedy-by-`Δ` only up to the `m`'s.
 
@@ -258,6 +260,32 @@ four-way distribution over the `(v,u)` bigram split by (predecessor is `v`) ×
 drop in the conditional entropy of the next word, summed over the consumed
 contexts, less a four-way dependence term.  No trace of `log N(x,u)` remains.
 
+### `Δ` can be negative with all trigram factors `m = 1`
+
+The entropy form makes the two contributions explicit.  The first two sums
+vanish whenever every trigram factor equals one — `m(x,u,v) = m(u,v,y) = 1`,
+i.e. the corpus is first-order Markov at the **trigram** level — leaving only
+the four-way term
+
+    Δ = −N(v,u) [ H(λ) + H(μ) − H(p) ] .
+
+That vanishes only when the four-way table `p` is its product baseline, i.e.
+when there is no **4-gram** dependence around the merged bigram.  Trigram
+consistency does *not* imply this.  Example (three strings, `\n` appended and
+bent into cycles):
+
+    "01",  "01",  "00111010100011"
+
+has `N(0,1) = 6` and `N(a,b) = 3` for the five other observed bigrams.  All
+thirteen trigram factors `m` are exactly `1`, yet merging `01` **reduces** `CS`
+by `0.523` nats (`0.755` bits).  With `λ = μ = 2/3`, `N(v,u) = N(1,0) = 3`,
+`a = N(1,0,1) = 2`, `b = N(0,1,0) = 2`, `Q = N(0,1,0,1) = 1`, the four-way table
+is `p = (0, 1/3, 1/3, 1/3)`, whose entropy `ln 3 = 1.099` is below
+`H(2/3) + H(2/3) = 1.273`.  Twelve of the sixteen 4-grams have `m₄ ≠ 1`: the
+corpus is trigram-Markov but not a genuine first-order Markov chain, and the
+whole `Δ` is that 4-gram term.  So `Δ = 0` requires a *genuinely* first-order
+Markov corpus (as the periodic regression corpora are), not merely `m ≡ 1`.
+
 ### Expanding in `m = e^E`: `Δ` is second order
 
 Write `m(a,b,c) = e^{E(a,b,c)}` so that `E = 0` is first-order consistency.  The
@@ -286,12 +314,13 @@ up into a manifestly negative quadratic form:
 where `χ² = Σ_i (p_i − p₀_i)² / p₀_i` is the Pearson `χ²` of the four-way table
 `p` against its product baseline `p₀`.  Three consequences:
 
-* **`Δ` is second order in `m − 1`** — the linear term cancels exactly, just as
-  `Δ⁽¹⁾` did.  A merge is a *quadratic* correction away from first-order
-  consistency.
+* **The linear term in `m − 1` cancels exactly**, just as `Δ⁽¹⁾` did; what is
+  left is a term *quadratic* in `m − 1` **plus** the four-way term `N(v,u)·χ²`.
 * At leading order **`Δ ≤ 0`**: every merge weakly decreases the corpus size.
   (Observed for all 36 000+ usable merges tested; the quadratic form shows why.)
-* `Q` (the 4-gram) enters only through `χ²`, at second order.
+* `Q` (the 4-gram) enters only through `χ²`, the four-way term.  Unlike the
+  `(m−1)²` pieces this is **not** controlled by `m − 1` — it survives when
+  `m ≡ 1` (see below), so it is a leading effect, not a second-order one.
 
 The exact entropy form, the zero `Δ⁽¹⁾`, the `u = v` closed form, the latent sum
 rule and the quadratic scaling are checked in `scripts/check_merge_delta.py`.
