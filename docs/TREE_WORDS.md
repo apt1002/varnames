@@ -234,17 +234,67 @@ vanish.  It still collapses, now to a function of the two counts
     Δ⁽¹⁾ = L(N(z) − 2N(z,z)) − L(N(z)) + 2L(N(z,z))
            − 2(N(z) − N(z,z)) · h( N(z,z)/N(z) ) .
 
-### The `m − 1` part
+### `Δ` in terms of conditional entropies
 
-Since `Δ = Δ⁽ᵐ⁾`, the whole effect is the higher-order term.  To first order,
-`L(n+δ) − L(n) ≈ (1 + ln n)·δ`, so `Δ⁽ᵐ⁾` is *linear* in `m − 1`, each
-perturbed count `n` contributing a weight `1 + ln n`, with the sign read off
-`ΔS2`.  The exact statement: the merge's effect on the description length is a
-weighted sum of the trigram (and one 4-gram) dependence factors `m − 1`, whose
-weights are `1 + ln(count)`.
+Since `Δ = Δ⁽ᵐ⁾`, substitute the `m`'s into the aggregates and cancel.  Each
+occurrence pair `L(N(x,u) − A(x)) + L(A(x))` collapses.  With
+`q_x = N(x,u,v)/N(x,u)` (and `A(x) = N(x,u)·q_x`) and the binary entropy
+`H(q) = −q·log q − (1−q)·log(1−q)`,
 
-The identity `Δ⁽¹⁾ = 0` (and the `u = v` closed form) is checked in
-`scripts/check_merge_delta.py`.
+    L(N(x,u) − A(x)) + L(A(x)) = N(x,u)·[ log N(x,u) + H(q_x) ] ,
+
+so the `log N(x,u)` cancels against the `−L(N(x,u))` in `ΔS2`.  Exactly as for
+`Δ⁽¹⁾`, the `x`-sum therefore carries only entropies, and likewise the `y`-sum,
+leaving the exact identity
+
+    Δ = Σ_{x≠v} N(x,u)[ H(P(v|x,u)) − H(P(v|u)) ]
+      + Σ_{y≠u} N(v,y)[ H(P(u|v,y)) − H(P(u|v)) ]
+      − N(v,u)[ H(P(v|u)) + H(P(u|v)) − H(p) ] ,
+
+where `P(v|x,u) = N(x,u,v)/N(x,u)`, `P(v|u) = N(u,v)/N(u)`, and `p` is the
+four-way distribution over the `(v,u)` bigram split by (predecessor is `v`) ×
+(successor is `u`), whose product baseline `P(v|u) ⊗ P(u|v)` has entropy
+`H(P(v|u)) + H(P(u|v))`.  So a merge's effect on the corpus size is (minus) the
+drop in the conditional entropy of the next word, summed over the consumed
+contexts, less a four-way dependence term.  No trace of `log N(x,u)` remains.
+
+### Expanding in `m = e^E`: `Δ` is second order
+
+Write `m(a,b,c) = e^{E(a,b,c)}` so that `E = 0` is first-order consistency.  The
+aggregates become `A(x) = N(x,u)λ·e^{E(x,u,v)}` (with `λ = N(u,v)/N(u)`), and the
+context sums satisfy, **exactly** (it is just `Σ_x N(x,u,v) = N(u,v)`),
+
+    Σ_x N(x,u)·( m(x,u,v) − 1 ) = 0 ,    Σ_y N(v,y)·( m(u,v,y) − 1 ) = 0 .
+
+Expanding the entropy form to first order in `E` — `H(λ(1+ε)) − H(λ) ≈
+H′(λ)λ ε`, `H′(λ) = log((1−λ)/λ)` — the `x`- and `y`-sums combine with the
+boundary terms and the sums *complete*: the `x = v` (the `A(v)`) and `y = u` (the
+`B(u)`) contributions are exactly the missing terms of a full sum over contexts,
+and `Q` drops out entirely:
+
+    Δ ≈ −λ log(λ/(1−λ)) Σ_x N(x,u) E(x,u,v)
+        − μ log(μ/(1−μ)) Σ_y N(v,y) E(u,v,y) ,      μ = N(u,v)/N(v) .
+
+Both sums are themselves `O(E²)` (by the sum rule above), so this *linear* form
+vanishes to leading order.  Working to `O((m−1)²)` instead, the sums close
+up into a manifestly negative quadratic form:
+
+    Δ ≈ −½ [ λ/(1−λ) Σ_{x≠v} N(x,u)·( m(x,u,v) − 1 )²
+           + μ/(1−μ) Σ_{y≠u} N(v,y)·( m(u,v,y) − 1 )²
+           + N(v,u)·χ² ] ,
+
+where `χ² = Σ_i (p_i − p₀_i)² / p₀_i` is the Pearson `χ²` of the four-way table
+`p` against its product baseline `p₀`.  Three consequences:
+
+* **`Δ` is second order in `m − 1`** — the linear term cancels exactly, just as
+  `Δ⁽¹⁾` did.  A merge is a *quadratic* correction away from first-order
+  consistency.
+* At leading order **`Δ ≤ 0`**: every merge weakly decreases the corpus size.
+  (Observed for all 36 000+ usable merges tested; the quadratic form shows why.)
+* `Q` (the 4-gram) enters only through `χ²`, at second order.
+
+The exact entropy form, the zero `Δ⁽¹⁾`, the `u = v` closed form, the latent sum
+rule and the quadratic scaling are checked in `scripts/check_merge_delta.py`.
 
 Two remarks:
 
