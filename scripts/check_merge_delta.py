@@ -16,6 +16,13 @@ awkward cases:
   * `A(v) > 0` and `B(u) > 0` (the `vuv` / `uvu` contexts);
   * `Q > 0`   (adjacent `uvuv` occurrences, which produce a `(w,w)` bigram).
 
+It also checks the `m = 1` part of the same document, `delta^(1)`:
+  * rebuilt by substitution (`delta_first_order`) it matches a closed form in
+    the four counts `N(u), N(v), N(u,v), N(v,u)` (`delta_first_order_closed`);
+  * that closed form is identically zero for a distinct-pair merge, and for a
+    doubled word it is the two-count form `delta_first_order_doubled_closed`;
+  * a perfectly bigram-Markov corpus has `delta = 0` for every merge.
+
 Usage: check_merge_delta.py [--trials 3000] [--seed 1]
 """
 import argparse
@@ -25,8 +32,8 @@ from collections import Counter
 
 
 def L(x):
-    """z log z, with 0 log 0 = 0."""
-    return 0.0 if x == 0 else x * math.log(x)
+    """z log z, with 0 log 0 = 0 (tiny round-off negatives clamp to 0)."""
+    return 0.0 if x < 1e-12 else x * math.log(x)
 
 
 def ngram_counts(seq, k):
@@ -114,6 +121,102 @@ def delta_formula(seq, u, v):
     return dU - dB
 
 
+def h_bin(lam):
+    """h(lam) = (1-lam) log(1-lam) + lam log lam, with 0 log 0 = 0."""
+    a = (1 - lam) * math.log(1 - lam) if lam < 1 else 0.0
+    b = lam * math.log(lam) if lam > 0 else 0.0
+    return a + b
+
+
+def delta_first_order(seq, u, v):
+    """delta with every trigram/4-gram factor `m` set to 1 (delta^(1)).
+
+    Rebuilt from the bigram table alone (A(x) = N(x,u)N(u,v)/N(u), and so on).
+    `docs/TREE_WORDS.md` proves this is identically zero for a merge of two
+    *distinct* words; for a doubled word it reduces to the two-count form
+    `delta_first_order_doubled_closed`.
+    """
+    B2 = ngram_counts(seq, 2)
+    U = Counter(seq)
+    alpha = sorted(set(seq) | {u, v})
+
+    if u == v:                                # doubled word (z, z)
+        z = u
+        n_zz = B2.get((z, z), 0)
+        if n_zz == 0:
+            return 0.0
+        nz = U[z]
+        lam = n_zz / nz
+        A = lambda x: B2.get((x, z), 0) * lam
+        B = lambda y: B2.get((z, y), 0) * lam
+        dU = L(nz - 2 * n_zz) - L(nz) + L(n_zz)
+        dB = L(0) - L(n_zz)
+        for x in alpha:
+            if x != z:
+                dB += L(B2.get((x, z), 0) - A(x)) - L(B2.get((x, z), 0))
+        for y in alpha:
+            if y != z:
+                dB += L(B2.get((z, y), 0) - B(y)) - L(B2.get((z, y), 0))
+        for a in alpha:
+            if a != z:
+                dB += L(A(a))
+        for b in alpha:
+            if b != z:
+                dB += L(B(b))
+        return dU - dB
+
+    n_uv = B2.get((u, v), 0)
+    if n_uv == 0:
+        return 0.0
+    nu, nv = U[u], U[v]
+    n_vu = B2.get((v, u), 0)
+    lam, mu = n_uv / nu, n_uv / nv
+    A = lambda x: B2.get((x, u), 0) * lam       # m(x,u,v) = 1
+    B = lambda y: B2.get((v, y), 0) * mu        # m(u,v,y) = 1
+    Q = n_vu * n_uv * n_uv / (nu * nv)          # m(u,v,u,v) = 1
+
+    dU = (L(nu - n_uv) - L(nu) + L(nv - n_uv) - L(nv) + L(n_uv))
+    dB = L(0) - L(n_uv)
+    for x in alpha:
+        if x != v:
+            dB += L(B2.get((x, u), 0) - A(x)) - L(B2.get((x, u), 0))
+    dB += L(n_vu - A(v) - B(u) + Q) - L(n_vu)
+    for y in alpha:
+        if y != u:
+            dB += L(B2.get((v, y), 0) - B(y)) - L(B2.get((v, y), 0))
+    for a in alpha:
+        if a != v:
+            dB += L(A(a))
+    dB += L(A(v) - Q)
+    dB += L(B(u) - Q)
+    for b in alpha:
+        if b != u:
+            dB += L(B(b))
+    dB += L(Q)
+    return dU - dB
+
+
+def delta_first_order_closed(U, V, M, R):
+    """delta^(1) from the four counts N(u), N(v), N(u,v), N(v,u) alone.
+
+    The context sums collapse (log N(x,u) and log N(v,y) cancel) to binary
+    entropies; this is the collapsed form of `delta_first_order`.
+    """
+    lam, mu = M / U, M / V
+    dS1 = L(U - M) - L(U) + L(V - M) - L(V) + L(M)
+    dS2 = (-L(M) + L(R * (1 - lam) * (1 - mu)) - L(R)
+           + L(R * lam * (1 - mu)) + L(R * mu * (1 - lam)) + L(R * lam * mu)
+           + (U - R) * h_bin(lam) + (V - R) * h_bin(mu))
+    return dS1 - dS2
+
+
+def delta_first_order_doubled_closed(nz, n_zz):
+    """delta^(1) for a doubled-word merge, in N(z) and N(z,z) only."""
+    lam = n_zz / nz
+    return (L(nz - 2 * n_zz) - L(nz) + 2 * L(n_zz)
+            - 2 * (nz - n_zz) * h_bin(lam))
+
+
 def usable(seq, u, v):
     """Skip corpora where the merge is ill-defined for this pair."""
     n = len(seq)
@@ -125,6 +228,23 @@ def usable(seq, u, v):
     return True
 
 
+def check_markov_corpora(w):
+    """A perfectly first-order (bigram-Markov) corpus has `delta = 0` for every
+    merge.  The periodic corpora below have all trigram factors `m = 1`."""
+    bad = 0
+    for base in ([0, 1, 2], [0, 1, 2, 3], [1, 2, 3, 1, 2, 3]):
+        seq = base * 6
+        B2 = ngram_counts(seq, 2)
+        for u in set(seq):
+            for v in set(seq):
+                if B2.get((u, v), 0) and usable(seq, u, v):
+                    d = score(merge(seq, u, v, w)) - score(seq)
+                    if abs(d) > 1e-9:
+                        bad += 1
+                        print(f"MARKOV MISMATCH base={base} u={u} v={v} d={d!r}")
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--trials', type=int, default=3000)
@@ -134,12 +254,14 @@ def main():
     w = -1                                   # a token outside the alphabet
 
     tested = bad = n_uvuv = n_eq = 0
+    d1tested = d1bad = 0
     for _ in range(args.trials):
         n = rng.randint(6, 20)
         k = rng.randint(2, 5)
         seq = [rng.randrange(k) for _ in range(n)]
         F4 = ngram_counts(seq, 4)
         B2 = ngram_counts(seq, 2)
+        U = Counter(seq)
         for u in range(k):
             for v in range(k):
                 if not usable(seq, u, v) or B2.get((u, v), 0) == 0:
@@ -154,8 +276,33 @@ def main():
                     if bad <= 5:
                         print(f"MISMATCH seq={seq} u={u} v={v} "
                               f"brute={brute!r} formula={form!r}")
+
+                # delta^(1): zero for distinct pairs, two-count form for u==v
+                d1 = delta_first_order(seq, u, v)
+                if u == v:
+                    d1closed = delta_first_order_doubled_closed(U[u],
+                                                                B2.get((u, u), 0))
+                else:
+                    d1closed = delta_first_order_closed(
+                        U[u], U[v], B2.get((u, v), 0), B2.get((v, u), 0))
+                d1tested += 1
+                if abs(d1 - d1closed) > 1e-9 * max(1.0, abs(d1closed)):
+                    d1bad += 1
+                    if d1bad <= 5:
+                        print(f"D1 MISMATCH seq={seq} u={u} v={v} "
+                              f"substituted={d1!r} closed={d1closed!r}")
+                if u != v and abs(d1) > 1e-9:
+                    d1bad += 1
+                    if d1bad <= 5:
+                        print(f"D1 NONZERO seq={seq} u={u} v={v} d1={d1!r}")
+
+    markov_bad = check_markov_corpora(w)
+
     print(f"tested {tested} (u==v: {n_eq}, Q>0: {n_uvuv}), mismatches {bad}")
-    raise SystemExit(1 if bad else 0)
+    print(f"delta^1 checked {d1tested}, mismatches {d1bad} "
+          f"(distinct-pair delta^1 is identically zero)")
+    print(f"bigram-Markov corpora: mismatches {markov_bad} (delta is zero)")
+    raise SystemExit(1 if (bad or d1bad or markov_bad) else 0)
 
 
 if __name__ == '__main__':

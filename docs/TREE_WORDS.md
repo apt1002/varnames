@@ -164,9 +164,10 @@ functions of the bigram counts and the `m`'s:
     B(u) = m(u,v,u) · N(u,v) · N(v,u) / N(v)
 
 and `Q` needs the 4-gram analogue,
-`m(a,b,c,d) = N(a,b,c,d) N(b,c) / ( N(a,b,c) N(b,c,d) )`:
+`m(a,b,c,d) = N(a,b,c,d) N(b,c) / ( N(a,b,c) N(b,c,d) )`.  Here the middle pair
+is `(b,c) = (v,u)`, so the normaliser is `N(v,u)`, *not* `N(u,v)`:
 
-    Q    = m(u,v,u,v) · B(u) · A(v) / N(u,v) .
+    Q    = m(u,v,u,v) · B(u) · A(v) / N(v,u) .
 
 `m(a,b,c) = 1` is exactly the statement that the 3-gram is fixed by the pair
 counts — that the next word depends on the previous one but not on the one
@@ -174,7 +175,8 @@ before it.
 
 ## Separating the `NUM_PAIRS` part from the `m` part
 
-Substituting the `m`'s into `Δ` splits it cleanly:
+Substituting the `m`'s into `Δ` splits it into a piece fixed by the bigram table
+and a piece carrying the higher-order dependence:
 
     Δ = Δ⁽¹⁾ + Δ⁽ᵐ⁾
 
@@ -182,22 +184,67 @@ Substituting the `m`'s into `Δ` splits it cleanly:
 
       A₁(x) = N(x,u) · N(u,v) / N(u)    B₁(y) = N(u,v) · N(v,y) / N(v)
       A₁(v) = N(v,u) · N(u,v) / N(u)    B₁(u) = N(u,v) · N(v,u) / N(v)
-      Q₁    = N(v,u)² · N(u,v) / ( N(u) N(v) )
+      Q₁    = N(v,u) · N(u,v)² / ( N(u) N(v) )
 
-  It depends **only on the unigram and bigram counts** — that is the `NUM_PAIRS`
-  contribution: the change you would see if the corpus were first-order
-  consistent under its own pair counts.
-* **`Δ⁽ᵐ⁾ = Δ − Δ⁽¹⁾`** is the correction.  The `m`'s enter only through `A`,
-  `B`, `Q`, so `Δ⁽ᵐ⁾` is a function of the deviations `m(a,b,c) − 1` (and
-  `m(u,v,u,v) − 1`), and it vanishes identically when the corpus is
-  first-order-consistent.
+  — the `NUM_PAIRS` contribution, the change you would see if the corpus were
+  first-order (bigram) consistent under its own pair counts.
+* **`Δ⁽ᵐ⁾ = Δ − Δ⁽¹⁾`** carries everything else: it is a function of the
+  deviations `m(a,b,c) − 1` and `m(u,v,u,v) − 1`, and it vanishes identically
+  when the corpus is first-order consistent.
 
-To first order, since `L(n+δ) − L(n) ≈ (1 + ln n)·δ`, `Δ⁽ᵐ⁾` is *linear* in
-`m − 1`, with each perturbed count `n` contributing a weight `(1 + ln n)` and
-the sign read off `ΔS2`.  So the exact statement is: the merge's effect on the
-description length is a piece fixed by the unigram/bigram table, plus a weighted
-sum of the trigram (and one 4-gram) dependence factors, whose weights are
-`1 + ln(count)`.
+### `Δ⁽¹⁾` vanishes for a distinct-pair merge
+
+The surprise is that `Δ⁽¹⁾` **is identically zero** when `u ≠ v`.  The context
+sums collapse.  Write `λ = N(u,v)/N(u)`, so `A₁(x) = λ·N(x,u)` and the three
+terms contributing to `ΔS2` at each predecessor `x ≠ v` are
+
+    −L(N(x,u)) + L(N(x,u) − A₁(x)) + L(A₁(x))
+      = −L(N(x,u)) + L(N(x,u)(1−λ)) + L(N(x,u)λ)
+      = N(x,u) · h(λ) ,
+
+where `h(λ) = (1−λ) log(1−λ) + λ log λ`.  The `log N(x,u)` cancels exactly — so
+the whole `x`-sum depends only on `Σ_{x≠v} N(x,u) = N(u) − N(v,u)`, and likewise
+the `y`-sum on `N(v) − N(v,u)`:
+
+    Σ_{x≠v} [ … ] = (N(u) − N(v,u)) · h(λ) ,   λ = N(u,v)/N(u)
+    Σ_{y≠u} [ … ] = (N(v) − N(v,u)) · h(μ) ,   μ = N(u,v)/N(v)
+
+The boundary terms (the gap, the new `(v,w)`, `(w,u)`, `(w,w)` bigrams) are
+    `−L(N(u,v)) + L(N(v,u)(1−λ)(1−μ)) − L(N(v,u)) + L(N(v,u)λ(1−μ))
+     + L(N(v,u)μ(1−λ)) + L(N(v,u)λμ)`
+and `ΔS1 = L(N(u)−N(u,v)) − L(N(u)) + L(N(v)−N(u,v)) − L(N(v)) + L(N(u,v))`.
+A two-line expansion of `L` (done symbolically, in the regression test) shows
+`ΔS1 − ΔS2 = 0` in the four counts `N(u), N(v), N(u,v), N(v,u)`.
+
+Consequences:
+
+* `Δ = Δ⁽ᵐ⁾` **exactly**.  A merge changes the corpus size only through the part
+  of the trigram (and 4-gram) statistics that the bigram table does not already
+  determine.  In a perfectly first-order (bigram-Markov) corpus `Δ = 0`: no merge
+  changes the description length.
+* The four-count dependence means the greedy "most frequent pair" rule, which
+  sees only bigrams, is a proxy for greedy-by-`Δ` only up to the `m`'s.
+
+### The doubled-word merge is the exception
+
+For `u = v = z` one merge consumes *two* copies of `z`, and `Δ⁽¹⁾` does **not**
+vanish.  It still collapses, now to a function of the two counts
+`N(z), N(z,z)` alone:
+
+    Δ⁽¹⁾ = L(N(z) − 2N(z,z)) − L(N(z)) + 2L(N(z,z))
+           − 2(N(z) − N(z,z)) · h( N(z,z)/N(z) ) .
+
+### The `m − 1` part
+
+Since `Δ = Δ⁽ᵐ⁾`, the whole effect is the higher-order term.  To first order,
+`L(n+δ) − L(n) ≈ (1 + ln n)·δ`, so `Δ⁽ᵐ⁾` is *linear* in `m − 1`, each
+perturbed count `n` contributing a weight `1 + ln n`, with the sign read off
+`ΔS2`.  The exact statement: the merge's effect on the description length is a
+weighted sum of the trigram (and one 4-gram) dependence factors `m − 1`, whose
+weights are `1 + ln(count)`.
+
+The identity `Δ⁽¹⁾ = 0` (and the `u = v` closed form) is checked in
+`scripts/check_merge_delta.py`.
 
 Two remarks:
 

@@ -268,9 +268,12 @@ factorisation and the unobserved-pairs prior are in
 A separate line of work builds a **dictionary by repeatedly merging the most
 common adjacent word pair** and models the tokenised corpus with a first-order
 Markov chain; the description length of that code has a closed form, and the
-exact change from one merge is derived (and regression-tested by
-`scripts/check_merge_delta.py`) in
-[`docs/TREE_WORDS.md`](docs/TREE_WORDS.md).
+exact change from one merge is derived in
+[`docs/TREE_WORDS.md`](docs/TREE_WORDS.md). The `m = 1` (bigram-only) part of
+that change turns out to be **identically zero** for a merge of two distinct
+words — so a merge only ever pays off through trigram dependence, and in a
+perfectly bigram-Markov corpus no merge changes the size. The identities are
+regression-tested by `scripts/check_merge_delta.py`.
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds:
