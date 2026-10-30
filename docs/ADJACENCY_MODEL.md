@@ -12,24 +12,16 @@ own companion report [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md).
 
 ## The model
 
-Case-normalise the corpus to CamelCase (see `docs/CASE_NORMALISATION.md`), wrap
-each identifier as `^identifier$`, and enumerate the **common substrings**
-(substrings occurring at least *T* times). For every split of `^identifier$`
-define
+The construction of `M` — the corpus preparation, the common-substring
+vocabulary, the longest-common-suffix/prefix edge rule, the empty backoff
+context, the reversal-symmetry invariant and the density — is documented once in
+[`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md); the properties we use are
+summarised there. `scripts/pair_matrix.py` builds `M` and approximates it as
+`M ≈ U Vᵀ` with `U` (`N x L`) and `V` (`L x N`), `L << N`.
 
-* `a` = the longest common substring that is a **suffix of the left half**
-  (the "left context"; never ends in `$`), and
-* `b` = the longest common substring that is a **prefix of the right half**
-  (the "right context"; may end in `$`),
-
-and count how often the pair `(a, b)` occurs. This gives a roughly `N x N`
-matrix `M` (`N` = number of common substrings, the empty string included as the
-backoff context on either side). `scripts/pair_matrix.py` builds `M` and
-approximates it as `M ≈ U Vᵀ` with `U` (`N x L`) and `V` (`L x N`), `L << N`.
-
-Density and relative Frobenius error of the randomized-SVD approximation in
-the **square-root (Hellinger) domain**, `√M ≈ (U Σ Vᵀ)_L` (the current default;
-the dense `M` itself has the same `nnz`/density):
+Relative Frobenius error of the randomized-SVD approximation in the
+**square-root (Hellinger) domain**, `√M ≈ (U Σ Vᵀ)_L` (the current default), for
+the vocabulary sizes of [`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md):
 
 | T | N | nnz | density | L=2 | L=4 | L=8 | L=16 | L=32 | L=64 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|

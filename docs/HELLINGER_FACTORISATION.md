@@ -108,25 +108,17 @@ count.  At L=2 the rank-1 backoff/marginal direction is marginally better.
 
 `M` counts only the `(a, b)` pairs actually seen, so it is full of structural
 zeros — 21% of cells at `N = 159`, 83% at `N = 2102`.  A zero is not an
-impossibility, so we add a small amount of pseudo-count mass, shaped like the
-independence model, to form a **corrected reference**
+impossibility, so (as defined and justified in
+[`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md)) we add an independence-shaped
+prior of fixed mass to form a **corrected reference**
 
-    M_ref = M + alpha · P_mar ,   P_mar = (r/T)(c/T)ᵀ   (sum 1),   alpha = kappa · N
+    M_ref = M + alpha · P_mar ,   P_mar = (r/T)(c/T)ᵀ (sum 1),   alpha = kappa · N .
 
-where `kappa` is the prior mass **per context** (`P_mar` is `M_mar` rescaled to
-unit mass; here `c` is the *column* marginal, not the parameter).  The
-correction has a **fixed** total mass `alpha = kappa·N`, not a fraction of the
-corpus, so it is a prior on *unseen pairs* that washes out as the corpus grows.
-(Adding the *unnormalised* `alpha · M_mar`, `M_mar = r cᵀ/T`, would instead
-inject `alpha·T` pseudo-counts — at `alpha = 1`, half the matrix — and never
-vanish; that was an earlier error.)  The per-context normalisation is the point:
-the optimal mass turns out to be a *constant multiple of `N`* (see the held-out
-study below), so one value of `kappa` serves every corpus size, whereas a fixed
-per-cell pseudo-count `c` would not.  `M_ref` is the reference for the whole
-analysis: every model is fitted to `M_ref` and scored against it, so results are
-**not comparable across `kappa`** by design — `kappa` is a counting fix, not a
-reconstruction knob (the reconstruction-side counterpart is the `backoff`
-remedy above, which keeps using the sum-`T` `M_mar` for its convex mixture).
+`M_ref` is the reference for the whole analysis: every model is fitted to
+`M_ref` and scored against it, so results are **not comparable across `kappa`**
+by design — `kappa` is a counting fix, not a reconstruction knob (the
+reconstruction-side counterpart is the `backoff` remedy above, which keeps using
+the sum-`T` `M_mar` for its convex mixture).
 
 `L = 16`, joint KL `KL(M_ref ‖ M̂/ΣM̂)` in bits (lower is better).
 
@@ -188,46 +180,13 @@ Two things to read off carefully:
 
 ### Choosing `kappa` by held-out likelihood
 
-`scripts/choose_kappa.py` selects the prior by *predictive* performance:
-binomial-thin the counts into train/test (`p_train = 0.5`), fit the `sqrtcnt`
-model to `M_train + kappa·N·P_mar(train)`, and score the test counts as
-cross-entropy in bits per held-out event (lower is better; mean over 5 splits).
-The test set contains pairs that are *unseen in train*, so this is the criterion
-that can reward the prior.  The sweep is over `kappa` directly (0, 300, 700,
-1000, 1500, 3000), so the fitted mass is `alpha = kappa·N` at every `N`.
-
-| T (N) | cells unobs. | best `kappa` | best `alpha` | CE\* best | CE `kappa=0` | CE indep. |
-|---:|---:|---:|---:|---:|---:|---:|
-| 100000 (159) | 21% | 1000 | 1.6×10⁵ | 12.4049 | 12.4061 | 13.5351 |
-| 50000 (316) | 36% | 1500 | 4.7×10⁵ | 14.0671 | 14.0754 | 15.4134 |
-| 20000 (911) | 65% | 1500 | 1.4×10⁶ | 16.6422 | 16.7232 | 18.1551 |
-| 10000 (2102) | 83% | 1000 | 2.1×10⁶ | 18.6564 | 18.9291 | 20.1605 |
-| 5000 (4478) | 92% | 700 | 3.1×10⁶ | 20.5217 | 21.0966 | 21.9917 |
-
-(\*cross-entropy of the test table under the model, bits/event; the "CE indep."
-column is the no-latent-structure baseline `P_mar(train)`.)
-
-Reading it:
-
-* **The prior helps, and the benefit grows with sparsity** — from 0.001
-  bits/event at `N = 159` (few unobserved cells; the whole `kappa` sweep is
-  within noise) to 0.57 bits/event at `N = 4478` (`sqrtcnt` still beats the
-  independence model by a further 1.5 bits).  Every `kappa > 0` beats
-  `kappa = 0`.
-* **The optimum is prior mass *per context*, not per cell.**  The best `kappa`
-  is 700–1500 across a 28× range of `N` — effectively a constant ≈10³.  So a
-  *single* fixed `kappa` transfers across corpus sizes: `kappa = 1000` is within
-  0.01 bits/event of the per-`N` optimum everywhere in the table (and is the
-  optimum itself at `N = 159` and `N = 2102`), which is why it is the default in
-  `sqrt_and_smooth.py`.  (Parameterising by a per-cell
-  pseudo-count `c` instead, `alpha = c·N²`, forces the optimum to fall like
-  `1/N` — 7 → 0.2 on the same corpus — so no fixed `c` transfers.)
-* Caveat: with a single corpus we cannot separate the `N`- from the corpus-size
-  dependence; ≈10³ is an empirical constant for this corpus.
-
-So the recommendation is a fixed `alpha = 1000·N` (equivalently `kappa = 1000`),
-which requires no per-corpus tuning.  `choose_kappa.py` remains available to
-re-check that on a new corpus.
+How `kappa` is chosen — and why it must **not** be chosen by the KL — is set out
+in [`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md) §7, together with the held-out
+cross-entropy table and the recommendation of a fixed `alpha = 1000·N`
+(`kappa = 1000`).  In short: the KL decreases monotonically in `kappa` (as
+`kappa → ∞`, `M_ref → P_mar`, which any rank-`L` model fits), so `kappa` is
+fixed instead by predictive cross-entropy on a train/test split; the optimum is
+a prior mass *per context* ≈10³, constant across a 28× range of `N`.
 
 ## Conclusions
 
@@ -246,4 +205,5 @@ re-check that on a new corpus.
    held-out study gives `kappa ≈ 10³` across a 28× range of `N`, and the code's
    default is `kappa = 1000`.  It changes the reference, so fix it independently
    (held-out likelihood), not by the KL — which decreases monotonically in
-   `kappa` as `M_ref → P_mar`.
+   `kappa` as `M_ref → P_mar`.  Construction and `kappa` selection:
+   [`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md).

@@ -49,12 +49,14 @@ varnames/
 │   ├── identifiers.multilang.txt        # union of all 6 ecosystems (2,365,468)
 │   └── by_language/
 │       ├── ruby.txt  rust.txt  python.txt  go.txt  javascript.txt  perl.txt
+├── PLAN.md                              # index of the parallel research lines
 ├── docs/
 │   ├── CORPUS.md                        # corpus statistics + reproduction
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
+│   ├── ADJACENCY_MATRIX.md              # how to build the adjacency matrix + the κ prior
 │   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
-│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation + unobserved-pairs prior
+│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   └── TREE_WORDS.md                    # dictionary (pair-merge) model + merge delta
 ├── scripts/
