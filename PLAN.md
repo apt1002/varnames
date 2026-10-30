@@ -41,7 +41,7 @@ progress, `[x]` = done.
 
 ## B. Adjacency matrix construction (new doc)
 
-- [ ] **B1. New `docs/ADJACENCY_MATRIX.md`** — the canonical "how to build the
+- [x] **B1. New `docs/ADJACENCY_MATRIX.md`** — the canonical "how to build the
       adjacency matrix", including the choice of `κ`. Experiment docs
       (`HELLINGER_FACTORISATION.md`, `ADJACENCY_MODEL.md`) should *refer* to it
       rather than repeat it.
