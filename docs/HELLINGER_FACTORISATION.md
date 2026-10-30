@@ -111,77 +111,98 @@ zeros — 21% of cells at `N = 159`, 83% at `N = 2102`.  A zero is not an
 impossibility, so we add a small amount of pseudo-count mass, shaped like the
 independence model, to form a **corrected reference**
 
-    M_ref = M + alpha · P_mar ,   P_mar = (r/T)(c/T)ᵀ   (sum 1),   alpha = c · N²
+    M_ref = M + alpha · P_mar ,   P_mar = (r/T)(c/T)ᵀ   (sum 1),   alpha = kappa · N
 
-where `c` is the average pseudo-count per cell (`P_mar` is `M_mar` rescaled to
-unit mass).  The correction has a **fixed** total mass `alpha = c·N²`, not a
-fraction of the corpus, so it is a prior on *unseen pairs* that washes out as the
-corpus grows.  (Adding the *unnormalised* `alpha · M_mar`, `M_mar = r cᵀ/T`,
-would instead inject `alpha·T` pseudo-counts — at `alpha = 1`, half the matrix —
-and never vanish; that was an earlier error.)  `M_ref` is the reference for the
-whole analysis: every model is fitted to `M_ref` and scored against it, so
-results are **not comparable across `c`** by design — `c` is a counting fix, not
-a reconstruction knob (the reconstruction-side counterpart is the `backoff`
+where `kappa` is the prior mass **per context** (`P_mar` is `M_mar` rescaled to
+unit mass; here `c` is the *column* marginal, not the parameter).  The
+correction has a **fixed** total mass `alpha = kappa·N`, not a fraction of the
+corpus, so it is a prior on *unseen pairs* that washes out as the corpus grows.
+(Adding the *unnormalised* `alpha · M_mar`, `M_mar = r cᵀ/T`, would instead
+inject `alpha·T` pseudo-counts — at `alpha = 1`, half the matrix — and never
+vanish; that was an earlier error.)  The per-context normalisation is the point:
+the optimal mass turns out to be a *constant multiple of `N`* (see the held-out
+study below), so one value of `kappa` serves every corpus size, whereas a fixed
+per-cell pseudo-count `c` would not.  `M_ref` is the reference for the whole
+analysis: every model is fitted to `M_ref` and scored against it, so results are
+**not comparable across `kappa`** by design — `kappa` is a counting fix, not a
+reconstruction knob (the reconstruction-side counterpart is the `backoff`
 remedy above, which keeps using the sum-`T` `M_mar` for its convex mixture).
 
 `L = 16`, joint KL `KL(M_ref ‖ M̂/ΣM̂)` in bits (lower is better).
 
-**T = 100000 (N = 159), 21% of cells unobserved** — the fix is negligible:
+`kappa = 1000` (the default) is the column to read; the others show the trend.
 
-| method | c=0 | c=0.1 | c=0.5 | c=1 | c=2 |
+**T = 100000 (N = 159), 21% of cells unobserved** — the fix is small:
+
+| method | κ=0 | κ=100 | κ=300 | κ=1000 | κ=3000 |
 |---|---:|---:|---:|---:|---:|
-| clip | 1.059 | 1.059 | 1.059 | 1.059 | 1.058 |
-| abs | 0.757 | 0.757 | 0.756 | 0.755 | 0.754 |
-| backoff .1 | 0.688 | 0.688 | 0.688 | 0.687 | 0.686 |
-| nmf | 0.730 | 0.730 | 0.730 | 0.729 | 0.728 |
-| **sqrtcnt** | 0.494 | 0.493 | 0.493 | 0.493 | 0.492 |
+| clip | 1.059 | 1.059 | 1.058 | 1.057 | 1.062 |
+| abs | 0.757 | 0.756 | 0.754 | 0.747 | 0.731 |
+| backoff .1 | 0.688 | 0.688 | 0.686 | 0.680 | 0.666 |
+| nmf | 0.730 | 0.729 | 0.728 | 0.723 | 0.711 |
+| **sqrtcnt** | 0.494 | 0.493 | 0.492 | **0.488** | 0.481 |
+
+**T = 20000 (N = 911), 65% of cells unobserved** — intermediate:
+
+| method | κ=0 | κ=100 | κ=300 | κ=1000 | κ=3000 |
+|---|---:|---:|---:|---:|---:|
+| clip | 2.377 | 2.370 | 2.360 | 2.331 | 2.261 |
+| abs | 2.333 | 2.318 | 2.293 | 2.218 | 2.046 |
+| backoff .1 | 2.225 | 2.211 | 2.188 | 2.118 | 1.961 |
+| nmf | 2.367 | 2.358 | 2.343 | 2.242 | 2.075 |
+| **sqrtcnt** | 2.036 | 2.003 | 1.969 | **1.894** | 1.747 |
 
 **T = 10000 (N = 2102), 83% of cells unobserved** — the fix is material:
 
-| method | c=0 | c=0.1 | c=0.5 | c=1 | c=2 |
+| method | κ=0 | κ=100 | κ=300 | κ=1000 | κ=3000 |
 |---|---:|---:|---:|---:|---:|
-| clip | 3.114 | 3.064 | 2.921 | 2.772 | 2.509 |
-| abs | 3.160 | 3.080 | 2.848 | 2.623 | 2.279 |
-| backoff .1 | 3.055 | 2.979 | 2.761 | 2.551 | 2.229 |
-| nmf | 3.353 | 3.246 | 2.844 | 2.673 | 2.400 |
-| **sqrtcnt** | 3.091 | 2.891 | 2.609 | 2.383 | 2.058 |
+| clip | 3.114 | 3.087 | 3.045 | 2.929 | 2.656 |
+| abs | 3.160 | 3.119 | 3.052 | 2.860 | 2.463 |
+| backoff .1 | 3.055 | 3.016 | 2.952 | 2.772 | 2.401 |
+| nmf | 3.353 | 3.289 | 3.217 | 2.855 | 2.551 |
+| **sqrtcnt** | 3.091 | 2.956 | 2.849 | **2.622** | 2.230 |
 
 It also cuts the *latent* negatives (the model is non-negative anyway, so this is
-a side benefit): at `N = 2102`, `sqrtcnt` goes 25.8% → 10.8% → 3.5% → 1.7% → 0.8%
-over `c = 0 … 2`, while `clip`/`abs`/`backoff` go 18.1% → 10.3%; `T = 20000`
-(`N = 911`) interpolates (`sqrtcnt` 2.036 → 1.827 bits, negatives 20.5% → 5.2%).
+a side benefit).  `sqrtcnt`: at `N = 159`, 14.4% → 13.3% → 11.9% over
+`κ = 0, 1000, 3000`; at `N = 911`, 20.5% → 7.9% → 3.3%; at `N = 2102`,
+25.8% → 3.7% → 1.1%.  For `clip`/`abs`/`backoff` the negative fraction
+shifts with the reference: 23.8% → 23.4% (`N = 159`), 19.8% → 17.1%
+(`N = 911`), 18.1% → 11.9% (`N = 2102`).
 
 Two things to read off carefully:
 
 * **The effect is a property of the vocabulary, not the corpus.**  It is driven
   by the *fraction of unobserved cells* (21% at `N = 159`, 83% at `N = 2102`):
-  a given `c` fills the same average per-cell count, but it only matters when the
-  matrix is sparse.  At `N = 159` the whole sweep moves `sqrtcnt` by 0.002 bits;
-  at `N = 2102` it moves it by over a bit.
-* **Do not choose `c` by this KL.**  It decreases monotonically in `c` for
-  *every* method, because as `c → ∞` the reference `M_ref` tends to the rank-1
-  `P_mar`, which any rank-`L` model fits nearly exactly, so the KL tends to 0.
-  `c` is a *prior strength* and must be fixed independently — by held-out
-  predictive log-likelihood (see below).  The earlier draft's conclusion that
-  "smoothing raises the KL" was an artefact of the unnormalised, `T`-sized
-  correction.
+  a fixed `kappa` adds the same mass *per context* `N`, so `alpha = kappa·N`
+  grows in proportion to the vocabulary — which is exactly what keeps its
+  per-cell effect roughly constant while the matrix gets sparser.  At `N = 159`
+  the whole sweep moves `sqrtcnt` by 0.013 bits (0.005 at `κ = 1000`); at
+  `N = 2102` it moves it by 0.47 bits at `κ = 1000` and 0.86 over the sweep.
+* **Do not choose `kappa` by this KL.**  It decreases monotonically in `kappa`
+  for *every* method, because as `kappa → ∞` the reference `M_ref` tends to the
+  rank-1 `P_mar`, which any rank-`L` model fits nearly exactly, so the KL tends
+  to 0.  `kappa` is a *prior strength* and must be fixed independently — by
+  held-out predictive log-likelihood (see below).  The earlier draft's
+  conclusion that "smoothing raises the KL" was an artefact of the unnormalised,
+  `T`-sized correction.
 
-### Choosing `c` by held-out likelihood
+### Choosing `kappa` by held-out likelihood
 
-`scripts/choose_c.py` selects the prior by *predictive* performance:
+`scripts/choose_kappa.py` selects the prior by *predictive* performance:
 binomial-thin the counts into train/test (`p_train = 0.5`), fit the `sqrtcnt`
-model to `M_train + alpha·P_mar(train)`, and score the test counts as
-cross-entropy in bits per held-out event (lower is better; mean over 5–10
-splits).  The test set contains pairs that are *unseen in train*, so this is the
-criterion that can reward the prior.
+model to `M_train + kappa·N·P_mar(train)`, and score the test counts as
+cross-entropy in bits per held-out event (lower is better; mean over 5 splits).
+The test set contains pairs that are *unseen in train*, so this is the criterion
+that can reward the prior.  The sweep is over `kappa` directly (0, 300, 700,
+1000, 1500, 3000), so the fitted mass is `alpha = kappa·N` at every `N`.
 
-| T (N) | cells unobs. | best `c` | best `alpha` | `alpha/N` | CE\* best | CE `c=0` | CE indep. |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100000 (159) | 21% | 7 | 1.8×10⁵ | 1.1×10³ | 12.405 | 12.406 | 13.535 |
-| 50000 (316) | 36% | 5 | 5.0×10⁵ | 1.6×10³ | 14.067 | 14.075 | 15.413 |
-| 20000 (911) | 65% | 1 | 8.3×10⁵ | 0.9×10³ | 16.643 | 16.723 | 18.155 |
-| 10000 (2102) | 83% | 0.5 | 2.2×10⁶ | 1.0×10³ | 18.656 | 18.929 | 20.161 |
-| 5000 (4478) | 92% | 0.2 | 4.0×10⁶ | 0.9×10³ | 20.526 | 21.097 | 21.992 |
+| T (N) | cells unobs. | best `kappa` | best `alpha` | CE\* best | CE `kappa=0` | CE indep. |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100000 (159) | 21% | 1000 | 1.6×10⁵ | 12.4049 | 12.4061 | 13.5351 |
+| 50000 (316) | 36% | 1500 | 4.7×10⁵ | 14.0671 | 14.0754 | 15.4134 |
+| 20000 (911) | 65% | 1500 | 1.4×10⁶ | 16.6422 | 16.7232 | 18.1551 |
+| 10000 (2102) | 83% | 1000 | 2.1×10⁶ | 18.6564 | 18.9291 | 20.1605 |
+| 5000 (4478) | 92% | 700 | 3.1×10⁶ | 20.5217 | 21.0966 | 21.9917 |
 
 (\*cross-entropy of the test table under the model, bits/event; the "CE indep."
 column is the no-latent-structure baseline `P_mar(train)`.)
@@ -189,21 +210,24 @@ column is the no-latent-structure baseline `P_mar(train)`.)
 Reading it:
 
 * **The prior helps, and the benefit grows with sparsity** — from 0.001
-  bits/event at `N = 159` (few unobserved cells; the whole `c` sweep is within
-  noise) to 0.57 bits/event at `N = 4478` (`sqrtcnt` still beats the independence
-  model by a further 1.5 bits).  Every `c > 0` beats `c = 0`.
-* **The invariant is prior mass *per context*, not per cell.**  `alpha/N` is
-  roughly constant at ≈10³ (0.9–1.6×10³) across a 28× range of `N`, so
-  `alpha ≈ 10³·N` and in the `c·N²` form the optimal `c` falls like `1/N`
-  (7 → 0.2).  A *fixed* `c` is therefore not scale-invariant: `c ≈ ½–1` is
-  near-optimal for `N ≈ 900–2100` but too strong at `N = 4478` and too weak at
-  `N = 159`.
+  bits/event at `N = 159` (few unobserved cells; the whole `kappa` sweep is
+  within noise) to 0.57 bits/event at `N = 4478` (`sqrtcnt` still beats the
+  independence model by a further 1.5 bits).  Every `kappa > 0` beats
+  `kappa = 0`.
+* **The optimum is prior mass *per context*, not per cell.**  The best `kappa`
+  is 700–1500 across a 28× range of `N` — effectively a constant ≈10³.  So a
+  *single* fixed `kappa` transfers across corpus sizes: `kappa = 1000` is within
+  0.01 bits/event of the per-`N` optimum everywhere in the table (and is the
+  optimum itself at `N = 159` and `N = 2102`), which is why it is the default in
+  `sqrt_and_smooth.py`.  (Parameterising by a per-cell
+  pseudo-count `c` instead, `alpha = c·N²`, forces the optimum to fall like
+  `1/N` — 7 → 0.2 on the same corpus — so no fixed `c` transfers.)
 * Caveat: with a single corpus we cannot separate the `N`- from the corpus-size
   dependence; ≈10³ is an empirical constant for this corpus.
 
-So either tune `c` per corpus with `choose_c.py`, or parameterise the mass
-per context, `alpha = kappa·N` with `kappa` ≈ 10³, which a single constant
-serves across the whole range.
+So the recommendation is a fixed `alpha = 1000·N` (equivalently `kappa = 1000`),
+which requires no per-corpus tuning.  `choose_kappa.py` remains available to
+re-check that on a new corpus.
 
 ## Conclusions
 
@@ -217,7 +241,9 @@ serves across the whole range.
    occurrence-weighted conditional KL only by a model-independent constant, so
    the conditional `p(b|a)` is not needed and has been removed from the code.
 3. Put a small independence-shaped prior on unobserved pairs,
-   `M_ref = M + c·N²·P_mar`, with `c` a fixed pseudo-count *rate* per cell (not
-   a fraction of the corpus).  It changes the reference, so fix `c`
-   independently (held-out likelihood), not by the KL — which decreases
-   monotonically in `c` as `M_ref → P_mar`.
+   `M_ref = M + kappa·N·P_mar`, with `kappa` a fixed prior mass *per context*
+   (not a fraction of the corpus: `alpha` must not scale with `T`).  The
+   held-out study gives `kappa ≈ 10³` across a 28× range of `N`, and the code's
+   default is `kappa = 1000`.  It changes the reference, so fix it independently
+   (held-out likelihood), not by the KL — which decreases monotonically in
+   `kappa` as `M_ref → P_mar`.

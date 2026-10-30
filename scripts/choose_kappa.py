@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Choose the counting-prior strength c by held-out predictive likelihood.
+"""Choose the counting-prior strength kappa by held-out predictive likelihood.
 
 The counting fix (`docs/HELLINGER_FACTORISATION.md`) adds an independence-shaped
-prior of fixed mass `alpha = c*N^2` to the reference before factorising.  `c`
-cannot be chosen by the in-sample KL (which is monotone in `c`), so we choose it
-by how well the model predicts *held-out* pairs:
+prior of fixed mass `alpha = kappa * N` to the reference before factorising
+(`kappa` is the prior mass per context).  `kappa` cannot be chosen by the
+in-sample KL (which is monotone in it), so we choose it by how well the model
+predicts *held-out* pairs:
 
   * binomial-thin the count matrix M into train/test (each (a,b) count split as
     Binomial(n, p), p = --p);
-  * fit the sqrtcnt model to the train reference `M_train + c*N^2*P_mar(train)`;
+  * fit the sqrtcnt model to the train reference `M_train + kappa*N*P_mar(train)`;
   * score the test counts under the model, as cross-entropy in bits per held-out
     event (lower is better).
 
@@ -22,8 +23,8 @@ Approximation: thinning the (a,b) count matrix treats each co-occurrence as an
 independent multinomial draw; a fully faithful split would re-derive (a,b) from
 held-out identifiers.
 
-Usage: choose_c.py CORPUS --outdirs work/common100000,... [--L 16]
-       [--p 0.5] [--reps 5] [--cs 0,0.01,...,10]
+Usage: choose_kappa.py CORPUS --outdirs work/common100000,... [--L 16]
+       [--p 0.5] [--reps 5] [--kappas 0,100,...,10000]
 """
 import argparse
 import os
@@ -73,7 +74,7 @@ def independence_crossentropy(train, test):
 
 def support_loss(train, test):
     """Fraction of held-out test mass on cells whose row *or* column context was
-    never seen in train (marginal 0) -- unpredictable by any `c`."""
+    never seen in train (marginal 0) -- unpredictable by any `kappa`."""
     seen_a = train.sum(1) > 0
     seen_b = train.sum(0) > 0
     covered = seen_a[:, None] & seen_b[None, :]
@@ -87,10 +88,10 @@ def main():
     ap.add_argument('--L', type=int, default=16)
     ap.add_argument('--p', type=float, default=0.5, help='train fraction')
     ap.add_argument('--reps', type=int, default=5)
-    ap.add_argument('--cs', default='0,0.01,0.03,0.1,0.2,0.3,0.5,1,2,5,10')
+    ap.add_argument('--kappas', default='0,100,300,500,700,1000,1500,2000,3000,5000,10000')
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
-    cs = [float(x) for x in args.cs.split(',')]
+    kappas = [float(x) for x in args.kappas.split(',')]
 
     for outdir in args.outdirs.split(','):
         M = pair_matrix.load_or_build_matrix(
@@ -100,7 +101,7 @@ def main():
         print(f"\n=== {outdir}  N={n}  events={int(M.sum())}  "
               f"p_train={args.p}  reps={args.reps} ===", flush=True)
 
-        ce = np.full((len(cs), args.reps), np.nan)
+        ce = np.full((len(kappas), args.reps), np.nan)
         unseen = []
         ind = []
         for rep in range(args.reps):
@@ -109,25 +110,25 @@ def main():
             test = M - train
             unseen.append(support_loss(train, test))
             ind.append(independence_crossentropy(train, test))
-            for ci, c in enumerate(cs):
+            for ki, kappa in enumerate(kappas):
                 rng_svd = np.random.default_rng(args.seed * 7919 + rep)
-                ce[ci, rep] = test_crossentropy(train, test, args.L, c * n * n,
+                ce[ki, rep] = test_crossentropy(train, test, args.L, kappa * n,
                                                 rng_svd)
 
         mean = np.nanmean(ce, axis=1)
         std = np.nanstd(ce, axis=1)
         print(f"held-out test mass on contexts unseen in train (unpredictable "
-              f"by any c): {100*np.mean(unseen):.2f}%")
-        print(f"{'c':>7} {'alpha':>12} {'CE_test bits/event':>19} {'std':>9}")
-        for ci, c in enumerate(cs):
-            a = c * n * n
-            if not np.isfinite(mean[ci]):
-                print(f"{c:>7g} {a:>12.4g} {'inf (zero pred.)':>19}")
+              f"by any kappa): {100*np.mean(unseen):.2f}%")
+        print(f"{'kappa':>7} {'alpha':>12} {'CE_test bits/event':>19} {'std':>9}")
+        for ki, kappa in enumerate(kappas):
+            a = kappa * n
+            if not np.isfinite(mean[ki]):
+                print(f"{kappa:>7g} {a:>12.4g} {'inf (zero pred.)':>19}")
             else:
-                print(f"{c:>7g} {a:>12.4g} {mean[ci]:>19.5f} {std[ci]:>9.5f}")
+                print(f"{kappa:>7g} {a:>12.4g} {mean[ki]:>19.5f} {std[ki]:>9.5f}")
         if np.isfinite(mean).any():
             bi = int(np.nanargmin(np.where(np.isfinite(mean), mean, np.inf)))
-            print(f"best c = {cs[bi]:g}  CE = {mean[bi]:.5f} bits/event")
+            print(f"best kappa = {kappas[bi]:g}  CE = {mean[bi]:.5f} bits/event")
         print(f"independence model CE = {np.mean(ind):.5f} bits/event")
 
 

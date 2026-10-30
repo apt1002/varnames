@@ -32,15 +32,16 @@ We add a fixed amount of pseudo-count mass, shaped like the independence model,
 
     M_ref = M + alpha * P_mar ,   P_mar = (r/T)(c/T)^T   (sum 1),
 
-with ``alpha = c * N^2`` (so ``c`` is the average number of pseudo-counts per
-cell; --cs sweeps it).  The correction has a *fixed* total mass, not a fraction
-of the corpus ``T``: that makes it a genuine prior on unseen pairs which washes
-out as the corpus grows (adding ``alpha * M_mar`` with ``M_mar`` unnormalised
-would instead inject ``alpha * T`` and never vanish).
+with ``alpha = kappa * N`` (``kappa`` is the prior mass *per context*;
+``--kappas`` sweeps it, default 1000 -- the held-out optimum is ~10^3, constant
+across N; see docs/HELLINGER_FACTORISATION.md).  The correction has a *fixed*
+total mass, not a fraction of the corpus ``T``: that makes it a genuine prior on
+unseen pairs which washes out as the corpus grows (adding ``alpha * M_mar`` with
+``M_mar`` unnormalised would instead inject ``alpha * T`` and never vanish).
 
 M_ref *is* the reference for the whole analysis: every model is a
 reconstruction of M_ref and is scored against M_ref.  Results are therefore not
-comparable across ``c`` -- by design.  ``c`` is a *counting* fix, not a
+comparable across ``kappa`` -- by design.  ``kappa`` is a *counting* fix, not a
 reconstruction knob; the reconstruction version of "mix in the independence
 model" already exists as the ``backoff`` remedy below.
 
@@ -49,7 +50,7 @@ fraction of the latent reconstruction (the model itself is non-negative for the
 sqrt variant).
 
 Usage: sqrt_and_smooth.py CORPUS --outdirs work/common100000,... [--ls 8,16,32]
-       [--cs 0,0.1,0.5,1,2] [--exact]
+       [--kappas 1000] [--exact]
 """
 import argparse
 import os
@@ -125,17 +126,17 @@ def main():
     ap.add_argument('corpus')
     ap.add_argument('--outdirs', required=True)
     ap.add_argument('--ls', default='16', help='comma-separated ranks')
-    ap.add_argument('--cs', default='0,0.1,0.5,1,2',
-                    help='prior strength as multiples of N^2 (average '
-                         'pseudo-counts per cell, independence-shaped); '
-                         'alpha = c * N^2')
+    ap.add_argument('--kappas', default='1000',
+                    help='prior mass as multiples of N (mass per context, '
+                         'independence-shaped); alpha = kappa * N.  The '
+                         'held-out optimum is ~10^3 (constant across N).')
     ap.add_argument('--nmf-iters', type=int, default=200)
     ap.add_argument('--exact', action='store_true',
                     help='use the exact SVD (small N only)')
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
-    cs = [float(x) for x in args.cs.split(',')]
+    kappas = [float(x) for x in args.kappas.split(',')]
     Ls = [int(x) for x in args.ls.split(',')]
 
     for outdir in args.outdirs.split(','):
@@ -146,33 +147,33 @@ def main():
         print(f"\n=== {outdir}  N={n}  rows={krows}  "
               f"svd={'exact' if args.exact else 'randomised'} ===", flush=True)
         for L in Ls:
-            hdr = 'method'.ljust(12) + ''.join(f"c={c:<9g}" for c in cs)
+            hdr = 'method'.ljust(12) + ''.join(f"k={k:<9g}" for k in kappas)
             tk, negtab = {}, {}
-            for c in cs:
-                alpha = c * n * n
+            for k in kappas:
+                alpha = k * n
                 rng = np.random.default_rng(args.seed)
                 out, neg, M_mar, Ma = models_for(M, L, alpha, rng, args.exact,
                                                  args.nmf_iters)
                 for name in METHODS:
-                    tk.setdefault(name, {})[c] = KL(Ma, out[name])
-                    negtab.setdefault(name, {})[c] = neg[name]
+                    tk.setdefault(name, {})[k] = KL(Ma, out[name])
+                    negtab.setdefault(name, {})[k] = neg[name]
 
             print(f"\n-- L = {L} --  KL(M_ref || M_hat/sum M_hat) in bits "
-                  f"(lower is better); M_ref = M + c*N^2*P_mar")
+                  f"(lower is better); M_ref = M + kappa*N*P_mar")
             print(hdr)
             for name in METHODS:
                 print(name.ljust(12) +
-                      ''.join(f"{tk[name][c]:<11.4f}" for c in cs))
+                      ''.join(f"{tk[name][k]:<11.4f}" for k in kappas))
             print("   latent negative fraction (%)")
             for name in METHODS:
                 print(name.ljust(12) +
-                      ''.join(f"{100*negtab[name][c]:<11.4f}" for c in cs))
+                      ''.join(f"{100*negtab[name][k]:<11.4f}" for k in kappas))
 
-        print("\nindependence model KL(M_ref || P_mar) by c:")
-        for c in cs:
-            alpha = c * n * n
+        print("\nindependence model KL(M_ref || P_mar) by kappa:")
+        for k in kappas:
+            alpha = k * n
             M_mar, P_mar, Ma = priors(M, alpha)
-            print(f"  c={c:<6g}  alpha={alpha:<12.4g}  "
+            print(f"  kappa={k:<6g}  alpha={alpha:<12.4g}  "
                   f"KL {KL(Ma, M_mar):.4f} bits")
 
 
