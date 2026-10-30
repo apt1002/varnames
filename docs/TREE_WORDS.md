@@ -72,9 +72,9 @@ P(u0 ... u_n) = product over i in 0 .. n of P(u_{i+1} | u_i)
 Compressed size of the strings is -log2(its probability).
 
 
-# Success metric
+# Corpus size
 
-Success (smaller better) is the sum over the corpus of the compressed size of its strings.
+The corpus size `CS` (smaller better) is the sum over the corpus of the compressed size of its strings.
 
 We believe this is equal to sum over u of N(u) log(N(u)) - sum over u, v of N(u, v) log(N(u, v))
 
