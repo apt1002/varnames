@@ -76,9 +76,11 @@ Compressed size of the strings is -log2(its probability).
 
 The corpus size `CS` (smaller better) is the sum over the corpus of the compressed size of its strings.
 
-In the limit of plentiful training data (`N` much larger than `NUM_PAIRS`) no smoothing is needed, and the corpus size is the unsmoothed bigram model's
+In the limit of plentiful training data (`N` much larger than `NUM_PAIRS`) no
+smoothing is needed, and, with `L(z) = z·log z` (any log base; `L(0) = 0`), the
+corpus size is the unsmoothed bigram model's
 
-    sum over u of N(u) log(N(u)) - sum over u, v of N(u, v) log(N(u, v))
+    sum over u of L(N(u)) - sum over u, v of L(N(u, v))
 
 
 # Effect of incrementing `NUM_PAIRS`
@@ -97,8 +99,7 @@ three-consecutive-repeats assumption each `uvuv` is isolated (three consecutive
 `uv` pairs would be `(uv)³`, which is forbidden), so `Q` counts every adjacency
 exactly once.  If the adjacency is ignored (`Q = 0`) only 3-gram counts remain.
 
-With `L(z) = z·log z` (any base; `L(0) = 0`), and `Δ = CS' − CS` (so a merge
-that *improves* compression gives `Δ < 0`):
+With `Δ = CS' − CS` (so a merge that *improves* compression gives `Δ < 0`):
 
     Δ = ΔU − ΔB
 
