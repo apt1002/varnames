@@ -280,10 +280,11 @@ exact change from one merge is derived in
 that change turns out to be **identically zero** for a merge of two distinct
 words — so a merge only ever pays off through trigram dependence, and in a
 perfectly bigram-Markov corpus no merge changes the size. Writing the trigram
-dependence as `m = e^E`, the whole change reduces to a sum of conditional
-entropies whose linear term in `m − 1` also cancels, leaving a manifestly
-non-positive quadratic form: every merge weakly *shrinks* the dictionary. The
-identities are regression-tested by `scripts/check_merge_delta.py`.
+dependence as the factor `m − 1`, the whole change reduces to a sum of
+conditional entropies whose linear term in `m − 1` also cancels, leaving a
+manifestly non-positive quadratic form: every merge weakly *shrinks* the
+dictionary. The identities are regression-tested by
+`scripts/check_merge_delta.py`.
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds:

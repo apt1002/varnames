@@ -35,8 +35,8 @@ progress, `[x]` = done.
 - [x] **A2. Relax "no threefold repetition".** When `uu` is the most common
       pair, emit `(u^n)` words for every run length `n` present, instead of a
       single `(uu)`. The *run-aware rule* is defined and proved sign-safe in
-      `docs/TREE_WORDS.md` ("Relaxing the three-consecutive-repeats
-      assumption"): collapse maximal runs `u^k` to flat `(u^k)` words, one per
+      `docs/TREE_WORDS.md` §9.1 ("Relaxing `no uuu`"): collapse maximal runs
+      `u^k` to flat `(u^k)` words, one per
       length. Verified by `check_run_aware` in `scripts/check_merge_delta.py`
       (`0` positive `Δ` over `41 167` enumerated steps) and a heavier
       cross-check (`118 597` corpora × ≤40 steps, `4 000` random run-heavy
@@ -53,8 +53,11 @@ progress, `[x]` = done.
       (correct `10/10` on the test grid); with spread run lengths the boundary
       takes the slot but the full run-aware rule still wins. Reuses A2's
       `scripts/check_merge_delta.py` theory + `scripts/dict_experiments.py`.
-- [ ] **A5. Rewrite `TREE_WORDS.md` for pedagogy.** One of `m`/`E` only,
-      history removed, textbook order. Git history is the archive.
+- [x] **A5. Rewrite `TREE_WORDS.md` for pedagogy.** One of `m`/`E` only (`m`
+      kept throughout, no `e^E`), history removed, textbook order: corpus →
+      dictionary → score → one-merge delta → `m` factorisation → entropy form →
+      second order → sign/run-aware → cycle identity → remarks. Git history is
+      the archive.
 
 ## B. Adjacency matrix construction (new doc)
 

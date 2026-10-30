@@ -460,7 +460,7 @@ def _fourgram_abab(seq):
 
 
 def check_sufficient_condition(cap=20000, w='W'):
-    """Corpora satisfying both identities of `docs/TREE_WORDS.md`
+    """Corpora satisfying both identities of `docs/TREE_WORDS.md` §7.1
     ("A checkable sufficient condition for `delta = 0`") must have `delta = 0`
     for every merge.
 
@@ -578,8 +578,8 @@ def run_aware_step(seq):
 
 
 def check_run_aware(cap=20000, steps=4):
-    """The run-aware rule of `docs/TREE_WORDS.md` ("Relaxing the
-    three-consecutive-repeats assumption") keeps `delta <= 0`.
+    """The run-aware rule of `docs/TREE_WORDS.md` §9.1
+    ("Relaxing `no uuu`") keeps `delta <= 0`.
 
     Enumerates small cyclic corpora, applies up to `steps` run-aware steps to
     each, and checks every step's `delta`.  Returns `(positives, n_steps,
