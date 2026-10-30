@@ -48,13 +48,20 @@ progress, `[x]` = done.
 
 ## C. Apply the dictionary model to `merged.txt`
 
-- [ ] **C1. Word × word adjacency counts** by tokenising every string with the
+- [x] **C1. Word × word adjacency counts** by tokenising every string with the
       pair-merge dictionary (dictionary-based split, *not* the character-level
-      split used so far).
-- [ ] **C2. Fill unobserved adjacencies** with the current best-practice prior.
-- [ ] **C3. Held-out compressibility** — sample identifiers, score under the
+      split used so far).  `scripts/tree_words.py train` builds the greedy BPE
+      dictionary, tokenises the corpus and saves the cyclic word bigram matrix
+      (`work/tw{96,512,2040}/adj.npz`).
+- [x] **C2. Fill unobserved adjacencies** with the current best-practice prior.
+      The `kappa` prior of `ADJACENCY_MATRIX.md` §6 adapted to the word bigram
+      matrix (`tree_words.py score`); the matrix prefers `kappa ≈ 30–100`, not
+      the character default 1000 (documented + swept).
+- [x] **C3. Held-out compressibility** — sample identifiers, score under the
       model, report the fraction under 64 bits and 128 bits; compare with
-      `docs/CODE_LENGTHS.md`.
+      `docs/CODE_LENGTHS.md`.  `docs/WORD_COMPRESSIBILITY.md`.  At equal
+      dictionary size the character model wins clearly (vocab ≈ 2100: 55.2 vs
+      63.9 mean bits, 72.6% vs 61.7% in 64 bits).
 - [ ] **C4. "Breaking open the pair" prior.** For an unobserved `(uv)w`, seed the
       count from the observed `vw` (recursively); when both words are pairs,
       break the later (rarer) one; base case = single characters.
