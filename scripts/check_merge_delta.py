@@ -24,6 +24,9 @@ It also checks the `m = 1` part of the same document, `delta^(1)`:
   * a *genuinely* first-order Markov corpus has `delta = 0` for every merge.
     (Trigram consistency `m = 1` alone is not enough — see
     `check_trigram_markov_counterexample`.)
+  * the checkable sufficient condition (trigram identity `m = 1` **and** the
+    `(a,b,a,b)` 4-gram identity) also makes `delta = 0` for every merge
+    (`check_sufficient_condition`).
 
 and the `m != 1` part (`delta = delta^(m)`):
   * the exact conditional-entropy form (`delta_entropy`) matches the brute force;
@@ -438,6 +441,52 @@ def check_trigram_markov_counterexample():
     return fails
 
 
+def _trigram_markov(seq):
+    """N(a,b,c) N(b) = N(a,b) N(b,c) for every trigram (m = 1)."""
+    U = Counter(seq); B = ngram_counts(seq, 2); T = ngram_counts(seq, 3)
+    return all(v * U[b] == B[(a, b)] * B[(b, c)] for (a, b, c), v in T.items())
+
+
+def _fourgram_abab(seq):
+    """N(a,b,a,b) N(b,a) = N(a,b,a) N(b,a,b) for every a, b."""
+    B = ngram_counts(seq, 2); T = ngram_counts(seq, 3); F = ngram_counts(seq, 4)
+    syms = set(seq)
+    return all(F.get((a, b, a, b), 0) * B.get((b, a), 0)
+               == T.get((a, b, a), 0) * T.get((b, a, b), 0)
+               for a in syms for b in syms)
+
+
+def check_sufficient_condition(cap=20000, w='W'):
+    """Corpora satisfying both identities of `docs/TREE_WORDS.md`
+    ("A checkable sufficient condition for `delta = 0`") must have `delta = 0`
+    for every merge.
+
+    Enumerates all small cyclic corpora, keeps those with the trigram identity
+    (m = 1) *and* the `(a,b,a,b)` 4-gram identity, and checks `delta`.  Returns
+    `(failures, n_corpora)`."""
+    import itertools
+    syms = [0, 1, 2]
+    fails = 0
+    n_ok = 0
+    for n in range(3, 12):
+        if len(syms) ** n > cap:
+            break
+        for tup in itertools.product(syms, repeat=n):
+            seq = list(tup)
+            if not (_trigram_markov(seq) and _fourgram_abab(seq)):
+                continue
+            n_ok += 1
+            B2 = ngram_counts(seq, 2)
+            for u in syms:
+                for v in syms:
+                    if B2.get((u, v), 0) == 0 or not usable(seq, u, v):
+                        continue
+                    d = score(merge(seq, u, v, w)) - score(seq)
+                    if abs(d) > 1e-9:
+                        fails += 1
+    return fails, n_ok
+
+
 def check_delta_sign_exhaustive(cap=20000):
     """Enumerate every cyclic corpus over <=4 symbols and check `delta <= 0`.
 
@@ -555,6 +604,7 @@ def main():
 
     markov_bad = check_markov_corpora(w)
     trig_bad = check_trigram_markov_counterexample()
+    cond_bad, cond_n = check_sufficient_condition(w=w)
 
     ex_bad = 0
     if args.exhaustive:
@@ -572,8 +622,10 @@ def main():
     print(f"bigram-Markov corpora: mismatches {markov_bad} (delta is zero)")
     print(f"trigram-Markov counterexample: failures {trig_bad} "
           f"(all m=1 yet delta<0, from the 4-gram term)")
+    print(f"sufficient condition (m=1 and (a,b,a,b)): failures {cond_bad} "
+          f"over {cond_n} corpora (every merge has delta=0)")
     raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad
-                           or trig_bad) else 0)
+                           or trig_bad or cond_bad) else 0)
 
 
 if __name__ == '__main__':

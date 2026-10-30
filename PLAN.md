@@ -27,7 +27,11 @@ progress, `[x]` = done.
       sign check (`scripts/check_merge_delta.py --exhaustive`). Both `ΔS1` and
       `ΔS2` are shown `≤ 0`, but the exact `ΔS2 ≤ ΔS1` is still open; the only
       counterexamples to the raw inequality are doubled-word merges with a run
-      `uuu`, which the standing assumption excludes (see A2).*
+      `uuu`, which the standing assumption excludes (see A2). A checkable
+      sufficient condition for `Δ = 0` is proved in `docs/TREE_WORDS.md` (the
+      trigram identity `m = 1` together with the `(a,b,a,b)` 4-gram identity)
+      and exercised by `check_sufficient_condition`; whether the pair secretly
+      forces every `m₄ = 1` is left open.*
 - [ ] **A2. Relax "no threefold repetition".** When `uu` is the most common
       pair, emit `(u^n)` words for every run length `n` present, instead of a
       single `(uu)`. Replaces the earlier global-RLE idea.

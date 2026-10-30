@@ -286,6 +286,37 @@ corpus is trigram-Markov but not a genuine first-order Markov chain, and the
 whole `Δ` is that 4-gram term.  So `Δ = 0` requires a *genuinely* first-order
 Markov corpus (as the periodic regression corpora are), not merely `m ≡ 1`.
 
+### A checkable sufficient condition for `Δ = 0`
+
+The counterexample above was trigram-Markov but failed one 4-gram identity.
+Adding that identity is enough.  Precisely, suppose that for every `a, b, c`
+
+    N(a,b,c) · N(b) = N(a,b) · N(b,c)                      (trigram factors `m = 1`)
+
+**and** that for every `a, b`
+
+    N(a,b,a,b) · N(b,a) = N(a,b,a) · N(b,a,b)              (4-gram `(a,b,a,b)`, `m₄ = 1`)
+
+Then `Δ = 0` for every merge.  Proof: fix the merge `uv`.  The first identity,
+applied to `m(x,u,v)` and `m(u,v,y)`, makes the two conditional-entropy sums of
+the entropy form vanish.  Applied to the two special trigrams it also pins the
+marginals of the four-way table: `m(v,u,v) = 1` gives `A(v) = λ·N(v,u)` and
+`m(u,v,u) = 1` gives `B(u) = μ·N(v,u)`.  The second identity, with
+`(a,b) = (u,v)`, then gives `Q = λμ·N(v,u)`, so
+
+    p = ( (1−λ)(1−μ), λ(1−μ), μ(1−λ), λμ ) = p₀ ,
+
+the product baseline, and the last term is `0`.  Hence `Δ = 0`.  ∎
+
+The two identities are on their face weaker than "first-order Markov at every
+order" — only the `(a,b,a,b)` 4-grams are constrained, not all of them.  Whether
+they *secretly* force every `m₄ = 1` is left open: every corpus we have tested
+that satisfies them is also fully Markov, but that is no reason to expect it in
+general (a counterexample, if one exists, is probably large).  In any case the
+pair is exactly what the four-way term needs, and is what the regression test
+below exercises.  Note the trigram identity is used **twice**: once to zero the
+entropy sums and once to fix the marginals of `p`.
+
 ### Expanding in `m = e^E`: `Δ` is second order
 
 Write `m(a,b,c) = e^{E(a,b,c)}` so that `E = 0` is first-order consistency.  The
