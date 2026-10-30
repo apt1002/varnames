@@ -36,8 +36,8 @@ progress, `[x]` = done.
       pair, emit `(u^n)` words for every run length `n` present, instead of a
       single `(uu)`. The *run-aware rule* is defined and proved sign-safe in
       `docs/TREE_WORDS.md` §9.1 ("Relaxing `no uuu`"): collapse maximal runs
-      `u^k` to flat `(u^k)` words, one per
-      length. Verified by `check_run_aware` in `scripts/check_merge_delta.py`
+      `u^k` to flat `(u^k)` words, one per length.  Verified by
+      `check_run_aware` in `scripts/check_merge_delta.py`
       (`0` positive `Δ` over `41 167` enumerated steps) and a heavier
       cross-check (`118 597` corpora × ≤40 steps, `4 000` random run-heavy
       corpora × ≤60 steps — `0` positives), so `Δ ≤ 0` survives the relaxation.
