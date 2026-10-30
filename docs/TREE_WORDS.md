@@ -80,7 +80,9 @@ In the limit of plentiful training data (`N` much larger than `NUM_PAIRS`) no
 smoothing is needed, and, with `L(z) = z·log z` (any log base; `L(0) = 0`), the
 corpus size is the unsmoothed bigram model's
 
-    sum over u of L(N(u)) - sum over u, v of L(N(u, v))
+    CS = S1 - S2 ,   S1 = sum over u of L(N(u)) ,   S2 = sum over u, v of L(N(u, v))
+
+where `S1` collects the unigram counts and `S2` the bigram counts.
 
 
 # Effect of incrementing `NUM_PAIRS`
@@ -101,11 +103,11 @@ exactly once.  If the adjacency is ignored (`Q = 0`) only 3-gram counts remain.
 
 With `Δ = CS' − CS` (so a merge that *improves* compression gives `Δ < 0`):
 
-    Δ = ΔU − ΔB
+    Δ = ΔS1 − ΔS2
 
-    ΔU = L(N(u)−N(u,v)) − L(N(u))  +  L(N(v)−N(u,v)) − L(N(v))  +  L(N(u,v))
+    ΔS1 = L(N(u)−N(u,v)) − L(N(u))  +  L(N(v)−N(u,v)) − L(N(v))  +  L(N(u,v))
 
-    ΔB =  −L(N(u,v))                                       (u,v)  -> gone
+    ΔS2 =  −L(N(u,v))                                       (u,v)  -> gone
         + Σ_{x≠v} [ L(N(x,u) − A(x)) − L(N(x,u)) ]         (x,u)  decremented
         +       [ L(N(v,u) − A(v) − B(u) + Q) − L(N(v,u)) ]  (v,u)  both decrements
         + Σ_{y≠u} [ L(N(v,y) − B(y)) − L(N(v,y)) ]         (v,y)  decremented
@@ -135,9 +137,9 @@ occurs, only `uuu` is forbidden) is a special case, because one merge consumes
 *two* copies of `z`, and the three-repeats assumption forces
 `Q = A(z) = B(z) = 0`:
 
-    ΔU = L(N(z)−2N(z,z)) − L(N(z)) + L(N(z,z))
+    ΔS1 = L(N(z)−2N(z,z)) − L(N(z)) + L(N(z,z))
 
-    ΔB =  −L(N(z,z))                                   (z,z)  -> gone
+    ΔS2 =  −L(N(z,z))                                   (z,z)  -> gone
         + Σ_{x≠z} [ L(N(x,z) − A(x)) − L(N(x,z)) ]     (x,z)
         + Σ_{y≠z} [ L(N(z,y) − B(y)) − L(N(z,y)) ]     (z,y)
         + Σ_{a≠z} L(A(a)) + Σ_{b≠z} L(B(b))            (a,w), (w,b)
@@ -192,7 +194,7 @@ Substituting the `m`'s into `Δ` splits it cleanly:
 
 To first order, since `L(n+δ) − L(n) ≈ (1 + ln n)·δ`, `Δ⁽ᵐ⁾` is *linear* in
 `m − 1`, with each perturbed count `n` contributing a weight `(1 + ln n)` and
-the sign read off `ΔB`.  So the exact statement is: the merge's effect on the
+the sign read off `ΔS2`.  So the exact statement is: the merge's effect on the
 description length is a piece fixed by the unigram/bigram table, plus a weighted
 sum of the trigram (and one 4-gram) dependence factors, whose weights are
 `1 + ln(count)`.
