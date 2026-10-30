@@ -42,11 +42,17 @@ progress, `[x]` = done.
       cross-check (`118 597` corpora × ≤40 steps, `4 000` random run-heavy
       corpora × ≤60 steps — `0` positives), so `Δ ≤ 0` survives the relaxation.
       Replaces the earlier global-RLE idea.
-- [ ] **A3. Greedy alternative.** Pick the pair with the largest `Δ` instead of
-      the most frequent pair. Known drawback: ignores long-distance
-      correlations in favour of rare short-range ones. Compare the two rules.
-- [ ] **A4. `(uv)` vs `(u^n)` crossover.** For `uuuuv`, when should the model
-      prefer `(u^4)v` over `uuu(uv)`? Propose a corpus-based heuristic.
+- [x] **A3. Greedy alternative.** Pick the pair with the largest `Δ` instead of
+      the most frequent pair. `docs/DICTIONARY_RULES.md` §A3, driven by
+      `scripts/dict_experiments.py`: the `Δ` rule wins by +4–6% on structured
+      synthetic data but only +0.2–0.3% on real identifiers (and reverses by
+      `NUM_PAIRS = 24`) — the frequency rule is a robust proxy.
+- [x] **A4. `(uv)` vs `(u^n)` crossover.** For `uuuuv`, when should the model
+      prefer `(u^4)v` over `uuu(uv)`? `docs/DICTIONARY_RULES.md` §A4: a single
+      run word `(u^k)` beats the boundary `(uv)` iff `(k−1)·#runs(k) > N(u,v)`
+      (correct `10/10` on the test grid); with spread run lengths the boundary
+      takes the slot but the full run-aware rule still wins. Reuses A2's
+      `scripts/check_merge_delta.py` theory + `scripts/dict_experiments.py`.
 - [ ] **A5. Rewrite `TREE_WORDS.md` for pedagogy.** One of `m`/`E` only,
       history removed, textbook order. Git history is the archive.
 

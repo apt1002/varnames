@@ -420,7 +420,9 @@ Two remarks:
   entropy, not a likelihood ratio.
 * The greedy rule picks the pair with the largest `N(u,v)`.  That is a *proxy*
   for the smallest `Δ`; `Δ` also depends on how the pair is embedded (`A`, `B`,
-  `Q`), so a "greedy by gain" variant would rank candidates by `Δ` instead.
+  `Q`), so a "greedy by gain" variant would rank candidates by `Δ` instead
+  (measured in `docs/DICTIONARY_RULES.md` §A3: the `Δ` rule wins on structured
+  data but barely on real identifiers).
 
 **Checked numerically.** `scripts/check_merge_delta.py` merges a pair by brute
 force (recount, then recompute `CS`) and compares against the formula above, on
@@ -473,8 +475,9 @@ run-aware rule `Δ ≤ 0` holds exactly on everything we can enumerate, and the
 
 What remains is the *choice* between the flat run word `(uᵏ)` and the ordinary
 bigram `(uv)` when a run abuts a different word — e.g. `uuuuv` as `(u⁴)v` versus
-`uuu(uv)` (see A4).  The run-aware rule is one consistent end of that spectrum;
-A4 measures the crossover.
+`uuu(uv)`.  The run-aware rule is one consistent end of that spectrum;
+`docs/DICTIONARY_RULES.md` §A4 measures the crossover (a single run word wins
+iff `(k−1)·#runs(k) > N(u,v)`).
 
 # Notes
 

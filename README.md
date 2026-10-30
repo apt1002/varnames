@@ -59,6 +59,7 @@ varnames/
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary (pair-merge) model + merge delta
+│   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -88,6 +89,7 @@ varnames/
 │   ├── check_merge_delta.py             # regression test for the tree-words merge delta
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
 │   ├── tree_words.py                    # pair-merge dictionary + word x word adjacency model
+│   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency (A3/A4)
 │   └── run_sweep.sh                     # run the analyses over all thresholds
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
