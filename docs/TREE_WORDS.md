@@ -267,8 +267,8 @@ versus `a(aa)` decodes to `aaa` either way. So the assumption protects the
 
 ## The score identity
 
-The belief is correct, and it is worth recording why, because the derivation
-pins down what it depends on. Per string,
+The identity `CS = S1 - S2` is worth proving, because the derivation pins down
+what it depends on.  Per string,
 
     -log2 P(u_0 ... u_n) = -sum_i log2 P(u_{i+1} | u_i)
                          = sum_i log2 [ N(u_i) / N(u_i, u_{i+1}) ] .
@@ -281,7 +281,7 @@ Summing over the corpus, each bigram `(u,v)` appearing `N(u,v)` times,
 and the first term collapses because `sum_v N(u,v) = N(u)` for every `u`,
 giving
 
-    CS = sum_u N(u) log2 N(u)  -  sum_{u,v} N(u,v) log2 N(u,v) .   ✓
+    CS = sum_u N(u) log2 N(u)  -  sum_{u,v} N(u,v) log2 N(u,v)  =  S1 - S2 .   ✓
 
 Two consequences:
 
