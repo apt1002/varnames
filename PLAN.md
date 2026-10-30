@@ -20,9 +20,14 @@ progress, `[x]` = done.
 
 ## A. Dictionary / pair-merge theory (`docs/TREE_WORDS.md`)
 
-- [ ] **A1. Prove `Δ < 0` exactly** (not just to second order). Intuition:
+- [~] **A1. Prove `Δ < 0` exactly** (not just to second order). Intuition:
       incrementing `NUM_PAIRS` should always shrink `CS`. Standard of proof:
-      symbolic algebra + numerical experiment.
+      symbolic algebra + numerical experiment. *Status: leading-order proof
+      (non-positive quadratic form) + exact entropy form + exhaustive numerical
+      sign check (`scripts/check_merge_delta.py --exhaustive`). Both `ΔS1` and
+      `ΔS2` are shown `≤ 0`, but the exact `ΔS2 ≤ ΔS1` is still open; the only
+      counterexamples to the raw inequality are doubled-word merges with a run
+      `uuu`, which the standing assumption excludes (see A2).*
 - [ ] **A2. Relax "no threefold repetition".** When `uu` is the most common
       pair, emit `(u^n)` words for every run length `n` present, instead of a
       single `(uu)`. Replaces the earlier global-RLE idea.

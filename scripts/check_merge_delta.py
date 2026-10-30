@@ -29,6 +29,10 @@ and the `m != 1` part (`delta = delta^(m)`):
   * scaling every `m - 1` by `eps`, the linear term vanishes and the quadratic
     coefficient matches `delta_quadratic` (the manifestly non-positive form).
 
+With `--exhaustive` it additionally enumerates every small cyclic corpus and
+checks that `delta <= 0`, separating distinct-pair merges from doubled words
+(the doubled words are non-positive whenever the corpus has no run `uuu`).
+
 Usage: check_merge_delta.py [--trials 3000] [--seed 1]
 """
 import argparse
@@ -368,10 +372,44 @@ def check_markov_corpora(w):
     return bad
 
 
+def check_delta_sign_exhaustive(cap=20000):
+    """Enumerate every cyclic corpus over <=4 symbols and check `delta <= 0`.
+
+    Returns the number of positive deltas found, split by category:
+      * distinct pairs `u != v`;
+      * doubled words `u == v` with no run `uuu` (the standing assumption);
+      * doubled words with a run (the only place a positive delta lives).
+    """
+    import itertools
+    res = dict(distinct=0, doubled_ok=0, doubled_run=0)
+    for k in range(2, 5):
+        for n in range(2, 12):
+            if k ** n > cap:
+                break
+            for seq in itertools.product(range(k), repeat=n):
+                seq = list(seq)
+                has_run = any(seq[i] == seq[(i + 1) % n] == seq[(i + 2) % n]
+                              for i in range(n))
+                for u in range(k):
+                    for v in range(k):
+                        if delta_formula(seq, u, v) <= 1e-9:
+                            continue
+                        if u != v:
+                            res['distinct'] += 1
+                        elif has_run:
+                            res['doubled_run'] += 1
+                        else:
+                            res['doubled_ok'] += 1
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--trials', type=int, default=3000)
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--exhaustive', action='store_true',
+                    help='also enumerate every small cyclic corpus and check '
+                         'the sign of delta (slow)')
     args = ap.parse_args()
     rng = random.Random(args.seed)
     w = -1                                   # a token outside the alphabet
@@ -451,13 +489,21 @@ def main():
 
     markov_bad = check_markov_corpora(w)
 
+    ex_bad = 0
+    if args.exhaustive:
+        res = check_delta_sign_exhaustive()
+        ex_bad = res['distinct'] + res['doubled_ok']
+        print(f"exhaustive sign: distinct-pair positives {res['distinct']}, "
+              f"doubled-word (no run) positives {res['doubled_ok']}, "
+              f"doubled-word (with run) positives {res['doubled_run']}")
+
     print(f"tested {tested} (u==v: {n_eq}, Q>0: {n_uvuv}), mismatches {bad}")
     print(f"delta^1 checked {d1tested}, mismatches {d1bad} "
           f"(distinct-pair delta^1 is identically zero)")
     print(f"m-part checked {mexp}, mismatches {mexpbad} "
           f"(entropy form, sum rule, quadratic expansion)")
     print(f"bigram-Markov corpora: mismatches {markov_bad} (delta is zero)")
-    raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad) else 0)
+    raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad) else 0)
 
 
 if __name__ == '__main__':

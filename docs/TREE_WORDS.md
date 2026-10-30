@@ -296,6 +296,62 @@ where `χ² = Σ_i (p_i − p₀_i)² / p₀_i` is the Pearson `χ²` of the fou
 The exact entropy form, the zero `Δ⁽¹⁾`, the `u = v` closed form, the latent sum
 rule and the quadratic scaling are checked in `scripts/check_merge_delta.py`.
 
+### Is `Δ` always negative?
+
+`Δ < 0` for *every* merge would say that adding a word to the dictionary never
+enlarges `CS`.  It holds to leading (second) order — the quadratic form above is
+non-positive — and it holds exactly in every case we can enumerate; but it is
+**not** a trivial consequence of "each score sum shrinks", and we have only a
+partial proof of the all-orders statement.  Here is how far we get.
+
+**Each sum really does shrink.**  One merge removes `M = N(u,v)` copies of `u`
+and of `v` and creates `M` copies of `w`, so the unigram part is
+
+    ΔS1 = L(U − M) − L(U) + L(V − M) − L(V) + L(M) .
+
+Since `L(a − c) + L(c) − L(a) = −a·H(c/a) ≤ 0` (the binary entropy is
+non-negative), each `u`/`v` piece is `≤ 0` and the whole thing is `≤ 0`.  The
+same lemma, applied cell by cell, gives `ΔS2 ≤ 0`: a bigram cell that loses `c`
+of its count contributes `L(a − c) − L(a) = −[L(a) − L(a − c)] ≤ −L(c) ≤ 0`, and
+the new `(·, w)`, `(w, ·)`, `(w, w)` cells only repackage counts deleted
+elsewhere.  So **both** `S1` and `S2` fall.
+
+**Why that is not enough.**  `Δ = ΔS1 − ΔS2` is a difference of two *negative*
+numbers, and the exact statement is `ΔS2 ≤ ΔS1` — the bigram sum must fall *at
+least as much* as the unigram sum.  Neither `S1 ≥ S2` nor its reverse holds in
+general.  In the form `CS = N·H` (with `H = H(next | word)`), putting
+`N' = N − M` and writing `H'` for the merged conditional entropy, the claim is
+
+    Δ ≤ 0   ⟺   N'·H' ≤ N·H .
+
+The merge **deletes** `M` tokens (a gain proportional to `M`) while it **raises**
+the conditional entropy per token (the merged transition table is less
+predictable); `Δ ≤ 0` says the deletion always wins.  Both effects are visible
+in an i.i.d. corpus: merging two of `k` symbols pushes `H` from `log k` toward
+`log(k−1)`, yet the corpus still gets shorter.  Neither effect dominates by
+inspection.
+
+**What we can prove, and what we test.**  The doubled-word merge `u = v` is the
+one case where the `m ≡ 1` part does not cancel, and it is the source of every
+counterexample to the raw inequality.  Enumerating *every* cyclic corpus over
+`≤ 4` symbols (all sizes with at most `20 000` sequences) and every merge pair
+gives:
+
+* `u ≠ v`: `0` positive `Δ` out of `447 384` merges, worst `0`;
+* `u = v`, under the standing "no threefold repeat" assumption: `0` positive
+  out of `102 306` merges;
+* `u = v` *without* that assumption: `8 956` positives, and every one lies in a
+  corpus containing a run `uuu` — e.g. `u^11` with `u = v` gives `Δ ≈ +26.4`.
+
+A broad random scan (a few `10⁵` merges, all alphabet sizes `2…5`) adds no
+counterexample.  So within the assumptions of this document `Δ ≤ 0` holds
+exactly, and the only way to break it is precisely the run-length case that A2
+removes.  An all-orders symbolic proof of the `u ≠ v` case is still open: the
+leading-order quadratic form and the exact entropy form are the sharpest handles
+we have found, and both fail to close term by term.  The sign is checked
+exhaustively (and for the two sums separately) in
+`scripts/check_merge_delta.py --exhaustive`.
+
 Two remarks:
 
 * The gain is **not** a pointwise-mutual-information term.  Merging a
