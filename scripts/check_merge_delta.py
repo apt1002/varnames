@@ -27,7 +27,10 @@ It also checks the `m = 1` part of the same document, `delta^(1)`:
   * the checkable sufficient condition (trigram identity `m = 1` **and** the
     `(a,b,a,b)` 4-gram identity) also makes `delta = 0` for every merge
     (`check_sufficient_condition`).
-
+  * the *run-aware* rule (collapse a run of a doubled word to a flat `(u^k)`
+    instead of merging two copies) restores `delta <= 0` on every step,
+    including the run `uuu` corpora that break the plain rule
+    (`check_run_aware`).
 and the `m != 1` part (`delta = delta^(m)`):
   * the exact conditional-entropy form (`delta_entropy`) matches the brute force;
   * the sum rule `sum_x N(x,u)(m(x,u,v)-1) = 0` holds exactly;
@@ -487,6 +490,125 @@ def check_sufficient_condition(cap=20000, w='W'):
     return fails, n_ok
 
 
+def most_common_pair(seq):
+    """The most frequent length-2 substring `uv` (count >= 2), ties broken by
+    smallest `(u, v)`.  `None` if no pair occurs twice."""
+    B = ngram_counts(seq, 2)
+    best = None
+    for (u, v), c in B.items():
+        if c < 2:
+            continue
+        key = (-c, u, v)
+        if best is None or key < best[0]:
+            best = (key, (u, v))
+    return best[1] if best else None
+
+
+def cyclic_merge_distinct(seq, u, v, w):
+    """Replace every non-overlapping occurrence of the pair `(u, v)` by `w`,
+    with `u != v` (so occurrences never overlap).
+
+    Done cyclically and correctly: a matching pair at position `i` uses tokens
+    `i` and `(i+1) % n`.  The linear `merge()` above double-uses the token at
+    position 0 when a match straddles the wrap (which is why `usable()` skips
+    those); starting the scan at a match start avoids that."""
+    n = len(seq)
+    match = [i for i in range(n) if seq[i] == u and seq[(i + 1) % n] == v]
+    if not match:
+        return list(seq)
+    s = min(match)
+    order = [seq[(s + k) % n] for k in range(n)]
+    out = []
+    k = 0
+    while k < n:
+        if k + 1 < n and order[k] == u and order[k + 1] == v:
+            out.append(w)
+            k += 2
+        else:
+            out.append(order[k])
+            k += 1
+    return out
+
+
+def collapse_runs(seq, a, base):
+    """Collapse each maximal run of the word `a` of length `k >= 2` to a single
+    word `(a^k)`, one word per observed length.  Runs of length 1 stay `a`.
+    Returns `(new_seq, {length: new_id})`."""
+    n = len(seq)
+    if all(x == a for x in seq):
+        return [base + 2], {n: base + 2}
+    j0 = next(i for i in range(n) if seq[i] != a)
+    order = [seq[(j0 + 1 + k) % n] for k in range(n)]
+    segs = []
+    lens = []
+    k = 0
+    while k < n:
+        if order[k] == a:
+            Lr = 0
+            while k < n and order[k] == a:
+                Lr += 1
+                k += 1
+            segs.append(('run', Lr))
+            lens.append(Lr)
+        else:
+            segs.append(('tok', order[k]))
+            k += 1
+    uniq = {Lr: base + 2 + j for j, Lr in enumerate(sorted(set(lens)))}
+    new = [uniq[t[1]] if t[0] == 'run' else t[1] for t in segs]
+    return new, uniq
+
+
+def run_aware_step(seq):
+    """One run-aware dictionary step.
+
+    The most common pair `uv`: if `u != v`, merge it (as usual).  If `u == v`
+    (a doubled word) then instead of merging two copies -- the step that breaks
+    `delta <= 0` on a run `uuu` -- collapse every maximal run of `u` to one flat
+    word `(u^k)` per length.  Returns `(new_seq, kind, info)` with `kind` in
+    `{pair, run, none}`."""
+    p = most_common_pair(seq)
+    if p is None:
+        return seq, 'none', None
+    u, v = p
+    w = max(seq) + 1
+    if u != v:
+        return cyclic_merge_distinct(seq, u, v, w), 'pair', (u, v)
+    new, uniq = collapse_runs(seq, u, max(seq) + 1)
+    return new, 'run', (u, uniq)
+
+
+def check_run_aware(cap=20000, steps=4):
+    """The run-aware rule of `docs/TREE_WORDS.md` ("Relaxing the
+    three-consecutive-repeats assumption") keeps `delta <= 0`.
+
+    Enumerates small cyclic corpora, applies up to `steps` run-aware steps to
+    each, and checks every step's `delta`.  Returns `(positives, n_steps,
+    n_run, n_pair, worst)`."""
+    import itertools
+    syms = [0, 1, 2]
+    pos = steps_done = n_run = n_pair = 0
+    worst = 0.0
+    for n in range(2, 13):
+        if len(syms) ** n > cap:
+            break
+        for tup in itertools.product(syms, repeat=n):
+            seq = list(tup)
+            for _ in range(steps):
+                d0 = score(seq)
+                new, kind, info = run_aware_step(seq)
+                if kind == 'none':
+                    break
+                steps_done += 1
+                n_run += kind == 'run'
+                n_pair += kind == 'pair'
+                d = score(new) - d0
+                if d > 1e-9:
+                    pos += 1
+                    worst = max(worst, d)
+                seq = new
+    return pos, steps_done, n_run, n_pair, worst
+
+
 def check_delta_sign_exhaustive(cap=20000):
     """Enumerate every cyclic corpus over <=4 symbols and check `delta <= 0`.
 
@@ -605,6 +727,7 @@ def main():
     markov_bad = check_markov_corpora(w)
     trig_bad = check_trigram_markov_counterexample()
     cond_bad, cond_n = check_sufficient_condition(w=w)
+    run_pos, run_steps, run_run, run_pair, run_worst = check_run_aware()
 
     ex_bad = 0
     if args.exhaustive:
@@ -624,8 +747,10 @@ def main():
           f"(all m=1 yet delta<0, from the 4-gram term)")
     print(f"sufficient condition (m=1 and (a,b,a,b)): failures {cond_bad} "
           f"over {cond_n} corpora (every merge has delta=0)")
+    print(f"run-aware step: positives {run_pos} over {run_steps} steps "
+          f"(run {run_run}, pair {run_pair}, worst {run_worst:.1e})")
     raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad
-                           or trig_bad or cond_bad) else 0)
+                           or trig_bad or cond_bad or run_pos) else 0)
 
 
 if __name__ == '__main__':

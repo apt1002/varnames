@@ -428,6 +428,54 @@ random cyclic corpora, for every pair (including `u = v`, and including corpora
 that contain `uvuv` so that `Q > 0`).  It agrees to `1e−9` on ~22k cases.
 
 
+# Relaxing the three-consecutive-repeats assumption
+
+The standing assumption ("no `uuu`) is what the sign argument leans on: every
+counterexample to `Δ ≤ 0` is a **doubled-word** merge, and every one of them sits
+in a corpus that contains a run `uuu` (e.g. `u¹¹`, where merging `(u,u)` raises
+`CS` by `Δ ≈ +26.4`).  It can be relaxed by changing *what the dictionary emits
+for a repeated word*.
+
+**The run-aware rule.**  As usual, find the most common length-2 substring `uv`.
+If `u ≠ v`, merge it.  If `u = v` — the doubled case, the only place the
+assumption is needed — do **not** merge two copies.  Instead, collapse *every*
+maximal run `uᵏ` (`k ≥ 2`) present in the corpus to a single flat word `(uᵏ)`,
+**one word per observed run length** `k`.  (This is the "word-level
+run-length-encoding step" sketched in the notes below, now made concrete: the
+run token is the flat word `(uᵏ)`, not a nested `((uu)u)…`.)  After the step no
+two adjacent `u` tokens remain, so the doubled pair `(u,u)` cannot recur.
+
+Two things make the sign work again:
+
+* **Distinct pairs are unaffected.**  For `u ≠ v` two occurrences of `uv` can
+  never overlap (a shared token would have to be both `u` and `v`), even on the
+  cycle — so "replace every occurrence" stays unambiguous and the earlier
+  `Δ ≤ 0` result for `u ≠ v` applies verbatim, straddling matches included.
+* **The run collapse never enlarges `CS`.**  Replacing a maximal run `uᵏ` by one
+  token deletes `k − 1` tokens and merges their bigrams into the `(uᵏ)`-edges; in
+  the degenerate all-`u` string both before and after have `CS = 0`, and
+  otherwise the deleted `(u,u)` self-loop and the new boundary bigrams exactly
+  rebalance.
+
+**Verified.**  `scripts/check_merge_delta.py` (`check_run_aware`) enumerates small
+cyclic corpora, applies up to four run-aware steps to each, and checks the sign
+of every step's `Δ`:
+
+* `0` positive `Δ` out of `41 167` steps (run steps `19 839`, pair steps
+  `21 328`), worst `0`.
+
+A heavier cross-check (all corpora over `≤ 3` symbols up to length `12`, up to
+`40` steps each — `118 597` corpora; and `4 000` random run-heavy corpora, up to
+`60` steps each) also finds `0` positives, and confirms the invariant "no two
+adjacent `u` tokens after collapsing runs of `u`" every time.  So under the
+run-aware rule `Δ ≤ 0` holds exactly on everything we can enumerate, and the
+`uuu` pathology is gone.
+
+What remains is the *choice* between the flat run word `(uᵏ)` and the ordinary
+bigram `(uv)` when a run abuts a different word — e.g. `uuuuv` as `(u⁴)v` versus
+`uuu(uv)` (see A4).  The run-aware rule is one consistent end of that spectrum;
+A4 measures the crossover.
+
 # Notes
 
 *Explanatory notes added 2026-10-29. The sections above are the specification and
@@ -451,17 +499,17 @@ Consequence: under the assumption, "occurrences of `uv`" is unambiguously the
 same as "non-overlapping occurrences of `uv`", so `N(u,v)` and the identity
 below are well-defined with no extra matching convention.
 
-(If it is ever relaxed — the deferred work — the plan is a word-level
-run-length-encoding step before each search-and-replace: it collapses any run of
-identical adjacent words, so *no two adjacent identical words exist at the
-moment `uv` is chosen*, and overlap (which needs `uuu`) cannot occur. E.g.
-`ababab` is untouched by the first RLE (all neighbours distinct), then merged to
-`(ab)(ab)(ab)`, then RLE'd to `(ab)³`. An alternative is simply to define the
-merge as "replace a maximal set of leftmost non-overlapping occurrences"; that
-also works for any corpus but makes `N(u,v)` convention-dependent. How run
-tokens such as `(ab)³` enter the adjacency matrix — one symbol, the bigrams of
-their expansion, or a weighted edge — is a genuine choice with several reasonable
-answers, and is out of scope for now.)
+(If it is ever relaxed — see "Relaxing the three-consecutive-repeats
+assumption" above — the plan is a word-level run-length-encoding step: when the
+chosen pair is a doubled word `(u,u)`, collapse every maximal run `uᵏ` to the
+flat word `(uᵏ)` instead of merging two copies, so *no two adjacent `u` tokens
+exist afterwards* and overlap (which needs `uuu`) cannot occur.  That section
+carries out exactly this, and shows `Δ ≤ 0` survives.  An alternative is to
+define the merge as "replace a maximal set of leftmost non-overlapping
+occurrences"; that also works for any corpus but makes `N(u,v)`
+convention-dependent.  How run tokens such as `(uᵏ)` enter the adjacency matrix
+— one symbol, the bigrams of their expansion, or a weighted edge — is a genuine
+choice with several reasonable answers, and is out of scope for now.)
 
 ## Tie-breaking
 

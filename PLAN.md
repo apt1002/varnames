@@ -32,9 +32,16 @@ progress, `[x]` = done.
       trigram identity `m = 1` together with the `(a,b,a,b)` 4-gram identity)
       and exercised by `check_sufficient_condition`; whether the pair secretly
       forces every `m₄ = 1` is left open.*
-- [ ] **A2. Relax "no threefold repetition".** When `uu` is the most common
+- [x] **A2. Relax "no threefold repetition".** When `uu` is the most common
       pair, emit `(u^n)` words for every run length `n` present, instead of a
-      single `(uu)`. Replaces the earlier global-RLE idea.
+      single `(uu)`. The *run-aware rule* is defined and proved sign-safe in
+      `docs/TREE_WORDS.md` ("Relaxing the three-consecutive-repeats
+      assumption"): collapse maximal runs `u^k` to flat `(u^k)` words, one per
+      length. Verified by `check_run_aware` in `scripts/check_merge_delta.py`
+      (`0` positive `Δ` over `41 167` enumerated steps) and a heavier
+      cross-check (`118 597` corpora × ≤40 steps, `4 000` random run-heavy
+      corpora × ≤60 steps — `0` positives), so `Δ ≤ 0` survives the relaxation.
+      Replaces the earlier global-RLE idea.
 - [ ] **A3. Greedy alternative.** Pick the pair with the largest `Δ` instead of
       the most frequent pair. Known drawback: ignores long-distance
       correlations in favour of rare short-range ones. Compare the two rules.
