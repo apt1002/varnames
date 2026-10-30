@@ -60,6 +60,7 @@ varnames/
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary (pair-merge) model + merge delta
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
+│   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior for the word adjacency
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)

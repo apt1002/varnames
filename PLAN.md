@@ -82,10 +82,14 @@ progress, `[x]` = done.
       `docs/CODE_LENGTHS.md`.  `docs/WORD_COMPRESSIBILITY.md`.  At equal
       dictionary size the character model wins clearly (vocab ≈ 2100: 55.2 vs
       63.9 mean bits, 72.6% vs 61.7% in 64 bits).
-- [ ] **C4. "Breaking open the pair" prior.** For an unobserved `(uv)w`, seed the
+- [x] **C4. "Breaking open the pair" prior.** For an unobserved `(uv)w`, seed the
       count from the observed `vw` (recursively); when both words are pairs,
       break the later (rarer) one; base case = single characters.
-      *Detail + feasibility pass first.*
+      *Detail + feasibility pass done* in `docs/BREAK_OPEN_PRIOR.md`: the
+      recursion on the merge tree, the tie rule, and a `tw2040` feasibility
+      table (right child JS 0.471 vs independence 0.508 vs left child 0.642).
+      Verdict: plausible but modest; **not yet wired in** — judge by held-out
+      likelihood (`choose_kappa.py`) before adopting.
 
 ## Housekeeping / deferred regenerations
 
