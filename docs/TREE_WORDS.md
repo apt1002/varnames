@@ -76,7 +76,7 @@ Compressed size of the strings is -log2(its probability).
 
 The corpus size `CS` (smaller better) is the sum over the corpus of the compressed size of its strings.
 
-We believe this is equal to sum over u of N(u) log(N(u)) - sum over u, v of N(u, v) log(N(u, v))
+In the limit of plentiful training data (`N` much larger than `NUM_PAIRS`), this is equal to sum over u of N(u) log(N(u)) - sum over u, v of N(u, v) log(N(u, v))
 
 
 # Effect of incrementing `NUM_PAIRS`
