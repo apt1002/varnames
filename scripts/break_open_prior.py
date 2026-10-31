@@ -37,14 +37,16 @@ import tree_words as tww
 
 # ---------------------------------------------------------------- trace replay
 
-def trace_replay(trace, alpha, mode='break'):
+def trace_replay(trace, alpha, mode='break', shrink=False):
     """Replay the level-by-level build from a `build_dictionary` trace.
 
     Returns `(M, Ncur, V, prior, info)`: the final joint reference matrix `M`,
     the observed counts `Ncur`, the vocabulary `V`, the prior block, and a
     diagnostic dict.  `mode` is `'break'` (break-open prior), `'mar'` (the
     independence prior `alpha*P_mar` read off the final marginals) or `'plain'`
-    (no prior, `M = N`)."""
+    (no prior, `M = N`).  With `shrink`, the prior on the former row/column of
+    the absorbed children is withdrawn *in proportion* to the observed mass that
+    the new word takes over (see `docs/BREAK_OPEN_PRIOR.md` §9)."""
     nchars = trace['nchars']
     stop = nchars
     entries = trace['entries']
@@ -91,6 +93,32 @@ def trace_replay(trace, alpha, mode='break'):
                 diag = alpha * invS * (Ncur[v, u] + prior[v, u])
                 prior[w, w] = diag                          # self-loop P(v,u)
                 psum += m + diag
+                if shrink:
+                    # Withdraw the prior on the former column of u and row of v
+                    # in proportion to the observed mass the new word takes over:
+                    # prior(x,u) *= 1 - (#(x,u)->(x,w)) / N(x,u), and likewise
+                    # prior(v,y) *= 1 - (#(v,y)->(w,y)) / N(v,y).
+                    lost = 0.0
+                    for arr, src_col, is_col in ((Ls, u, True), (Rs, v, False)):
+                        uniq, cnts = np.unique(arr, return_counts=True)
+                        for s, c in zip(uniq.tolist(), cnts.tolist()):
+                            den = Ncur[s, u] if is_col else Ncur[v, s]
+                            if den <= 0:
+                                continue
+                            if shrink == 'hard':
+                                if c < den:
+                                    continue            # partially absorbed: keep
+                                f = 0.0
+                            else:
+                                f = max(0.0, 1.0 - c / den)
+                            if is_col:
+                                old = prior[s, u]
+                                prior[s, u] = old * f
+                            else:
+                                old = prior[v, s]
+                                prior[v, s] = old * f
+                            lost += old - (prior[s, u] if is_col else prior[v, s])
+                    psum -= lost
             np.add.at(Ncur, (Ls, u), -1.0)      # (L,u) lost
             np.add.at(Ncur, (u, v), -1.0)       # (u,v) lost, dead
             np.add.at(Ncur, (v, Rs), -1.0)      # (v,R) lost
@@ -345,7 +373,8 @@ def cmd_compare(args):
         for kappa in kappas:
             alpha = kappa * V
             t1 = time.time()
-            M, Ncur, Vv, prior, info = trace_replay(trace, alpha, mode)
+            M, Ncur, Vv, prior, info = trace_replay(trace, alpha, mode,
+                                                    shrink=args.shrink)
             bits, ntok, nzero, un = score_bits(score_lines, char_id, plan,
                                                nchars, M, Ncur)
             row = f"{kappa:>7g} {alpha:>11.4g} {bits.mean():>10.3f}"
@@ -441,6 +470,8 @@ def main():
     ap.add_argument('--modes', default='mar,break')
     ap.add_argument('--save-trace', default=None)
     ap.add_argument('--load-trace', default=None)
+    ap.add_argument('--shrink', default='',
+                    help="withdraw prior on absorbed row/column mass: 'prop' (proportional) or 'hard' (only fully absorbed)")
     ap.add_argument('--selfcheck', action='store_true')
     ap.add_argument('--feasibility', action='store_true')
     ap.add_argument('--mix', action='store_true')

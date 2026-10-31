@@ -424,3 +424,52 @@ The last conceivable rescue — interpolating the child row with the marginal,
 3–5 locate the loss in the *shape* on exactly the unobserved cells the prior is
 meant to fill, so a per-row `lambda_w` has no failure mode left to repair.  The
 prior stays the independence `P_mar` over the run-aware dictionary.
+
+## 9. Withdrawing the prior on absorbed row/column mass (tried, rejected)
+
+Finding 5 said the rule can assign **exactly zero** to a bigram between two
+occurring words, because the structural zero of a dead cell propagates outwards
+along the recursion.  A structural zero raised by the tokeniser is *correct*:
+if `(uv)` is a word, no tokenised string contains `u` then `v`.  The suspicion
+(rationale from `rules/` design review) was that the prior is **under-retracted**:
+when the word `(uv)` is made, observed mass moves from `N(x,u)` to `N(x,uv)`
+(and from `N(v,y)` to `N(w,y)`), but the prior on `(x,u)` / `(v,y)` is left in
+place, so a word that has been fully absorbed (`u` no longer occurs as a token)
+still carries prior mass.  The proposed repair: retract it **in proportion**,
+
+    prior(x,u) *= 1 - N(x,uv) / N(x,u)        (and prior(v,y) *= 1 - N(w,y)/N(v,y)),
+
+applied at each pair step (`--shrink prop`), or only when the context is *fully*
+absorbed (`--shrink hard`).
+
+Both variants were implemented in `trace_replay` (the `shrink` argument of
+`scripts/break_open_prior.py`).  `prop` and `hard` produce the **same set of
+exact zeros** (a proportional factor `1 - c/den` is zero exactly when the cell
+is fully absorbed), but `prop` also *reduces* the prior on partially absorbed —
+still live — cells.
+
+`tw2040`, best-`kappa` comparison (held-out `merged_validation`, stride 20,
+11 477 identifiers; "live zeros" = cells that are `M = 0` while both words have
+nonzero marginal count, i.e. finding 5's hazard metric):
+
+| prior | mean bits | unobs bits | live zeros | live-zero % | prior mass / α |
+|---|---:|---:|---:|---:|---:|
+| `mar` | 52.10 | 8.50 | 0 | 0.00 % | 1.00 |
+| `break` | 62.26 | 10.38 | 248 334 | **5.63 %** | 22.7 |
+| `break` + `hard` | 67.22 | 13.45 | 849 744 | **19.25 %** | 20.7 |
+| `break` + `prop` | 67.12 | 13.38 | 849 744 | **19.25 %** | 14.1 |
+
+**It does not resolve finding 5 — it makes it three-and-a-half times worse.**
+The retraction *adds* zeros (5.6 % → 19.3 % of live cells, 248 k → 850 k) and the
+held-out rate gets *worse* (62.3 → 67.1 bits at `kappa = 100`; every `kappa`
+shows the same direction).  The extra zeros are the "absorbed-context" cells: a
+context `(x,u)` all of whose occurrences are swallowed by a word is indeed
+structurally impossible, so *as zeros they are harmless*.  The harm is that the
+withdrawn mass is **not redistributed** — it is simply removed — so the prior on
+the still-live, still-unobserved cells is starved and the model loses the
+smoothing it was there to give.  Retracting spurious mass is only useful if the
+mass is moved somewhere live, which is a different repair (see the structural-
+zero treatment of the *independence* prior, `ADJACENCY_MATRIX.md`).
+
+Verdict: **rejected.**  Finding 5 is not the reason the break-open prior loses;
+removing the offending zeros does not help, and the prior remains retired.
