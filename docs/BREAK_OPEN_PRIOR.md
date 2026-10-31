@@ -117,6 +117,31 @@ merge consumes, exactly as in `docs/TREE_WORDS.md` §5.  Subtract
 only: the **prior** term of a cell is fixed once, when the cell is created, and
 never recomputed.
 
+### Where the dead cell's mass goes
+
+Once `(uv)` is a word, **no tokenised string contains `u` immediately followed
+by `v`**, so `M(u,v)` must be *exactly zero* — count *and* prior.  It is a
+structural zero, not a knob.  The two parts of the cell travel differently:
+
+* **The observed count is absorbed by the new word.**  Each of the `N(u,v)`
+  occurrences sits in a context `x u v y` and becomes `x w y`; the count mass
+  reappears in row `w` / column `w`, spread over the new cells `(x,w)`, `(w,y)`,
+  `(w,w)` exactly as the §5 bookkeeping says.  Equivalently `N(w)` gains
+  `N(u,v)` while `u` and `v` each lose it — and that `N(u,v)` is precisely the
+  number of tokens the merge deletes (the compression gain).  So the dead cell's
+  mass goes **into `w`**.
+* **The prior is re-expressed, not conserved.**  The prior is a per-cell *shape*
+  `alpha·P(break(a,b))`, not a fluid to be balanced.  A dead cell carries no
+  shape (otherwise `P_ref(v|u) > 0` for an impossible transition), and the new
+  word's cells draw theirs from the boundary child — row `w` from `P(v,·)`
+  (`v`'s successors), column `w` from `P(·,u)` (`u`'s predecessors).  The
+  internal transition `u→v` is now subsumed by `w`, so its prior *reappears*,
+  reshaped, on the new word rather than disappearing.
+
+This is why "prior frozen at creation" needs the qualifier "until the cell is
+invalidated": a cell's prior survives a mere count decrement, but a cell that
+becomes structurally impossible is zeroed outright.
+
 **Why this is well defined.**  Every prior quoted at level `r` is `P(ref)` of a
 cell whose two endpoints already exist at level `r−1`, so it has a value.  No
 circularity, no fully-built `M` required, and `S` is maintained incrementally

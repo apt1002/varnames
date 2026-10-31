@@ -131,11 +131,14 @@ progress, `[x]` = done.
       * **Run words** — how a flat `(u^k)` (the A2 rule) enters the construction:
         as a chain of merges, or as one word with children `(u, (u^{k-1}))`,
         which changes `rc`/`lc` and the "later word" calls.
-      * **Dead cells** — after `(uv)` is added, `M(u,v)` is never used again and
-        should be exactly **zero**; likewise any cell whose endpoints can no
-        longer be adjacent.  Decide whether to zero them explicitly (and whether
-        the prior step can ever re-seed them), since leaving stale prior mass
-        there would bias the row/column sums.
+      * **Dead cells** — after `(uv)` is added, `M(u,v)` must be exactly **zero**
+        (structural: no tokenised string has `u` then `v`).  Resolved in
+        `BREAK_OPEN_PRIOR.md` §4 ("Where the dead cell's mass goes"): the
+        observed `N(u,v)` is *absorbed by the new word* (it becomes row/column
+        `w`, i.e. the tokens the merge deletes); the prior is *re-expressed* on
+        the new word (row `w` from `P(v,·)`, column `w` from `P(·,u)`), not
+        conserved.  So "prior frozen at creation" holds only until a cell is
+        structurally invalidated.
 
 ## Housekeeping / deferred regenerations
 
