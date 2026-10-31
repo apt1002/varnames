@@ -112,6 +112,30 @@ progress, `[x]` = done.
       child JS 0.471 vs independence 0.508 vs left child 0.642.  Verdict:
       plausible but modest; **not yet wired in** — judge by held-out likelihood
       (`choose_kappa.py`) before adopting.
+- [ ] **C5. Implement the bottom-up `M` construction (break-open prior).**
+      Code the algorithm of `docs/BREAK_OPEN_PRIOR.md` §4 and **validate on
+      held-out data** (the `choose_kappa.py` binomial-thinning protocol, scoring
+      `M_ref` against test counts — compare the break-open prior with the
+      independence `P_mar`, at `tw96`/`tw512`/`tw2040`, and re-sweep `kappa`).
+      Details to settle on the way:
+      * **Populating `M_ref(w,w)`** — which rule fills the self-loop of the new
+        word (row rule `P(v,v)`, column rule `P(u,u)`, the merge `L(Q)` term, or
+        a combination), and whether it needs the `Q` correction.
+      * **Decrement: subtract `N` or `M`?** — when a merge consumes a cell, do
+        we reduce its *observed count* `N` (leaving any prior mass in place) or
+        the whole cell `M`?  This decides whether "prior frozen at creation"
+        survives a decrement touching the same cell.
+      * **`alpha`, and does it depend on `NUM_PAIRS`?** — the prior mass per
+        cell (or per row/column); whether one `alpha` transfers across levels or
+        must shrink as words are added (each new word adds a row and a column).
+      * **Run words** — how a flat `(u^k)` (the A2 rule) enters the construction:
+        as a chain of merges, or as one word with children `(u, (u^{k-1}))`,
+        which changes `rc`/`lc` and the "later word" calls.
+      * **Dead cells** — after `(uv)` is added, `M(u,v)` is never used again and
+        should be exactly **zero**; likewise any cell whose endpoints can no
+        longer be adjacent.  Decide whether to zero them explicitly (and whether
+        the prior step can ever re-seed them), since leaving stale prior mass
+        there would bias the row/column sums.
 
 ## Housekeeping / deferred regenerations
 

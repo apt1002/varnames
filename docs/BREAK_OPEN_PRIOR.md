@@ -182,11 +182,32 @@ train/test binomial thinning), not by row similarity.  Concretely:
 3. keep it only if it beats independence by more than noise *and* the win grows
    with sparsity — the signature the `kappa` prior showed.
 
-Open questions: whether "break the later word" should instead break by depth or
-by `N` (the first draft), or by wordlist order (chosen here, for determinism);
-and how the prior interacts with the *cyclic* structure (the target bigrams
-include `(a, \n)` and `(\n, b)`).  (The joint-vs-conditional choice is settled:
-both `M` and `P` are the joint — §5.)
+### Details to settle while implementing
+
+(Tracked as **C5** in `PLAN.md`.)
+
+* **`M_ref(w,w)`.**  Which rule fills the new word's self-loop — the row rule
+  `alpha·P(v,v)`, the column rule `alpha·P(u,u)`, the merge term `L(Q)`, or a
+  combination — and whether the `Q` correction is needed there.
+* **Decrement by `N` or by `M`?**  When a merge consumes a cell, do we reduce its
+  *observed count* (leaving any frozen prior mass in place) or the whole cell?
+  This decides whether "prior frozen at creation" survives a later decrement of
+  the same cell.
+* **`alpha`** — its best value, and whether it must depend on `NUM_PAIRS`: every
+  new word adds a row and a column, so a fixed per-cell `alpha` inflates the
+  total prior mass as the vocabulary grows.
+* **Run words.**  How a flat `(u^k)` (the A2 rule) enters the tree — as a chain
+  of merges or as one word with children `(u, u^{k-1})` — which changes `rc`/`lc`
+  and the "later word" call.
+* **Dead cells.**  Once `(uv)` is added, `M(u,v)` is never used again and must be
+  exactly **zero**; likewise any cell whose endpoints can no longer be adjacent.
+  Leaving stale prior mass there would bias the row/column sums.
+
+Still open conceptually: whether "break the later word" should break by depth or
+by `N` (the first draft) rather than by wordlist order (chosen here, for
+determinism); and how the prior interacts with the *cyclic* structure (the
+target bigrams include `(a, \n)` and `(\n, b)`).  The joint-vs-conditional choice
+is settled: both `M` and `P` are the joint — §5.
 
 Reproduce the table with the `tw2040` files and `scripts/tree_words.py`
 (`load_dictionary`, `load_adj`).
