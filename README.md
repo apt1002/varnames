@@ -1,7 +1,13 @@
 # varnames — a corpus of programming-language identifiers
 
-Goal: build a training corpus of **programming-language identifiers** for research
-into identifier-specific compression. Identifiers are restricted to the form
+**Goal.** Construct a **bijection from programming-language identifiers to the
+integers**, one that can be *expressed compactly* — on the order of 20 KB of
+code plus its tables. A 64-bit hash function is usable as a bijection in
+practice, but its *inverse* is far too large; so instead we are trying to build
+a **compression algorithm** that encodes an identifier as an integer and can
+recover it.
+
+Identifiers are restricted to the form
 
 ```
 [A-Za-z_][A-Za-z0-9_]*      (ASCII only)
@@ -13,6 +19,10 @@ ASCII letters, underscores, or digits.
 We deliberately favour **namespace-rich languages** (modules / classes / packages)
 over languages like C that lack namespaces and therefore push authors into global
 prefixing conventions (`gl_`, `SDL_`, …), which distort identifier statistics.
+
+**Status.** A *feasibility study* and an *experimental statistical exploration*:
+the corpus, the models and the reports below exist to test whether a compact
+bijection is reachable at all. This is research, not a finished codec.
 
 ## The corpus
 
