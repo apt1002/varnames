@@ -58,7 +58,7 @@ varnames/
 │   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
-│   ├── TREE_WORDS.md                    # dictionary (pair-merge) model + merge delta
+│   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior for the word adjacency
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
@@ -89,7 +89,8 @@ varnames/
 │   ├── symmetry_check.py                # left/right reversal-symmetry sanity check
 │   ├── check_merge_delta.py             # regression test for the tree-words merge delta
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
-│   ├── tree_words.py                    # pair-merge dictionary + word x word adjacency model
+│   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
+│   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency (A3/A4)
 │   └── run_sweep.sh                     # run the analyses over all thresholds
 └── data/

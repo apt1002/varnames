@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-"""Word-level (pair-merge) model for `docs/TREE_WORDS.md`.
+"""Word-level (run-aware pair-merge) model for `docs/TREE_WORDS.md`.
 
-Builds the dictionary by the greedy pair-merge rule of TREE_WORDS.md, tokenises
-a corpus with it (a *dictionary split*: only word boundaries matter, the
-characters inside a word are not looked at), and counts the word x word
-adjacency of the tokenised, cyclic corpus.
+The dictionary is the **run-aware** rule of `docs/TREE_WORDS.md` §9.1.  Repeat
+`NUM_PAIRS` times: find the most common length-2 substring `uv` of *words*; if
+`u != v` merge it (ordinary BPE); if `u == v` **collapse every maximal run
+`u^k` (`k >= 2`) to a flat word `(u^k)`, one word per observed run length**.
 
-Dictionary.  Start with the set of words = the single characters.  Repeat
-`NUM_PAIRS` times: find the most common length-2 substring `uv` of *words* in
-the corpus, add `(uv)` as a word, and replace every occurrence of `uv`.
-Occurrences inside brackets are not looked at, i.e. this is ordinary BPE.  The
-stop character `\\n` is a separator, not a word: it is never merged across (a
-word spanning two identifiers would be meaningless).
+A run word `(u^k)` is a single **`k`-ary** node with `lc((u^k)) = rc((u^k)) = u`
+(it is *not* `k-1` nested binary merges).  This replaces the earlier plain
+pair-merge rule, which is obsolete.
 
-Tokenising.  Replay the wordlist in creation order, replacing each occurrence in
-turn; equivalently, merge the lowest-ranked adjacent pair until no rule applies.
+Effects of a run collapse are exact: a maximal run of length `L` becomes the
+word `(u^L)` if that word was created, else is left as `L` copies of `u` (so a
+run of an uncreated length never turns into adjacent equal run words).
 
-Counts.  After tokenising an identifier the cyclic sequence is `tokens + [\\n]`;
-the adjacency matrix counts its cyclic word bigrams.  Hence `N(\\n) =` number of
-strings and `sum_v N(u,v) = N(u)` for every word `u`, the identity the
-`CS = S1 - S2` derivation relies on.
+Tokenising replays the rules in creation order.  Consecutive *pair* rules are
+merged with a linked-list "lowest-ranked adjacent pair" pass; a *run* rule is a
+leftmost maximal-run replacement with greedy longest match (so unseen run
+lengths decompose, e.g. `L = 4` with only `(u^2)` present becomes `(u^2)(u^2)`).
 
-Symbol ids: `0..len(chars)-1` are the characters, `len(chars)` is the stop
-`\\n`, and `len(chars)+1+r` is the word created by merge `r`.
+Counts.  Each identifier is the cycle `tokens + [\n]`; the adjacency matrix
+counts its cyclic word bigrams, so `N(\n) =` number of strings and
+`sum_v N(u,v) = N(u)` for every word `u`.
+
+Symbol ids: `0..len(chars)-1` are the characters, `len(chars)` is `\n`, and
+`len(chars)+1+r` is the word (pair or run) created at rank `r`.
 
 Usage:
     tree_words.py train --corpus work/camel/merged_training.txt \\
         --num-pairs 256 --sample 100000 --outdir work/tw256
-    tree_words.py stats --dir work/tw256 --corpus work/camel/merged_validation.txt
+    tree_words.py stats --dir work/tw256
+    tree_words.py score --dir work/tw256 --corpus work/camel/merged_validation.txt
 """
 import argparse
 import heapq
@@ -58,29 +61,50 @@ def read_lines(path, stride=0, limit=0):
 
 
 def build_dictionary(lines, num_pairs, verbose=False):
-    """Greedy pair-merge (BPE).  Returns (chars, wordlist, sym)."""
+    """Run-aware greedy dictionary.  Returns `(chars, rules, sym)`.
+
+    `rules[r]` is `('pair', (a, b), new_id)` or `('run', a, [(k, new_id), ...])`
+    in creation order; ids are `len(chars)+1+r` in order.
+    """
     chars = sorted(set(''.join(lines)))
     cid = {c: i for i, c in enumerate(chars)}
     sym = list(chars) + [STOP]
     seqs = [[cid[c] for c in s] for s in lines]
+    rules = []
+    next_id = len(chars) + 1
+    budget = num_pairs
 
     cnt = Counter()
     pos = {}
+    heap = []
+    for si, seq in enumerate(seqs):
+        for j in range(len(seq) - 1):
+            p = (seq[j], seq[j + 1])
+            pos.setdefault(p, set()).add((si, j))
+            cnt[p] += 1
+    heap[:] = [(-c, p) for p, c in cnt.items() if c > 1]
+    heapq.heapify(heap)
+
+    def rebuild():
+        cnt.clear()
+        pos.clear()
+        for si, seq in enumerate(seqs):
+            for j in range(len(seq) - 1):
+                if seq[j] is None or seq[j + 1] is None:
+                    continue
+                p = (seq[j], seq[j + 1])
+                pos.setdefault(p, set()).add((si, j))
+                cnt[p] += 1
+        heap[:] = [(-c, p) for p, c in cnt.items() if c > 1]
+        heapq.heapify(heap)
 
     def decr(si, p, j):
         s = pos.get(p)
         if s is not None and (si, j) in s:
             s.discard((si, j))
             cnt[p] -= 1
-
-    for si, seq in enumerate(seqs):
-        for j in range(len(seq) - 1):
-            p = (seq[j], seq[j + 1])
-            pos.setdefault(p, set()).add((si, j))
-            cnt[p] += 1
-
-    heap = [(-c, p) for p, c in cnt.items() if c > 1]
-    heapq.heapify(heap)
+            if cnt[p] > 1:                   # keep a valid heap key for `p`
+                heapq.heappush(heap, (-cnt[p], p))
 
     def incr(si, p, j):
         s = pos.setdefault(p, set())
@@ -89,57 +113,146 @@ def build_dictionary(lines, num_pairs, verbose=False):
             cnt[p] += 1
             heapq.heappush(heap, (-cnt[p], p))
 
-    def rebuild():
-        return [(-c, p) for p, c in cnt.items() if c > 1]
-
-    wordlist = []
-    next_id = len(chars) + 1
-    for step in range(num_pairs):
+    step = 0
+    while budget > 0:
+        p = None
         while heap:
-            neg, p = heapq.heappop(heap)
-            if cnt.get(p, 0) == -neg and -neg > 1:
+            neg, pp = heapq.heappop(heap)
+            if cnt.get(pp, 0) == -neg and -neg > 1:
+                p = pp
                 break
-        else:
+        if p is None:
             break
-        a, b = p
+
+        if p[0] == p[1]:                                   # doubled -> run step
+            a = p[0]
+            # drop the `None` holes left by earlier pair merges so run
+            # detection and `rebuild` see clean, indexable arrays
+            for idx in range(len(seqs)):
+                if None in seqs[idx]:
+                    seqs[idx] = [x for x in seqs[idx] if x is not None]
+            lengths = Counter()
+            for seq in seqs:
+                i = 0
+                n = len(seq)
+                while i < n:
+                    if seq[i] == a:
+                        j = i
+                        while j < n and seq[j] == a:
+                            j += 1
+                        if j - i >= 2:
+                            lengths[j - i] += 1
+                        i = j
+                    else:
+                        i += 1
+            if not lengths:                                # no actual run: skip
+                continue
+            else:
+                order = sorted(lengths, key=lambda k: (-lengths[k], k))
+                created = []
+                for k in order:
+                    if budget <= 0:
+                        break
+                    nid = next_id
+                    next_id += 1
+                    sym.append(sym[a] * k)
+                    created.append((k, nid))
+                    budget -= 1
+                cmap = dict(created)
+                for idx in range(len(seqs)):
+                    seq = seqs[idx]
+                    out = []
+                    i = 0
+                    n = len(seq)
+                    while i < n:
+                        if seq[i] == a:
+                            j = i
+                            while j < n and seq[j] == a:
+                                j += 1
+                            Lr = j - i
+                            if Lr >= 2:
+                                kmax = max(cmap)
+                                rem = Lr
+                                while rem > 0:
+                                    k = min(rem, kmax)
+                                    while k > 1 and k not in cmap:
+                                        k -= 1
+                                    if k in cmap:
+                                        out.append(cmap[k])
+                                        rem -= k
+                                    else:
+                                        out.extend([a] * rem)
+                                        rem = 0
+                            else:
+                                out.extend([a] * Lr)
+                            i = j
+                        else:
+                            out.append(seq[i])
+                            i += 1
+                    seqs[idx] = out
+                rules.append(('run', a, created))
+                step += 1
+                rebuild()
+                if verbose and step % 500 == 0:
+                    print(f"  step {step} run {sym[a]}* "
+                          f"({len(created)} words) vocab {len(sym)}", flush=True)
+                continue
+
+        a, b = p                                            # ordinary pair merge
         positions = list(pos.pop(p, ()))
         new = next_id
         next_id += 1
         sym.append(sym[a] + sym[b])
-        wordlist.append((a, b))
+        rules.append(('pair', (a, b), new))
         for si, i in positions:
             s = seqs[si]
-            if i + 1 >= len(s) or s[i] is None or s[i + 1] is None:
+            if i >= len(s) or s[i] is None or s[i] != a:
                 continue
-            if s[i] != a or s[i + 1] != b:
+            ri = i + 1                       # true right token of the pair
+            while ri < len(s) and s[ri] is None:
+                ri += 1
+            if ri >= len(s) or s[ri] != b:
                 continue
-            left = s[i - 1] if i - 1 >= 0 else None
-            right = s[i + 2] if i + 2 < len(s) else None
-            decr(si, (a, b), i)
+            li = i - 1                       # true left neighbour (skip holes)
+            while li >= 0 and s[li] is None:
+                li -= 1
+            rr = ri + 1                      # token after `b` (skip holes)
+            while rr < len(s) and s[rr] is None:
+                rr += 1
+            left = s[li] if li >= 0 else None
+            right = s[rr] if rr < len(s) else None
             if left is not None:
-                decr(si, (left, a), i - 1)
+                decr(si, (left, a), li)
             if right is not None:
-                decr(si, (b, right), i + 1)
+                decr(si, (b, right), ri)
             s[i] = new
-            s[i + 1] = None
+            s[ri] = None
             if left is not None:
-                incr(si, (left, new), i - 1)
+                incr(si, (left, new), li)
             if right is not None:
                 incr(si, (new, right), i)
+        cnt[p] = 0                       # all occurrences consumed by the merge
+        budget -= 1
+        step += 1
         if len(heap) > 4 * len(cnt) + 4096:
-            heap = rebuild()
+            heap[:] = [(-c, pp) for pp, c in cnt.items() if c > 1]
             heapq.heapify(heap)
-        if verbose and (step + 1) % 500 == 0:
-            print(f"  merge {step + 1}/{num_pairs} {sym[new]!r} "
-                  f"(cnt {(-neg)}) vocab {len(sym)}", flush=True)
-    return chars, wordlist, sym
+        if verbose and step % 500 == 0:
+            print(f"  step {step} pair {sym[new]!r} vocab {len(sym)}", flush=True)
+    return chars, rules, sym
 
 
-def save_dictionary(outdir, chars, wordlist, sym):
+def save_dictionary(outdir, chars, rules, sym):
     with open(os.path.join(outdir, 'dict.txt'), 'w', encoding='ascii') as f:
         f.write('\t'.join(c if c != STOP else STOP_LABEL for c in chars) + '\n')
-        for a, b in wordlist:
-            f.write(f"{a}\t{b}\n")
+        for item in rules:
+            if item[0] == 'pair':
+                _, (a, b), _nid = item
+                f.write(f"P\t{a}\t{b}\n")
+            else:
+                _, a, created = item
+                f.write("R\t" + str(a) + "\t"
+                        + "\t".join(str(k) for k, _ in created) + "\n")
     np.save(os.path.join(outdir, 'sym.npy'), np.array(
         [w if w != STOP else STOP_LABEL for w in sym]))
 
@@ -147,54 +260,89 @@ def save_dictionary(outdir, chars, wordlist, sym):
 def load_dictionary(outdir):
     sym = [str(x) for x in np.load(os.path.join(outdir, 'sym.npy'))]
     chars = [s for s in sym if len(s) == 1 and s != STOP_LABEL]
-    wordlist = []
+    nchars = len(chars)
+    rules = []
+    next_id = nchars + 1
     with open(os.path.join(outdir, 'dict.txt'), 'r', encoding='ascii') as f:
-        next(f)                                   # the charset line
+        next(f)                                          # the charset line
         for line in f:
-            a, b = line.rstrip('\n').split('\t')
-            wordlist.append((int(a), int(b)))
-    return chars, wordlist, sym
+            parts = line.rstrip('\n').split('\t')
+            if parts[0] == 'P':
+                a, b = int(parts[1]), int(parts[2])
+                rules.append(('pair', (a, b), next_id))
+                next_id += 1
+            else:
+                a = int(parts[1])
+                created = [(int(k), next_id + i)
+                           for i, k in enumerate(parts[2:])]
+                rules.append(('run', a, created))
+                next_id += len(created)
+    return chars, rules, sym
 
 
-def make_rank(wordlist, nchars):
-    """rank[(a,b)] = creation order; merged symbol id = nchars+1+rank."""
-    return {p: r for r, p in enumerate(wordlist)}
+def make_plan(rules, nchars):
+    """Compile the rule list into a tokenisation plan: alternating
+    `('pairs', {(a,b): (rank, new_id)})` blocks and `('run', a, {k: new_id})`
+    rules, in creation order.  Rank `r` has word id `nchars+1+r`."""
+    plan = []
+    block = {}
+    rank = 0
+    for item in rules:
+        if item[0] == 'pair':
+            _, (a, b), _nid = item
+            block[(a, b)] = (rank, nchars + 1 + rank)
+            rank += 1
+        else:
+            _, a, created = item
+            if block:
+                plan.append(('pairs', block))
+                block = {}
+            plan.append(('run', a, {k: nid for k, nid in created}))
+            rank += len(created)
+    if block:
+        plan.append(('pairs', block))
+    return plan
 
 
-def tokenize(s, char_id, rank, nchars):
-    """Merge the lowest-ranked adjacent pair until no rule applies.
-
-    Equivalent to replaying the wordlist in creation order ("for each `uv`, in
-    turn, replace every occurrence") and, because a newly created pair always
-    has a higher rank than the rule that made it, equivalent to repeatedly
-    merging the *lowest-ranked* adjacent pair.  A doubly linked list over the
-    tokens avoids index shifting when a pair is merged.
-    """
-    ids = [char_id[c] for c in s]
-    n = len(ids)
-    nxt = list(range(1, n + 1))          # n is a sentinel past the end
+def _apply_pair_block(tokens, rank_map):
+    """Merge the lowest-ranked applicable adjacent pair repeatedly (the block's
+    pair rules all apply before any later rule; within the block lowest rank
+    first).  Doubly linked list, so no index shifting on a merge."""
+    n = len(tokens)
+    if n < 2:
+        return tokens
+    nxt = list(range(1, n + 1))
     prv = list(range(-1, n - 1))
     dead = [False] * n
+    val = tokens[:]
     h = []
 
+    def best(i):
+        if not (0 <= i < n) or dead[i]:
+            return None
+        j = nxt[i]
+        if j >= n or dead[j]:
+            return None
+        return rank_map.get((val[i], val[j]))
+
     def push(i):
-        if 0 <= i < n and not dead[i]:
-            j = nxt[i]
-            if j < n and not dead[j]:
-                r = rank.get((ids[i], ids[j]))
-                if r is not None:
-                    heapq.heappush(h, (r, i))
+        b = best(i)
+        if b is not None:
+            heapq.heappush(h, (b[0], i))
 
     for i in range(n):
         push(i)
     while h:
         r, i = heapq.heappop(h)
-        if dead[i]:
+        b = best(i)
+        if b is None:
             continue
+        if b[0] != r:
+            heapq.heappush(h, (b[0], i))
+            continue
+        _, newid = b
         j = nxt[i]
-        if j >= n or dead[j] or rank.get((ids[i], ids[j])) != r:
-            continue
-        ids[i] = nchars + 1 + r
+        val[i] = newid
         dead[j] = True
         nxt[i] = nxt[j]
         if nxt[j] < n:
@@ -202,24 +350,62 @@ def tokenize(s, char_id, rank, nchars):
         push(prv[i])
         push(i)
     out = []
-    i = 0 if n else n
+    i = 0
     while i < n:
-        out.append(ids[i])
+        out.append(val[i])
         i = nxt[i]
     return out
 
 
-def count_adjacency(lines, chars, wordlist, sym):
+def _apply_run(tokens, a, lenmap):
+    """Replace each maximal run of `a`: the exact-length word if present, else
+    a greedy longest-match decomposition (leftover `a`'s kept as `a`)."""
+    if not lenmap:
+        return tokens
+    kmax = max(lenmap)
+    out = []
+    i = 0
+    n = len(tokens)
+    while i < n:
+        if tokens[i] == a:
+            j = i
+            while j < n and tokens[j] == a:
+                j += 1
+            rem = j - i
+            while rem > 0:
+                k = min(rem, kmax)
+                while k not in lenmap and k > 1:
+                    k -= 1
+                if k in lenmap:
+                    out.append(lenmap[k])
+                    rem -= k
+                else:
+                    out.extend([a] * rem)
+                    rem = 0
+            i = j
+        else:
+            out.append(tokens[i])
+            i += 1
+    return out
+
+
+def tokenize(s, char_id, plan, nchars):
+    toks = [char_id[c] for c in s]
+    for item in plan:
+        if item[0] == 'pairs':
+            toks = _apply_pair_block(toks, item[1])
+        else:
+            toks = _apply_run(toks, item[1], item[2])
+    return toks
+
+
+def count_adjacency(lines, char_id, plan, nchars):
     """Count cyclic word bigrams and unigrams over `lines`."""
-    nchars = len(chars)
-    char_id = {c: i for i, c in enumerate(chars)}
-    rank = make_rank(wordlist, nchars)
     stop = nchars
     big = Counter()
     uni = Counter()
     for s in lines:
-        toks = tokenize(s, char_id, rank, nchars)
-        seq = toks + [stop]
+        seq = tokenize(s, char_id, plan, nchars) + [stop]
         n = len(seq)
         for i in range(n):
             uni[seq[i]] += 1
@@ -230,39 +416,26 @@ def count_adjacency(lines, chars, wordlist, sym):
 _W = {}
 
 
-def _init_worker(char_id, rank, nchars):
+def _init_worker(char_id, plan, nchars):
     _W['char_id'] = char_id
-    _W['rank'] = rank
+    _W['plan'] = plan
     _W['nchars'] = nchars
 
 
 def _count_chunk(lines):
-    char_id, rank, nchars = _W['char_id'], _W['rank'], _W['nchars']
-    stop = nchars
-    big = Counter()
-    uni = Counter()
-    for s in lines:
-        toks = tokenize(s, char_id, rank, nchars)
-        seq = toks + [stop]
-        n = len(seq)
-        for i in range(n):
-            uni[seq[i]] += 1
-            big[(seq[i], seq[(i + 1) % n])] += 1
-    return big, uni
+    return count_adjacency(lines, _W['char_id'], _W['plan'], _W['nchars'])
 
 
-def count_adjacency_parallel(lines, chars, wordlist, sym, jobs=1, chunksize=2000):
+def count_adjacency_parallel(lines, char_id, plan, nchars, jobs=1,
+                             chunksize=2000):
     if jobs <= 1:
-        return count_adjacency(lines, chars, wordlist, sym)
+        return count_adjacency(lines, char_id, plan, nchars)
     import multiprocessing as mp
-    nchars = len(chars)
-    char_id = {c: i for i, c in enumerate(chars)}
-    rank = make_rank(wordlist, nchars)
     big = Counter()
     uni = Counter()
     chunks = [lines[i:i + chunksize] for i in range(0, len(lines), chunksize)]
     with mp.Pool(jobs, initializer=_init_worker,
-                 initargs=(char_id, rank, nchars)) as pool:
+                 initargs=(char_id, plan, nchars)) as pool:
         for b, u in pool.imap_unordered(_count_chunk, chunks):
             big.update(b)
             uni.update(u)
@@ -288,16 +461,18 @@ def cmd_train(args):
     build = read_lines(args.corpus, stride=args.sample)
     print(f"dictionary corpus {args.corpus}: {len(build)} lines "
           f"(stride {args.sample or 1})", flush=True)
-    chars, wordlist, sym = build_dictionary(build, args.num_pairs, verbose=True)
-    print(f"dictionary: {len(wordlist)} merges, vocab {len(sym)}", flush=True)
-    save_dictionary(outdir, chars, wordlist, sym)
+    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True)
+    print(f"dictionary: {len(rules)} rules, vocab {len(sym)}", flush=True)
+    save_dictionary(outdir, chars, rules, sym)
     with open(os.path.join(outdir, 'meta.json'), 'w') as f:
         json.dump(dict(corpus=args.corpus, num_pairs=args.num_pairs,
-                       sample=args.sample, nlines=len(build)), f)
+                       sample=args.sample, nlines=len(build), runs=True), f)
 
+    char_id = {c: i for i, c in enumerate(chars)}
+    plan = make_plan(rules, len(chars))
     full = read_lines(args.corpus, stride=0)
     print(f"tokenising {len(full)} lines", flush=True)
-    big, uni = count_adjacency_parallel(full, chars, wordlist, sym,
+    big, uni = count_adjacency_parallel(full, char_id, plan, len(chars),
                                         jobs=args.jobs)
     write_adj(outdir, big, uni, sym)
     print(f"adjacency: {len(big)} distinct bigrams, "
@@ -327,17 +502,13 @@ def reference_probabilities(big, uni, kappa=1000.0):
     return big, den, T, alpha
 
 
-def score_lines(lines, chars, wordlist, sym, big, uni, T, alpha, kappa=1000.0):
+def score_lines(lines, char_id, plan, nchars, big, uni, T, alpha):
     """Ideal arithmetic code length (bits) of each identifier's tokenisation."""
-    nchars = len(chars)
-    char_id = {c: i for i, c in enumerate(chars)}
-    rank = make_rank(wordlist, nchars)
     stop = nchars
     log2 = 1.0 / np.log(2.0)
     out = []
     for s in lines:
-        toks = tokenize(s, char_id, rank, nchars)
-        seq = toks + [stop]
+        seq = tokenize(s, char_id, plan, nchars) + [stop]
         n = len(seq)
         bits = 0.0
         for i in range(n):
@@ -351,23 +522,25 @@ def score_lines(lines, chars, wordlist, sym, big, uni, T, alpha, kappa=1000.0):
 
 
 def cmd_stats(args):
-    chars, wordlist, sym = load_dictionary(args.dir)
+    chars, rules, sym = load_dictionary(args.dir)
     big, uni, V = load_adj(args.dir)
-    print(f"vocab {V}, merges {len(wordlist)}, distinct bigrams {len(big)}, "
-          f"N={int(uni.sum())}, N(stop)={int(uni[len(chars)])}")
+    nruns = sum(1 for r in rules if r[0] == 'run')
+    print(f"vocab {V}, rules {len(rules)} ({nruns} run), distinct bigrams "
+          f"{len(big)}, N={int(uni.sum())}, N(stop)={int(uni[len(chars)])}")
 
 
 def cmd_score(args):
-    chars, wordlist, sym = load_dictionary(args.dir)
+    chars, rules, sym = load_dictionary(args.dir)
     big, uni, V = load_adj(args.dir)
+    char_id = {c: i for i, c in enumerate(chars)}
+    plan = make_plan(rules, len(chars))
     _, den, T, alpha = reference_probabilities(big, uni, kappa=args.kappa)
     lines = read_lines(args.corpus, stride=args.stride)
     print(f"scoring {len(lines)} held-out identifiers "
           f"(vocab {V}, kappa {args.kappa})", flush=True)
     import time
     t = time.time()
-    bits = score_lines(lines, chars, wordlist, sym, big, uni, T, alpha,
-                       kappa=args.kappa)
+    bits = score_lines(lines, char_id, plan, len(chars), big, uni, T, alpha)
     bits = np.array(bits)
     print(f"tokenised in {time.time()-t:.0f}s")
     budgets = [int(x) for x in args.budgets.split(',')]
@@ -389,7 +562,6 @@ def main():
     tr.set_defaults(func=cmd_train)
     st = sub.add_parser('stats')
     st.add_argument('--dir', required=True)
-    st.add_argument('--corpus', default=None)
     st.set_defaults(func=cmd_stats)
     sc = sub.add_parser('score')
     sc.add_argument('--dir', required=True)

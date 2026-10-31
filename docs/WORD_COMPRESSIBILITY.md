@@ -1,6 +1,6 @@
 # Word-level (dictionary) compressibility of identifiers
 
-This note applies the pair-merge **dictionary model** of
+This note applies the **run-aware dictionary model** of
 [`TREE_WORDS.md`](TREE_WORDS.md) to estimate the ideal compressed size of
 identifiers, in the same style as the character-level study
 [`CODE_LENGTHS.md`](CODE_LENGTHS.md), so the two can be compared.
@@ -12,16 +12,19 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
 
 ## The model
 
-1. **Dictionary.**  Build the word list by the greedy pair-merge rule of
-   `TREE_WORDS.md` on the **training** corpus: start from the single characters,
-   then `NUM_PAIRS` times find the most common length-2 substring `uv` of words
-   and replace every occurrence of `uv` by the new word `(uv)`.  The stop
-   character `\n` is a **separator**, never merged across (a word spanning two
-   identifiers is meaningless), and occurrences are replaced left-to-right,
-   non-overlapping (so runs such as `uuu` are not a special case).
+1. **Dictionary.**  Build the word list by the greedy **run-aware** rule of
+   `TREE_WORDS.md` §9.1 (A2) on the **training** corpus: start from the single
+   characters, then repeat `NUM_PAIRS` times — find the most common length-2
+   substring `uv` of words; if `u ≠ v` merge it (ordinary BPE); if `u = v`
+   **collapse every maximal run `u^k` (`k ≥ 2`) to a flat word `(u^k)`**, one
+   word per observed run length (a `k`-ary node, *not* `k−1` nested merges).
+   The stop character `\n` is a **separator**, never merged across (a word
+   spanning two identifiers is meaningless).
 
 2. **Tokenise.**  An identifier is tokenised by replaying the word list in
-   creation order, i.e. by repeatedly merging its lowest-ranked adjacent pair.
+   creation order: consecutive pair rules are applied by repeatedly merging the
+   *lowest-ranked* adjacent pair, and a run rule replaces each maximal run `u^k`
+   by `(u^k)` if that word exists, else by a greedy longest-match decomposition.
    This is a *dictionary split*: only word boundaries matter, the characters
    inside a word are not looked at.
 
@@ -50,14 +53,12 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
    The **success rate** at budget `B` is the fraction of held-out *distinct*
    identifiers with `L(id) <= B`.
 
-> **Caveat — the dictionary here uses `(uu)` pairs, not `(u^k)` runs.**
-> Step 1 is the *plain* pair-merge rule: a run `u^k` is built by ordinary BPE
-> into **nested** words `(uu)`, `((uu)u)`, … , not a single flat `(u^k)`.
-> `docs/TREE_WORDS.md` §9.1 and `docs/DICTIONARY_RULES.md` §A4 show the flat
-> **run-aware** rule is preferable (it beats plain BPE whenever there is run
-> mass, and is the sign-safe rule).  So the numbers below — and C1–C3 generally
-> — are produced on the *inferior* rule and should be regenerated with a
-> run-aware dictionary; see PLAN C6.
+> This is the **run-aware** rule (C6).  The previous version of this note used a
+> plain pair-merge dictionary that built a run `u^k` out of *nested* words
+> `(uu)`, `((uu)u)`, … ; `TREE_WORDS.md` §9.1 and `DICTIONARY_RULES.md` §A4 show
+> the flat `(u^k)` rule is preferable (it beats plain BPE whenever there is run
+> mass and is the sign-safe rule), so all numbers here were regenerated on it.
+> Those plain-pair artifacts are obsolete and live only in git history.
 
 ## Setup
 
@@ -75,9 +76,9 @@ Word-level model (held-out validation, `kappa = 1000`):
 
 | `NUM_PAIRS` | vocab `V` | distinct word bigrams | mean bits | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|
-| 96 | 160 | 5,972 | 73.24 | 50.1% | 92.1% |
-| 512 | 576 | 12,598 | 68.80 | 55.8% | 93.8% |
-| 2,040 | 2,104 | 39,491 | 63.95 | 61.7% | 95.6% |
+| 96 | 160 | 20,499 | 64.86 | 60.7% | 95.2% |
+| 512 | 576 | 149,932 | 54.05 | 74.1% | 97.9% |
+| 2,040 | 2,104 | 802,606 | 45.79 | 85.0% | 99.2% |
 
 Character-level model (`CODE_LENGTHS.md`, same corpus), at the nearest
 vocabulary sizes:
@@ -90,41 +91,45 @@ vocabulary sizes:
 
 ## What it shows
 
-* **At a small dictionary the two models are close** (vocab ≈ 160: 73.2 vs
-  71.5 mean bits, 50.1% vs 52.3% in 64 bits).
-* **At equal dictionary size the character model pulls ahead sharply.**  At
-  vocab ≈ 2,100 the word model needs 63.9 bits against the character model's
-  55.2, and fits 61.7% against 72.6% in 64 bits.  The gap grows with the
-  dictionary: the word model adds a word at a time and pays for each word with a
-  single bigram factor, whereas the character model spends its contexts on
-  *variable-order suffix* contexts and can look several characters back.
+* **At a small dictionary the two models are close** (vocab ≈ 160: 64.9 vs
+  71.5 mean bits, 60.7% vs 52.3% in 64 bits) — the word model is already ahead.
+* **At equal dictionary size the word model now wins, and the gap grows with
+  the dictionary.**  At vocab ≈ 576 the word model needs 54.1 bits against an
+  interpolated ≈ 63 for the character model (between its 159-context 71.5 and
+  911-context 60.2 points) and fits 74.1% against ≈ 59% in 64 bits; at
+  vocab ≈ 2,100 it needs 45.8 bits against 55.2 and fits 85.0% against 72.6%.
+* Plausibly the reason is that an identifier is a *sequence of morphemes*
+  (`get`, `User`, `Count`, `ion`, …): a word bigram table spends one bigram per
+  morpheme boundary where the character model spends a variable-order suffix
+  context per character.  Once the dictionary holds the common morphemes, the
+  word model captures the short-range morpheme-to-morpheme dependence directly —
+  and the run-aware rule (flat `(u^k)` words) keeps runs of repeated characters
+  cheap (e.g. `ss`, `tt`, `---`) instead of paying for them character by
+  character.
 * This is a fair comparison of *models at a dictionary size*, not of *orders*:
   the word model is a first-order word Markov model, the character model is an
-  effectively unbounded-order character model.  The pair-merge dictionary is
-  also greedy by frequency, not by code length, so its words are good for
-  *counting*, not chosen to minimise bits.
-* The word model still buys real compression over the char model's crude end of
-  its range, and needs no variable-order context machinery — only a word list
-  and one bigram table.
+  effectively unbounded-order character model.  Neither buys any context
+  machinery beyond its table.
+* The word model needs no variable-order context machinery — only a word list
+  and one bigram table — and is now the better rate estimator at every tested
+  size.
 
 ## kappa for the word matrix
 
-`kappa = 1000` (the `ADJACENCY_MATRIX.md` default, tuned on the character
-context matrices) is **conservative** here.  On the `NUM_PAIRS = 2040` model the
-held-out fit is essentially flat for `kappa` in `3 … 300` and only degrades past
-`1000`:
+The word bigram matrix is **denser** than the character context matrix, so it
+needs less prior.  On the `NUM_PAIRS = 2040` model (a stride-3 held-out sample,
+76,512 identifiers, so a larger absolute rate than the full-table above), the
+held-out fit is optimised near `kappa ≈ 100–300` and degrades at both ends:
 
-| `kappa` | 0 | 3 | 10 | 30 | 100 | 300 | 1000 | 3000 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| mean bits | ∞ | 63.74 | 63.74 | 63.74 | 63.75 | 63.80 | 64.07 | 64.97 |
-| fit ≤64 | 61.3% | 61.5% | 61.5% | 61.5% | 61.5% | 61.4% | 61.0% | 59.9% |
+| `kappa` | 3 | 10 | 30 | 100 | 300 | 1000 | 3000 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| mean bits | 46.31 | 46.08 | 45.88 | 45.69 | 45.60 | 45.80 | 46.72 |
+| fit ≤64 | 84.2% | 84.5% | 84.8% | 85.0% | 85.1% | 84.9% | 83.9% |
 
-`kappa = 0` diverges (unseen bigrams unrepresentable).  The word bigram matrix
-is *denser* than the character context matrix, so it needs less prior; a
-`kappa ≈ 30–100` would be the word-matrix analogue of the character default.
-The table above uses `kappa = 1000` so the two studies share one setting; the
-qualitative gap to `CODE_LENGTHS.md` is insensitive to this choice (a fraction
-of a bit).
+`kappa = 0` diverges (unseen bigrams unrepresentable).  A `kappa ≈ 100–300`
+would be the word-matrix analogue of the character default (`ADJACENCY_MATRIX.md`
+uses 1000); the difference is only ~0.2 bit, so the main table uses `kappa =
+1000` to share one setting with the character study.
 
 ## Reproducing
 
@@ -139,4 +144,12 @@ python3 scripts/tree_words.py score \
 
 `work/tw96`, `work/tw512`, `work/tw2040` hold the three dictionaries and their
 adjacency matrices (`adj.npz`: `rows`, `cols`, `data`, `uni`, `nvoc`;
-`dict.txt` / `sym.npy`: the word list).
+`dict.txt` / `sym.npy`: the word list).  `dict.txt` starts with the character
+set on its first line, then records each rule on its own line — `P a b` for a
+pair merge, `R a k1 k2 …` for a run rule that created the words
+`(a^k1), (a^k2), …`.
+
+`scripts/check_tree_words.py` is the regression test for the dictionary and
+tokeniser (builder against a from-scratch recount, fast plan replay against an
+independent replay, incremental bigrams against a direct count):
+`python3 scripts/check_tree_words.py --real`.

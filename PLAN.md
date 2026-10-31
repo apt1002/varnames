@@ -87,19 +87,19 @@ progress, `[x]` = done.
 ## C. Apply the dictionary model to `merged.txt`
 
 - [x] **C1. Word × word adjacency counts** by tokenising every string with the
-      pair-merge dictionary (dictionary-based split, *not* the character-level
-      split used so far).  `scripts/tree_words.py train` builds the greedy BPE
-      dictionary, tokenises the corpus and saves the cyclic word bigram matrix
-      (`work/tw{96,512,2040}/adj.npz`).
+      **run-aware** dictionary (dictionary-based split, *not* the character-level
+      split used so far).  `scripts/tree_words.py train` builds the greedy
+      run-aware dictionary, tokenises the corpus and saves the cyclic word
+      bigram matrix (`work/tw{96,512,2040}/adj.npz`).
 - [x] **C2. Fill unobserved adjacencies** with the current best-practice prior.
       The `kappa` prior of `ADJACENCY_MATRIX.md` §6 adapted to the word bigram
-      matrix (`tree_words.py score`); the matrix prefers `kappa ≈ 30–100`, not
+      matrix (`tree_words.py score`); the matrix prefers `kappa ≈ 100–300`, not
       the character default 1000 (documented + swept).
 - [x] **C3. Held-out compressibility** — sample identifiers, score under the
       model, report the fraction under 64 bits and 128 bits; compare with
       `docs/CODE_LENGTHS.md`.  `docs/WORD_COMPRESSIBILITY.md`.  At equal
-      dictionary size the character model wins clearly (vocab ≈ 2100: 55.2 vs
-      63.9 mean bits, 72.6% vs 61.7% in 64 bits).
+      dictionary size the **word model wins** (vocab ≈ 2100: 45.8 vs 55.2 mean
+      bits, 85.0% vs 72.6% in 64 bits); the gap grows with the dictionary.
 - [x] **C4. "Breaking open the pair" prior.** For an unobserved `(uv)w`, seed the
       count from the observed `vw` (recursively); when both words are pairs,
       break the later (rarer) one; base case = single characters.
@@ -147,13 +147,22 @@ progress, `[x]` = done.
         conserved.  So "prior frozen at creation" holds only until a cell is
         structurally invalidated.
 
-- [ ] **C6. Re-run C1–C3 with the run-aware dictionary (this is C5's
-      baseline).**  Make the run-aware rule (`(u^k)`, A2) the **only** dictionary
-      in `scripts/tree_words.py`; the plain pair-merge version is obsolete and
-      all records of it (outside git history) are removed.  Regenerate the
-      `tw*` artifacts and the held-out 64/128-bit table and rewrite
-      `docs/WORD_COMPRESSIBILITY.md` on the run-aware rule.  Its results are the
-      **baseline that C5 is compared against**.
+- [x] **C6. Re-run C1–C3 with the run-aware dictionary (this is C5's
+      baseline).**  The run-aware rule (`(u^k)`, A2) is now the **only**
+      dictionary in `scripts/tree_words.py`; the plain pair-merge version is
+      obsolete and all records of it (outside git history) are removed.
+      `tw*` artifacts and the held-out 64/128-bit table regenerated and
+      `docs/WORD_COMPRESSIBILITY.md` rewritten on the run-aware rule
+      (vocab 160/576/2104 → 64.86/54.05/45.79 mean bits).  **This is the
+      baseline C5 is compared against.**  *The plain-pair builder turned out to
+      carry an incremental-counting bug (it lost counts across the `None` holes
+      left by merges), so its old numbers were pessimistic; the rewritten
+      builder is verified against a from-scratch recount (`0` mismatches over
+      `6000` synthetic + real-data trials).*  The standing regression test is
+      `scripts/check_tree_words.py` — builder vs a from-scratch recount, fast
+      plan replay vs an independent replay, incremental bigrams vs a direct
+      count, plus the saved `tw*` dictionaries replayed end to end with
+      `--real`; all pass.
 
 ## Housekeeping / deferred regenerations
 
