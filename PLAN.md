@@ -59,6 +59,24 @@ progress, `[x]` = done.
       second order → sign/run-aware → cycle identity → remarks. Git history is
       the archive.
 
+- [ ] **A6. Run-fusion theory (mirror A1 for runs).** Repeat the A1 analysis for
+      the run-aware *run-fusion* step — collapse `u^k` to a flat `(u^k)` — rather
+      than for a pair merge: (i) prove it always reduces `CS` (the analogue of
+      `Δ ≤ 0`); (ii) decide whether `Δ = 0` in the genuine-Markov case, as A1 did
+      for pairs. *Looks harder than the pair case.* One step replaces a whole run
+      **and all run lengths at once** (several new words, one per length), so
+      there is no single `(u,v)` pair to hang the `A(x) / B(y) / Q` context
+      split on; the effect is the removal of the `k−1` internal `(u,u)`
+      self-loops plus the two new boundary bigrams at the run's ends, all
+      interacting through one new word each with its own in/out edges. Likely
+      the right handle is the conditional-entropy form (`TREE_WORDS.md` §7)
+      rather than the `m`-factorisation, since run-fusion moves `N(u)` and
+      `N(u,u)` together. *Status: empirical only* — `check_run_aware`
+      (`docs/TREE_WORDS.md` §9.1) finds `0` positive `Δ` over `41 167` enumerated
+      steps, with a heavier cross-check (`118 597` corpora × ≤40 steps; `4 000`
+      random run-heavy corpora × ≤60 steps) also clean; a symbolic proof and the
+      `Δ = 0`-under-Markov question are open.
+
 ## B. Adjacency matrix construction (new doc)
 
 - [x] **B1. New `docs/ADJACENCY_MATRIX.md`** — the canonical "how to build the
