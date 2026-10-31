@@ -96,7 +96,7 @@ vocabulary sizes:
 * **At equal dictionary size the word model now wins, and the gap grows with
   the dictionary.**  At vocab ≈ 576 the word model needs 54.1 bits against an
   interpolated ≈ 63 for the character model (between its 159-context 71.5 and
-  911-context 60.2 points) and fits 74.1% against ≈ 59% in 64 bits; at
+  911-context 60.2 points) and fits 74.1% against ≈ 63% in 64 bits; at
   vocab ≈ 2,100 it needs 45.8 bits against 55.2 and fits 85.0% against 72.6%.
 * Plausibly the reason is that an identifier is a *sequence of morphemes*
   (`get`, `User`, `Count`, `ion`, …): a word bigram table spends one bigram per
