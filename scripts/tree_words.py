@@ -404,6 +404,115 @@ def _apply_pair_block(tokens, rank_map):
     return out
 
 
+def _apply_pair_block_stack(tokens, rank_map):
+    """Tokenise one pair block with a precedence (operator) parser.
+
+    `rank_map[(a, b)] = (rank, new_id)`, lower rank binds tighter.  Keep a
+    stack; before pushing the next symbol reduce the top pair while its rank is
+    `<=` the rank of the pair it would form with the lookahead (left wins on
+    ties) -- i.e. reduce exactly the *local minima*.  Equivalent to the heap
+    version because the ranks are nested (a merge always outranks the merges
+    that built its operands), so the lowest-rank-first rule reduces local minima
+    only.  O(n) with plain list ops instead of a heap.
+    """
+    if len(tokens) < 2:
+        return tokens
+    stack = []
+    for t in tokens:
+        while len(stack) >= 2:
+            left = rank_map.get((stack[-2], stack[-1]))
+            if left is None:
+                break
+            right = rank_map.get((stack[-1], t))
+            if right is not None and left[0] > right[0]:
+                break                      # the pair with `t` binds tighter
+            stack[-2] = left[1]            # reduce the top pair
+            del stack[-1]
+        stack.append(t)
+    while len(stack) >= 2:                 # drain: no more lookahead
+        left = rank_map.get((stack[-2], stack[-1]))
+        if left is None:
+            break
+        stack[-2] = left[1]
+        del stack[-1]
+    return stack
+
+
+def _apply_pair_block_buckets(tokens, rank_map):
+    """Tokenise one pair block with an ascending-rank bucket queue.
+
+    Ranks are nested -- a merge's rank always exceeds the ranks that built its
+    operands -- so a merge never creates a pair with a lower rank than itself.
+    Hence sweeping ranks 0,1,2,... once, merging every still-valid pair found in
+    each bucket, performs the same merges as lowest-rank-first but in O(n) with
+    the distinct ranks spawned (small), not a full heap.  Linked list over
+    positions; stale entries are skipped.
+    """
+    n = len(tokens)
+    if n < 2 or not rank_map:
+        return tokens
+    nxt = list(range(1, n + 1))
+    prv = list(range(-1, n - 1))
+    dead = [False] * n
+    val = tokens[:]
+    buckets = {}
+    rank_heap = []
+    get = rank_map.get
+
+    for i in range(n - 1):                       # initial adjacent pairs
+        b = get((val[i], val[i + 1]))
+        if b is not None:
+            lst = buckets.get(b[0])
+            if lst is None:
+                buckets[b[0]] = [i]
+                heapq.heappush(rank_heap, b[0])
+            else:
+                lst.append(i)
+    while rank_heap:
+        r = rank_heap[0]
+        bucket = buckets[r]
+        if not bucket:
+            heapq.heappop(rank_heap)
+            del buckets[r]
+            continue
+        i = bucket.pop()
+        if dead[i]:
+            continue
+        j = nxt[i]
+        if j >= n or dead[j]:
+            continue
+        b = get((val[i], val[j]))
+        if b is None or b[0] != r:
+            continue
+        val[i] = b[1]
+        dead[j] = True
+        nxt[i] = nxt[j]
+        nj = nxt[j]
+        if nj < n:
+            prv[nj] = i
+        for k in (prv[i], i):                    # refresh the two neighbours
+            if k < 0 or dead[k]:
+                continue
+            jj = nxt[k]
+            if jj >= n or dead[jj]:
+                continue
+            bb = get((val[k], val[jj]))
+            if bb is None:
+                continue
+            lst = buckets.get(bb[0])
+            if lst is None:
+                buckets[bb[0]] = [k]
+                heapq.heappush(rank_heap, bb[0])
+            else:
+                lst.append(k)
+    out = []
+    i = 0
+    while i < n:
+        out.append(val[i])
+        i = nxt[i]
+    return out
+
+
 def _apply_run(tokens, a, lenmap):
     """Replace each maximal run of `a`: the exact-length word if present, else
     a greedy longest-match decomposition (leftover `a`'s kept as `a`)."""
@@ -437,10 +546,45 @@ def _apply_run(tokens, a, lenmap):
 
 
 def tokenize(s, char_id, plan, nchars):
+    """Tokenise with the ascending-rank bucket parser (production path)."""
+    toks = [char_id[c] for c in s]
+    for item in plan:
+        if item[0] == 'pairs':
+            toks = _apply_pair_block_buckets(toks, item[1])
+        else:
+            toks = _apply_run(toks, item[1], item[2])
+    return toks
+
+
+def tokenize_heap(s, char_id, plan, nchars):
+    """Reference tokeniser: the heap + linked-list pair blocks (see
+    `check_tree_words.py` / `tokenizer_bench.py`)."""
     toks = [char_id[c] for c in s]
     for item in plan:
         if item[0] == 'pairs':
             toks = _apply_pair_block(toks, item[1])
+        else:
+            toks = _apply_run(toks, item[1], item[2])
+    return toks
+
+
+def tokenize_stack(s, char_id, plan, nchars):
+    """Same as `tokenize` but with the precedence-parser pair blocks."""
+    toks = [char_id[c] for c in s]
+    for item in plan:
+        if item[0] == 'pairs':
+            toks = _apply_pair_block_stack(toks, item[1])
+        else:
+            toks = _apply_run(toks, item[1], item[2])
+    return toks
+
+
+def tokenize_buckets(s, char_id, plan, nchars):
+    """Same as `tokenize` but with the ascending-rank bucket-queue pair blocks."""
+    toks = [char_id[c] for c in s]
+    for item in plan:
+        if item[0] == 'pairs':
+            toks = _apply_pair_block_buckets(toks, item[1])
         else:
             toks = _apply_run(toks, item[1], item[2])
     return toks

@@ -128,6 +128,46 @@ constants (`0000`) of generated or bindgen-style code.
 | 14 | `KEYS_000000000000001B_REFLECTED` |
 | 10 | `__________` (case-normalised corpus) |
 
+## Word-level runs (repeated *words*, not characters)
+
+The run-aware rule collapses runs of any token, so the natural follow-up:
+do adjacent equal **multi-character words** ever appear?  Yes, but rarely.
+`scripts/word_runs.py` tokenises a held-out corpus and counts maximal blocks of
+one repeated *word*.
+
+Held-out (`merged_validation.txt`, 229 534 identifiers; raw character runs on
+the same text: 85 987):
+
+| dictionary | word-level runs | of which pair word | of which run word | share of char runs |
+|---|---:|---:|---:|---:|
+| `tw96` | 434 | 434 | 0 | 0.50 % |
+| `tw512` | 973 | 969 | 4 | 1.13 % |
+| `tw2040` | 409 | 404 | 5 | 0.48 % |
+
+So a repeated multi-character word occurs about **once per 500–2 000
+identifiers** — one or two orders of magnitude rarer than a character run —
+and almost always as a repeated *pair* word.  Almost all come from generated
+names that repeat a component:
+
+    AliasAliasAppearsInFromClause     AwsS3BucketBucketLifecycleConfiguration…
+    AttrAttrStringExt                 AwsEcsServiceServiceRegistriesList
+    AudioVideoVideoCamera             BuildBuildmode
+    InputInputInput                   CXCursor_TemplateTemplateParameter
+
+The handful of repeated *run* words are artifacts of the greedy
+longest-match decomposition of a very long character run, not a real word
+repeat: the 47-long `1` run in
+`a_long_function_name_111…111` decomposes as fifteen copies of `(1^3)` plus one
+`(1^2)`, and ten underscores decompose as `(_^4)(_^4)(_^2)`.
+
+**No dictionary actually builds a run word over a non-character base.**  Every
+`R` rule has a single-character base (`tw96`: `r`; `tw512`: `r f m _ s 1 0`;
+`tw2040` adds `e p d c`), so the `(u^k)` machinery only ever fires on
+characters.  Doubled *words* exist with non-trivial counts in the final matrix
+(largest `N(_0,_0) = 728` against `N(S,S) = 1 532` for the top character;
+3 957 vs 25 109 in total, ≈ 14 %), but they never became the globally most
+common pair at the moment a slot was free, so they were never collapsed.
+
 ## What it means for the dictionary
 
 * **The run-aware rule is effectively the doubled-pair rule.**  With 99.0 % of

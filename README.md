@@ -69,6 +69,7 @@ varnames/
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
+│   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
@@ -102,6 +103,7 @@ varnames/
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
 │   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
 │   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
+│   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency

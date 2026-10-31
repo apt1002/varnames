@@ -24,6 +24,8 @@ labels (see `README.md`).
       `docs/TREE_WORDS.md`, `scripts/check_merge_delta.py`.
 - [x] Typical run lengths of the corpus — `docs/RUN_LENGTHS.md`,
       `scripts/run_lengths.py`.
+- [x] Tokeniser speed (precedence parser vs ascending-rank buckets) —
+      `docs/TOKENISATION.md`, `scripts/tokenizer_bench.py`.
 
 ## A. Dictionary / pair-merge theory (`docs/TREE_WORDS.md`)
 
