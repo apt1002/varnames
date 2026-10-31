@@ -47,8 +47,9 @@ where
     break(a, b) = (rc(a), b)    if a is the later of the two,
                 = (a, lc(b))    if b is the later of the two,
 
-and `P` is the matrix of bigram probabilities `P(a,b) = M(a,b) / ΣM` for the
-`M` built so far (see §4 — this is the crux).  In words: to guess what follows
+and `P` is the **joint** matrix of bigram probabilities
+`P(a,b) = M(a,b) / ΣM` for the `M` built so far (see §4 — this is the crux;
+joint, not row-conditional — see §5).  In words: to guess what follows
 `a`, look at what follows the last piece of `a`; to guess what precedes `b`,
 look at what precedes the first piece of `b`.  Break the **later** word because
 it is the one whose *internal* structure carries less information (its children
@@ -129,15 +130,15 @@ its endpoints were born, whose `P` is the level's normalised matrix.  So the
 bottom-up iteration *is* the recursive pair-breaking, reordered so that `P`
 exists before it is asked for.
 
-## 5. Where the old draft's "shape" formula went
+## 5. Joint, not conditional
 
-An earlier draft wrote `M_ref(a,b) = N(a,b) + alpha·N(a)·S_b(a)` with a shape
-`S_b(a)` normalised over `b`.  That is **not** the rule; the prior mass is
-`alpha·P(break(a,b))` with `P` the joint `M/ΣM` (§2).  (If one wants the prior
-mass of a whole row to be independent of how often the boundary child occurs,
-one would instead use the *conditional* `P(y | rc(a)) = M(rc(a),y)/R(rc(a))`;
-that is a tuning choice, not the rule, and either way the existing `kappa` sweep
-re-tunes `alpha`.)
+Both `M` and `P` are the **joint** objects: `M(a,b)` is a count-like mass on the
+cell `(a,b)` (its row sums are *not* normalised), and `P(a,b) = M(a,b)/ΣM` is the
+**joint** bigram probability, summing to `1` over all cells.  So the prior mass
+of a cell is `alpha·P(break(a,b))` with this joint `P` — *not* a row-conditional
+`P(y | rc(a))`.  (An earlier draft used a row-normalised shape `alpha·N(a)·S_b(a)`;
+that is a different object and is rejected.)  The `kappa` sweep of
+`docs/ADJACENCY_MATRIX.md` §7 then re-tunes `alpha` as before.
 
 ## 6. Feasibility pass
 
@@ -181,11 +182,11 @@ train/test binomial thinning), not by row similarity.  Concretely:
 3. keep it only if it beats independence by more than noise *and* the win grows
    with sparsity — the signature the `kappa` prior showed.
 
-Open questions: whether the row prior should be the joint `P(rc(a), ·)` or the
-conditional `P(· | rc(a))` (§5); whether "break the later word" should instead
-break by depth, or by `N` (the first draft), or by wordlist order (chosen here,
-for determinism); and how the prior interacts with the *cyclic* structure (the
-target bigrams include `(a, \n)` and `(\n, b)`).
+Open questions: whether "break the later word" should instead break by depth or
+by `N` (the first draft), or by wordlist order (chosen here, for determinism);
+and how the prior interacts with the *cyclic* structure (the target bigrams
+include `(a, \n)` and `(\n, b)`).  (The joint-vs-conditional choice is settled:
+both `M` and `P` are the joint — §5.)
 
 Reproduce the table with the `tw2040` files and `scripts/tree_words.py`
 (`load_dictionary`, `load_adj`).
