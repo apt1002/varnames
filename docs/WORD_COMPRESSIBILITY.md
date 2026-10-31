@@ -50,6 +50,15 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
    The **success rate** at budget `B` is the fraction of held-out *distinct*
    identifiers with `L(id) <= B`.
 
+> **Caveat — the dictionary here uses `(uu)` pairs, not `(u^k)` runs.**
+> Step 1 is the *plain* pair-merge rule: a run `u^k` is built by ordinary BPE
+> into **nested** words `(uu)`, `((uu)u)`, … , not a single flat `(u^k)`.
+> `docs/TREE_WORDS.md` §9.1 and `docs/DICTIONARY_RULES.md` §A4 show the flat
+> **run-aware** rule is preferable (it beats plain BPE whenever there is run
+> mass, and is the sign-safe rule).  So the numbers below — and C1–C3 generally
+> — are produced on the *inferior* rule and should be regenerated with a
+> run-aware dictionary; see PLAN C6.
+
 ## Setup
 
 * Training corpus `work/camel/merged_training.txt` (2,065,806 identifiers),

@@ -140,6 +140,16 @@ progress, `[x]` = done.
         conserved.  So "prior frozen at creation" holds only until a cell is
         structurally invalidated.
 
+- [ ] **C6. Re-run C1–C3 with the run-aware dictionary.**  C1–C3 (and
+      `docs/WORD_COMPRESSIBILITY.md`) use the **plain pair-merge** rule, so a run
+      `u^k` is built as nested `(uu)`, `((uu)u)`, … .  A2/A4 show the flat
+      **run-aware** rule (`(u^k)`) is preferable, so add a `--runs` mode to
+      `scripts/tree_words.py` (build the run-aware dictionary, tokenise, count,
+      score) and regenerate the held-out 64/128-bit table, then update
+      `WORD_COMPRESSIBILITY.md`.  Depends on the A2 rule; independent of C5.
+      (Caveat noted inline in `WORD_COMPRESSIBILITY.md`; the current numbers
+      stand as the plain-BPE baseline for comparison.)
+
 ## Housekeeping / deferred regenerations
 
 - [x] **H1. Rebuild `work/*/pair_stats.txt` and `pair_factors_L*.npy`** with the
