@@ -118,6 +118,19 @@ The exact tie-break is, as ever, `Δ` (A3) — but on real data the frequency
 proxy is good enough, and the rule above needs only the two counts `N(u,v)` and
 the run-length histogram.
 
+**The predictor is just a pair count.**  A run `u^k` contains exactly `k − 1`
+adjacent `uu` pairs, so `(k − 1)·#runs(k)` counts the `uu` pairs *inside runs of
+length exactly k* (and `Σ_k (k − 1)·#runs(k) = N(u,u)`).  The rule above is
+therefore nothing more than the **most-common-pair rule** applied to the two
+candidates: count the `uu` joins against the `uv` joins and take the larger.
+The only subtlety is *which* `uu` count a candidate owns — a **single** run word
+claims just one length's slice, so it can lose to `(uv)` even when
+`N(u,u) > N(u,v)`; the **full** run-aware rule claims every length at once, so
+it *is* exactly `N(u,u) > N(u,v)`.  The genuinely new part of A4 is not the
+*selection* (still most-common-pair) but the *action*: when the top pair is a
+doubled word, collapse the run instead of merging two copies — which is why
+run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.
+
 ## Caveats
 
 * In-sample `CS` is gameable, so every comparison here is held-out; the
