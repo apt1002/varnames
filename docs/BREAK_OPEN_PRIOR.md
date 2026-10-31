@@ -142,6 +142,14 @@ This is why "prior frozen at creation" needs the qualifier "until the cell is
 invalidated": a cell's prior survives a mere count decrement, but a cell that
 becomes structurally impossible is zeroed outright.
 
+**`N` and `M` are built together.**  The sweep carries *two* matrices forward,
+one per level: the observed counts `N_r` (the level-`r` token-bigram counts,
+updated by the §5 bookkeeping or recomputed) and the reference
+`M_r = N_r + prior`, whose new-cell priors read `P = M_{r−1}/S` from the level
+just passed.  So `N` cannot be skipped — it is both the thing the merge
+bookkeeping moves and the base the recursion bottoms out on — and only the
+triple `(N_r, M_r, S_r)` need be carried across levels; no level is stored.
+
 **Why this is well defined.**  Every prior quoted at level `r` is `P(ref)` of a
 cell whose two endpoints already exist at level `r−1`, so it has a value.  No
 circularity, no fully-built `M` required, and `S` is maintained incrementally
