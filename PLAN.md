@@ -112,7 +112,7 @@ progress, `[x]` = done.
       child JS 0.471 vs independence 0.508 vs left child 0.642.  Verdict:
       plausible but modest; **not yet wired in** — judge by held-out likelihood
       (`choose_kappa.py`) before adopting.
-- [ ] **C5. Implement the bottom-up `M` construction (break-open prior).**
+- [x] **C5. Implement the bottom-up `M` construction (break-open prior).**
       Code the algorithm of `docs/BREAK_OPEN_PRIOR.md` §4 and **validate on
       held-out data** (the `choose_kappa.py` binomial-thinning protocol, scoring
       `M_ref` against test counts — compare the break-open prior with the
@@ -146,6 +146,33 @@ progress, `[x]` = done.
         the new word (row `w` from `P(v,·)`, column `w` from `P(·,u)`), not
         conserved.  So "prior frozen at creation" holds only until a cell is
         structurally invalidated.
+      **DONE — outcome: the prior LOSES; not adopted.**  Implemented as
+      `scripts/break_open_prior.py` (the per-level counts `N_r` are replayed
+      from a trace that `tree_words.build_dictionary` records — see
+      `BREAK_OPEN_PRIOR.md` §8.1).  Held-out (`merged_validation`, scored under
+      `P_ref(b|a) = M(a,b)/Σ_y M(a,y)`, `alpha = kappa·V`), the break-open prior
+      is **worse** than `P_mar` at every size and every `alpha`: deficit
+      **3.55 / 5.57 / 8.24** bits at `tw96`/`tw512`/`tw2040`, and it grows with
+      the vocabulary.  Details in `docs/BREAK_OPEN_PRIOR.md` §8:
+      * the loss sits on exactly the **unobserved** cells the prior is for
+        (9.6 / 11.5 / 12.6 bits vs `mar`'s 6.9 / 7.0 / 8.5);
+      * the prior mass inflates with `NUM_PAIRS` (**7.7× / 14.2× / 23.8×**
+        `alpha`), but rescaling to equal mass (`breakz`) does not help, and no
+        mixture with the marginal helps either — the deficit is in the *shape*;
+      * growing the training set 4× (fresh dictionaries at strides 40/20/10)
+        barely moves it (8.75 / 8.24 / 8.03) — so it is not a small-sample
+        artefact, and the sparsity trend has the **opposite** sign to the one
+        §7 hoped for;
+      * 5.6% of the cells between occurring words get exactly **zero** mass
+        (the structural zero propagates along the recursion) — the rule is not
+        a smoothing;
+      * §6's row-similarity ordering reproduces (right child JS 0.687 <
+        independence 0.716, winning 59% of the time) yet the prior still loses —
+        row similarity is not the operative criterion, as §7 warned.
+      Verification: `break_open_prior.py --selfcheck` (replayed cyclic counts
+      equal a direct count on every cell; row/column/self-loop priors and dead
+      cells checked) and the stride-20 trace pass reproducing the saved `tw*`
+      dictionaries rule-for-rule.
 
 - [x] **C6. Re-run C1–C3 with the run-aware dictionary (this is C5's
       baseline).**  The run-aware rule (`(u^k)`, A2) is now the **only**
@@ -163,6 +190,17 @@ progress, `[x]` = done.
       plan replay vs an independent replay, incremental bigrams vs a direct
       count, plus the saved `tw*` dictionaries replayed end to end with
       `--real`; all pass.
+
+- [ ] **C7. (optional) Smooth the break-open shape, or drop it.**  C5 rejected
+      the break-open prior *as specified*; the failure mode is that the child's
+      row is spiky — it puts the unobserved-cell mass where the child's own
+      successors were (and can be exactly zero).  The natural repair is a
+      *per-row* interpolation with the marginal,
+      `prior(w,y) = alpha[(1-lambda_w)·(child row) + lambda_w·P_mar(w,y)]`, with
+      `lambda_w` larger where the child is poorly measured.  `--mix` in
+      `scripts/break_open_prior.py` already answers the *global*-lambda version
+      (no `lambda < 1` beats `lambda = 1` on `tw2040`), so only the per-row form
+      is open.  Drop the idea if that also fails to beat `P_mar`.
 
 ## Housekeeping / deferred regenerations
 

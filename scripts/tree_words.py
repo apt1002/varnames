@@ -62,12 +62,39 @@ def read_lines(path, stride=0, limit=0):
     return lines
 
 
-def build_dictionary(lines, num_pairs, verbose=False):
+def _cyclic_arrays(seqs, nstop):
+    """Cyclic word bigram counts (with the stop token) as `(rows, cols, vals)`.
+
+    Each line is `seq + \\n` bent into a cycle, so the bigrams are the adjacent
+    `(u,v)` pairs plus `(last, \\n)` and `(\\n, first)`."""
+    cnt = Counter()
+    for s in seqs:
+        real = [x for x in s if x is not None]
+        m = len(real)
+        if m == 0:
+            continue
+        for i in range(m - 1):
+            cnt[(real[i], real[i + 1])] += 1
+        cnt[(real[-1], nstop)] += 1
+        cnt[(nstop, real[0])] += 1
+    rows = np.fromiter((k[0] for k in cnt), dtype=np.int64, count=len(cnt))
+    cols = np.fromiter((k[1] for k in cnt), dtype=np.int64, count=len(cnt))
+    vals = np.fromiter(cnt.values(), dtype=np.float64, count=len(cnt))
+    return rows, cols, vals
+
+
+def build_dictionary(lines, num_pairs, verbose=False, trace=None):
     """Run-aware greedy dictionary.  Returns `(chars, rules, sym)`.
 
     `rules[r]` is `('pair', (a, b), new_id)` or `('run', a, [(k, new_id), ...])`
     in creation order; ids are `len(chars)+1+r` in order.
-    """
+
+    If `trace` is a dict, it is filled with the information needed to replay the
+    *cyclic* word-bigram count matrix level by level (for the break-open prior):
+    `trace['level0']` = the level-0 counts, and `trace['entries']` = one entry
+    per rule, `('pair', u, v, w, Ls, Rs)` (the left/right neighbours, `stop` at a
+    line boundary, of each merged occurrence) or `('run', a, created, snapshot)`
+    (the counts after the run)."""
     chars = sorted(set(''.join(lines)))
     cid = {c: i for i, c in enumerate(chars)}
     sym = list(chars) + [STOP]
@@ -75,6 +102,10 @@ def build_dictionary(lines, num_pairs, verbose=False):
     rules = []
     next_id = len(chars) + 1
     budget = num_pairs
+    if trace is not None:
+        trace['nchars'] = len(chars)
+        trace['level0'] = _cyclic_arrays(seqs, len(chars))
+        trace['entries'] = []
 
     cnt = Counter()
     pos = {}
@@ -193,6 +224,10 @@ def build_dictionary(lines, num_pairs, verbose=False):
                             i += 1
                     seqs[idx] = out
                 rules.append(('run', a, created))
+                if trace is not None:
+                    trace['entries'].append(
+                        ('run', a, list(created),
+                         _cyclic_arrays(seqs, len(chars))))
                 step += 1
                 rebuild()
                 if verbose and step % 500 == 0:
@@ -206,6 +241,8 @@ def build_dictionary(lines, num_pairs, verbose=False):
         next_id += 1
         sym.append(sym[a] + sym[b])
         rules.append(('pair', (a, b), new))
+        _Ls = [] if trace is not None else None
+        _Rs = [] if trace is not None else None
         for si, i in positions:
             s = seqs[si]
             if i >= len(s) or s[i] is None or s[i] != a:
@@ -223,6 +260,10 @@ def build_dictionary(lines, num_pairs, verbose=False):
                 rr += 1
             left = s[li] if li >= 0 else None
             right = s[rr] if rr < len(s) else None
+            if trace is not None:            # bound the cycle by the stop token
+                nstop = len(chars)
+                _Ls.append(left if left is not None else nstop)
+                _Rs.append(right if right is not None else nstop)
             if left is not None:
                 decr(si, (left, a), li)
             if right is not None:
@@ -233,6 +274,10 @@ def build_dictionary(lines, num_pairs, verbose=False):
                 incr(si, (left, new), li)
             if right is not None:
                 incr(si, (new, right), i)
+        if trace is not None:
+            trace['entries'].append(
+                ('pair', a, b, new, np.array(_Ls, dtype=np.int64),
+                 np.array(_Rs, dtype=np.int64)))
         cnt[p] = 0                       # all occurrences consumed by the merge
         budget -= 1
         step += 1

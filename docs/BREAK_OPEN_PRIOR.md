@@ -257,3 +257,166 @@ joint-vs-conditional choice is settled: both `M` and `P` are the joint — §5.
 
 Reproduce the table with the `tw2040` files and `scripts/tree_words.py`
 (`load_dictionary`, `load_adj`).
+
+## 8. C5: implemented, and judged on held-out data
+
+*Code: `scripts/break_open_prior.py`.  Runner: `scripts/run_c5.sh`; logs
+`work/tw*_c5*.log`; saved traces `work/tw*_trace*.npy`.  Every number below is
+**mean bits per held-out identifier, lower is better**.*
+
+### 8.1 The build
+
+`trace_replay` carries the triple `(N_r, M_r, S_r)` of §4 level by level.  The
+per-level counts `N_r` come from a *trace* that `tree_words.build_dictionary`
+records in the same pass that grows the dictionary: for every pair merge it
+stores the left/right neighbours of each merged occurrence (the stop token at a
+line boundary, so the counts are the *cyclic* ones), and after every run step the
+cyclic count matrix.  One expensive pass therefore yields every level, and the
+prior is then rebuilt for a new `alpha` in ~10 s.
+
+Checked (`--selfcheck`, and the trace pass at stride 20, which reproduces the
+saved `tw*` dictionaries rule-for-rule):
+
+* the replayed cyclic counts equal a direct count of the finished tokenisation on
+  **every** vocabulary cell (0 mismatches);
+* on a hand-checked corpus the row, column and self-loop priors equal
+  `alpha·P(v,·)`, `alpha·P(·,u)`, `alpha·P(v,u)` read off the *previous* level;
+* every dead cell `(u,v)` is exactly `0` in `M`.
+
+Run words are `k`-ary with `lc = rc = u`: their row and column priors are
+`alpha·P(u,·)` / `alpha·P(·,u)` and their self-loop `alpha·P(u,u)`.
+
+### 8.2 Protocol
+
+Dictionary and counts both come from the dictionary's own training sample
+(stride 20); the held-out identifiers are `merged_validation` (stride 20,
+disjoint from training), scored under the first-order word Markov model
+`P_ref(b|a) = M(a,b) / Σ_y M(a,y)`, with `alpha = kappa·V`.  The `unobs%` column
+is the share of held-out bigram tokens whose *training* count is zero — exactly
+the cells the prior is there to fill.
+
+*Why not literal binomial thinning.*  `choose_kappa.py` thins the **final** count
+matrix.  This prior needs the counts at **every** level, and `N_r` cannot be
+recovered from a thinned `N_final` — thinning the final matrix is simply not
+defined for it.  The line-level held-out split used instead is the "fully
+faithful split … re-derive `(a,b)` from held-out identifiers" that
+`choose_kappa.py`'s own docstring calls the ideal, and is strictly cleaner than
+the thinning approximation.
+
+### 8.3 Results
+
+`mar` = independence `P_mar` (the C6 baseline); `break` = the break-open prior of
+§4; `breakz` = the same shape rescaled to total prior mass `alpha` (see §8.4).
+Best row per model in **bold**.
+
+**`tw96`** — vocab 160, 7.5% of held-out tokens unobserved in training
+
+| kappa |   mar | break | breakz |
+|------:|------:|------:|-------:|
+|    10 | 78.41 | 79.45 |  82.41 |
+|    30 | 76.81 | 77.92 |  80.80 |
+|   100 | 75.08 | 76.48 |  79.04 |
+|   300 | 73.60 |**75.82**| 77.49 |
+|  1000 | 72.36 | 76.58 |  76.11 |
+|  3000 |**72.27**| 79.11 | 75.83 |
+
+**`tw512`** — vocab 576, 11.5% unobserved
+
+| kappa |   mar | break | breakz |
+|------:|------:|------:|-------:|
+|    10 | 65.67 | 67.61 |  71.73 |
+|    30 | 63.87 |**66.57**| 69.83 |
+|   100 | 62.09 | 66.84 |  67.92 |
+|   300 |**61.00**| 68.72 | 66.68 |
+|  1000 | 61.31 | 72.20 |  66.70 |
+|  3000 | 63.72 | 76.05 |  68.59 |
+
+**`tw2040`** — vocab 2104, 22.8% unobserved
+
+| kappa |   mar | break | breakz |
+|------:|------:|------:|-------:|
+|    10 | 56.22 |**60.34**| 65.39 |
+|    30 | 53.84 | 60.54 |  62.69 |
+|   100 |**52.10**| 62.26 | 60.70 |
+|   300 | 52.15 | 64.75 |**60.21**|
+|  1000 | 54.35 | 68.13 |  61.34 |
+|  3000 | 57.26 | 71.15 |  63.67 |
+
+### 8.4 The `alpha` sweep, and the mass inflation §7 predicted
+
+§7 asked whether `alpha` must shrink as `NUM_PAIRS` grows.  It must: the break
+rule gives every new word a full row *and* column of prior, so the total prior
+mass is `alpha · Σ_w [marg(rc(w)) + marg(lc(w))]`, and that factor grows with the
+vocabulary — **7.7×** (`tw96`), **14.2×** (`tw512`), **23.8×** (`tw2040`).  The
+best `kappa` consequently drifts downwards as the vocabulary grows (3000 → 300 →
+10 for `break`), so §8.3 does *not* compare the two priors at equal mass.
+
+`breakz` removes that confound by rescaling the break shape to total prior mass
+`alpha`, the same as `P_mar`.  It does not help: `breakz`'s best is within
+0.1 bits of `break`'s at every size (75.83 vs 75.82, 66.68 vs 66.57, 60.21 vs
+60.34).  **The deficit is in the shape, not in the mass.**
+
+### 8.5 Findings
+
+1. **It loses at every size and every `alpha`.**  At each prior's own best
+   `kappa` the deficit is **3.55** bits (`tw96`), **5.57** (`tw512`), **8.24**
+   (`tw2040`) — and it grows with the vocabulary.
+2. Mass-matching does not rescue it (§8.4), and neither does a mixture: on
+   `tw2040` the mean bits fall **monotonically** towards `lambda = 1` (pure
+   `P_mar`) at every `kappa`, e.g. `kappa=30`: 62.69 (λ=0) → 56.20 → 54.96 →
+   54.26 (λ=0.75) → 53.85 (λ=0.99) → 53.84 (λ=1).  Even a 1% weight on the
+   break shape hurts.  **The break shape carries nothing the marginal lacks on
+   these cells.**
+3. **The loss sits on exactly the cells the prior exists to fill.**  Restricted
+   to held-out bigrams *unseen in training*, `mar` gives 6.9 / 7.0 / 8.5 bits
+   (`tw96`/`tw512`/`tw2040`; 5.6 / 4.9 / 6.5 at `kappa=3000`) where `break` gives
+   9.6 / 11.5 / 12.6.  The prior is *worse* where it is meant to help.
+4. **It is not an estimation artefact of too little data.**  Growing the training
+   set 4-fold (a fresh dictionary at each stride, so both priors see the same
+   model) barely moves the deficit — **8.75 / 8.24 / 8.03** bits at strides
+   **40 / 20 / 10**, while the unobserved share falls only 25.5% → 22.8% → 20.3%.
+   Rows (best `kappa` per model):
+
+   | train stride | train ids | unobs% |   mar | break | deficit |
+   |---:|---:|---:|---:|---:|---:|
+   | 40 |  51646 | 25.5% | 51.96 | 60.71 | 8.75 |
+   | 20 | 103291 | 22.8% | 52.10 | 60.34 | 8.24 |
+   | 10 | 206581 | 20.3% | 51.95 | 59.98 | 8.03 |
+
+   The **sign of the sparsity trend is the opposite** of the one §7 hoped for
+   ("keep it only if it … wins more as sparsity grows").
+5. **5.6% of the cells between occurring words get exactly zero mass** (`tw2040`
+   `break`: 248 334 of 4 414 201; `mar`: 0).  They are the cells whose `break`
+   parent is itself a dead cell — the structural zero propagates outwards along
+   the recursion — so the rule is *not* a smoothing: it can assign probability
+   zero to a possible bigram.  None was hit by this held-out set, but it is a
+   latent hazard.
+6. **Row similarity is not the operative criterion.**  §6's ordering *does*
+   reproduce on this data (raw count rows, 1275 words): mean JS right child
+   **0.687** < independence 0.716 < random 0.806 < left child 0.844, the right
+   child winning against independence **59%** of the time.  And yet the prior
+   built from it loses by 8 bits.  §7 was right to insist on held-out
+   likelihood: the child's row is close to the word's row *on the cells the word
+   has*, which is not where a prior earns its keep — on the unobserved cells the
+   child's row is a *spiky* guess (mass where the child's own successors were),
+   and cross-entropy punishes exactly those spikes.
+
+### 8.6 Verdict
+
+**Do not adopt the break-open prior as specified.**  It is 3.5–8.2 bits worse
+than the independence prior at `tw96`/`tw512`/`tw2040`, it is worse precisely on
+the unobserved cells, the deficit grows with the vocabulary as well as with
+sparsity, and neither mass-matching nor any mixture with the marginal recovers
+it.  §6's "plausible but modest" row-similarity signal was real, but it is not
+the signal that decides.
+
+If the idea is to be rescued, finding 5 (and 6) points the way: **interpolate**
+the child row with the marginal,
+
+    prior(w,y) = alpha · [ (1-lambda)·(child row) + lambda·P_mar(w,y) ] ,
+
+and choose `lambda` on held-out data.  §8.5(2) already answers the question it
+would ask at the *matrix* level — no `lambda < 1` beats `lambda = 1` — but a
+*per-row* lambda (larger where the child is well measured, smaller where it is
+not) is the form that could still work, and it removes the zero-cell hazard of
+finding 5.  Tracked as **C7** in `PLAN.md`.
