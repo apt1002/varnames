@@ -385,6 +385,12 @@ best `kappa` consequently drifts downwards as the vocabulary grows (3000 → 300
 
    The **sign of the sparsity trend is the opposite** of the one §7 hoped for
    ("keep it only if it … wins more as sparsity grows").
+
+   The literal **thinning-style protocol** agrees: a 9:1 split *within* the
+   sample (dictionary and counts from the 92 961 train lines, scored on the
+   10 330 held-out lines of the same sample, `unobs%` 28.4%) gives `mar` 53.99,
+   `break` 62.78, `breakz` 62.94 at `tw2040` — again a **8.79**-bit deficit.
+   (`work/tw2040_c5_split.log`.)
 5. **5.6% of the cells between occurring words get exactly zero mass** (`tw2040`
    `break`: 248 334 of 4 414 201; `mar`: 0).  They are the cells whose `break`
    parent is itself a dead cell — the structural zero propagates outwards along
