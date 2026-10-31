@@ -14,10 +14,11 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
 
 1. **Dictionary.**  Build the word list by the greedy **run-aware** rule of
    `TREE_WORDS.md` §9.1 (A2) on the **training** corpus: start from the single
-   characters, then repeat `NUM_PAIRS` times — find the most common length-2
-   substring `uv` of words; if `u ≠ v` merge it (ordinary BPE); if `u = v`
-   **collapse every maximal run `u^k` (`k ≥ 2`) to a flat word `(u^k)`**, one
-   word per observed run length (a `k`-ary node, *not* `k−1` nested merges).
+   characters, then create `NUM_PAIRS` *words* in total — find the most common
+   length-2 substring `uv` of words; if `u ≠ v` merge it (ordinary BPE, one
+   word); if `u = v` **collapse every maximal run `u^k` (`k ≥ 2`) to a flat word
+   `(u^k)`**, one word per observed run length (a `k`-ary node, *not* `k−1`
+   nested merges), so a run step may spend several words of the budget at once.
    The stop character `\n` is a **separator**, never merged across (a word
    spanning two identifiers is meaningless).
 

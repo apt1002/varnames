@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Word-level (run-aware pair-merge) model for `docs/TREE_WORDS.md`.
 
-The dictionary is the **run-aware** rule of `docs/TREE_WORDS.md` §9.1.  Repeat
-`NUM_PAIRS` times: find the most common length-2 substring `uv` of *words*; if
-`u != v` merge it (ordinary BPE); if `u == v` **collapse every maximal run
-`u^k` (`k >= 2`) to a flat word `(u^k)`, one word per observed run length**.
+The dictionary is the **run-aware** rule of `docs/TREE_WORDS.md` §9.1.  Create
+`NUM_PAIRS` *words* in total: find the most common length-2 substring `uv` of
+*words*; if `u != v` merge it (ordinary BPE, one word); if `u == v` **collapse
+every maximal run `u^k` (`k >= 2`) to a flat word `(u^k)`, one word per observed
+run length** (so a run step can spend several words of the budget at once).
 
 A run word `(u^k)` is a single **`k`-ary** node with `lc((u^k)) = rc((u^k)) = u`
 (it is *not* `k-1` nested binary merges).  This replaces the earlier plain
 pair-merge rule, which is obsolete.
 
 Effects of a run collapse are exact: a maximal run of length `L` becomes the
-word `(u^L)` if that word was created, else is left as `L` copies of `u` (so a
-run of an uncreated length never turns into adjacent equal run words).
+word `(u^L)` if that word was created, else a greedy longest-match decomposition
+into the run words that do exist (so `L = 4` with only `(u^2)` present becomes
+`(u^2)(u^2)`); a leftover single character stays a character.
 
 Tokenising replays the rules in creation order.  Consecutive *pair* rules are
 merged with a linked-list "lowest-ranked adjacent pair" pass; a *run* rule is a
