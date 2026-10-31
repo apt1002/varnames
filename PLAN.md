@@ -104,10 +104,14 @@ progress, `[x]` = done.
       count from the observed `vw` (recursively); when both words are pairs,
       break the later (rarer) one; base case = single characters.
       *Detail + feasibility pass done* in `docs/BREAK_OPEN_PRIOR.md`: the
-      recursion on the merge tree, the tie rule, and a `tw2040` feasibility
-      table (right child JS 0.471 vs independence 0.508 vs left child 0.642).
-      Verdict: plausible but modest; **not yet wired in** — judge by held-out
-      likelihood (`choose_kappa.py`) before adopting.
+      estimation rule `M_ref(a,b) = N(a,b) + alpha·P(break(a,b))`, where
+      `break(a,b)` opens the **later** word (by wordlist order, so no ties) to
+      its boundary child; `P` is defined by building `M` **bottom-up** in
+      `NUM_PAIRS` order (so normalisation exists when needed), with `P_mar`
+      only at the character base case.  Feasibility table on `tw2040`: right
+      child JS 0.471 vs independence 0.508 vs left child 0.642.  Verdict:
+      plausible but modest; **not yet wired in** — judge by held-out likelihood
+      (`choose_kappa.py`) before adopting.
 
 ## Housekeeping / deferred regenerations
 
