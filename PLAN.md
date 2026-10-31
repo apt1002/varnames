@@ -22,6 +22,8 @@ labels (see `README.md`).
 - [x] Choosing `k` and `N` for the model size — `docs/CLUSTER_SIZE_STUDY.md`.
 - [x] Dictionary (pair-merge) model: CS identity, per-merge delta —
       `docs/TREE_WORDS.md`, `scripts/check_merge_delta.py`.
+- [x] Typical run lengths of the corpus — `docs/RUN_LENGTHS.md`,
+      `scripts/run_lengths.py`.
 
 ## A. Dictionary / pair-merge theory (`docs/TREE_WORDS.md`)
 
