@@ -191,16 +191,19 @@ progress, `[x]` = done.
       count, plus the saved `tw*` dictionaries replayed end to end with
       `--real`; all pass.
 
-- [ ] **C7. (optional) Smooth the break-open shape, or drop it.**  C5 rejected
-      the break-open prior *as specified*; the failure mode is that the child's
-      row is spiky — it puts the unobserved-cell mass where the child's own
-      successors were (and can be exactly zero).  The natural repair is a
-      *per-row* interpolation with the marginal,
-      `prior(w,y) = alpha[(1-lambda_w)·(child row) + lambda_w·P_mar(w,y)]`, with
-      `lambda_w` larger where the child is poorly measured.  `--mix` in
-      `scripts/break_open_prior.py` already answers the *global*-lambda version
-      (no `lambda < 1` beats `lambda = 1` on `tw2040`), so only the per-row form
-      is open.  Drop the idea if that also fails to beat `P_mar`.
+- [x] **C7. (optional) Smooth the break-open shape, or drop it. — DROPPED
+      (decided 2026-10-31: not needed).**  C5 rejected the break-open prior *as
+      specified*; the failure mode is that the child's row is spiky — it puts
+      the unobserved-cell mass where the child's own successors were (and can be
+      exactly zero).  The conceivable repair was a *per-row* interpolation with
+      the marginal, `prior(w,y) = alpha[(1-lambda_w)·(child row) +
+      lambda_w·P_mar(w,y)]`.  The *global*-lambda version was already settled by
+      `--mix` in `scripts/break_open_prior.py` (no `lambda < 1` beats
+      `lambda = 1` on `tw2040`, and even 1% weight on the break shape hurts),
+      and the §8 diagnostics show the loss is in the *shape* on exactly the
+      unobserved cells the prior exists to fill — so there is no reason to
+      expect a per-row `lambda_w` to rescue it.  The break-open prior is retired;
+      `P_mar` (with the C6 run-aware dictionary) stands.
 
 ## Housekeeping / deferred regenerations
 
@@ -221,4 +224,6 @@ progress, `[x]` = done.
 - D4. Whether C4's prior sits inside C2 or stays separate. — **this is the
   question studied by C5**: the break-open prior as a *replacement for* the
   independence `P_mar` inside the counting prior, judged against the C6
-  baseline on held-out data.
+  baseline on held-out data.  — *answered* (2026-10-31): **no** — the break-open
+  prior loses to `P_mar` at every size and `kappa` (§8, C5), so the prior stays
+  the independence `P_mar`.

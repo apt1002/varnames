@@ -416,13 +416,11 @@ sparsity, and neither mass-matching nor any mixture with the marginal recovers
 it.  §6's "plausible but modest" row-similarity signal was real, but it is not
 the signal that decides.
 
-If the idea is to be rescued, finding 5 (and 6) points the way: **interpolate**
-the child row with the marginal,
-
-    prior(w,y) = alpha · [ (1-lambda)·(child row) + lambda·P_mar(w,y) ] ,
-
-and choose `lambda` on held-out data.  §8.5(2) already answers the question it
-would ask at the *matrix* level — no `lambda < 1` beats `lambda = 1` — but a
-*per-row* lambda (larger where the child is well measured, smaller where it is
-not) is the form that could still work, and it removes the zero-cell hazard of
-finding 5.  Tracked as **C7** in `PLAN.md`.
+The last conceivable rescue — interpolating the child row with the marginal,
+`prior(w,y) = alpha·[(1-lambda_w)·(child row) + lambda_w·P_mar(w,y)]`, with a
+*per-row* `lambda_w` — is **retired (C7 dropped, 2026-10-31; not needed)**.
+§8.5(2) already answers the global-lambda version (no `lambda < 1` beats
+`lambda = 1`, and even a 1% weight on the break shape hurts), and findings 1 and
+3–5 locate the loss in the *shape* on exactly the unobserved cells the prior is
+meant to fill, so a per-row `lambda_w` has no failure mode left to repair.  The
+prior stays the independence `P_mar` over the C6 run-aware dictionary.
