@@ -91,9 +91,10 @@ varnames/
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
 │   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
 │   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
-│   ├── break_open_prior.py               # C5: break-open prior vs P_mar on held-out data
+│   ├── break_open_prior.py              # C5: break-open prior vs P_mar on held-out data
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency (A3/A4)
-│   └── run_sweep.sh                     # run the analyses over all thresholds
+│   ├── run_sweep.sh                     # run the analyses over all thresholds
+│   └── run_c5.sh                        # run the C5 break-open-prior sweep
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
