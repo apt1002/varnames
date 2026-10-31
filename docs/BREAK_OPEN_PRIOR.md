@@ -473,3 +473,22 @@ zero treatment of the *independence* prior, `ADJACENCY_MATRIX.md`).
 
 Verdict: **rejected.**  Finding 5 is not the reason the break-open prior loses;
 removing the offending zeros does not help, and the prior remains retired.
+
+### 9.1 Are the extra zeros even structural? (no)
+
+It is tempting to read the retraction as *discovering* structural zeros of the
+word matrix and to feed them back into the **independence** prior (`C10`): take
+the 849 744 absorbed cells the retraction zeroes, zero `P_mar` there and
+renormalise.  It fails the same way, and more sharply:
+
+| prior (`tw2040`, `kappa = 100`) | mean bits | unobs bits |
+|---|---:|---:|
+| `mar` | 52.10 | 8.50 |
+| `mar` zeroed on the absorbed cells, renormalised | 57.10 | 11.40 |
+
+So the zeros the retraction produces are **not** structural: they include cells
+whose two words both occur but which were merely *unobserved* in training, i.e.
+exactly the bigrams the prior exists to predict.  Zeroing them is worse than
+leaving the independence prior alone.  The genuinely structural cells (dead
+`(uv)` pairs) are a negligible ~2 × 10³ out of 4.4 × 10⁶, and zeroing them
+changes nothing.
