@@ -144,6 +144,6 @@ run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.
   production path in `scripts/tree_words.py`.
 * The **run-length histogram of the real corpus** is measured in
   `docs/RUN_LENGTHS.md`: runs are almost all length 2 (99 % of runs, 98 % of the
-  `uu` mass), so on real identifiers the crossover below is usually decided by
+  `uu` mass), so on real identifiers the crossover above is usually decided by
   `N(u,u)` vs `N(u,v)` alone — the length-`k` cases above are the synthetic
   stress tests.
