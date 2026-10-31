@@ -13,7 +13,7 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
 ## The model
 
 1. **Dictionary.**  Build the word list by the greedy **run-aware** rule of
-   `TREE_WORDS.md` §9.1 (A2) on the **training** corpus: start from the single
+   `TREE_WORDS.md` §9.1 on the **training** corpus: start from the single
    characters, then create `NUM_PAIRS` *words* in total — find the most common
    length-2 substring `uv` of words; if `u ≠ v` merge it (ordinary BPE, one
    word); if `u = v` **collapse every maximal run `u^k` (`k ≥ 2`) to a flat word
@@ -54,9 +54,10 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
    The **success rate** at budget `B` is the fraction of held-out *distinct*
    identifiers with `L(id) <= B`.
 
-> This is the **run-aware** rule (C6).  The previous version of this note used a
+> This is the **run-aware** rule.  The previous version of this note used a
 > plain pair-merge dictionary that built a run `u^k` out of *nested* words
-> `(uu)`, `((uu)u)`, … ; `TREE_WORDS.md` §9.1 and `DICTIONARY_RULES.md` §A4 show
+> `(uu)`, `((uu)u)`, … ; `TREE_WORDS.md` §9.1 and the run-word/boundary-word
+> experiments in `DICTIONARY_RULES.md` show
 > the flat `(u^k)` rule is preferable (it beats plain BPE whenever there is run
 > mass and is the sign-safe rule), so all numbers here were regenerated on it.
 > Those plain-pair artifacts are obsolete and live only in git history.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C5: the break-open prior (`docs/BREAK_OPEN_PRIOR.md`).
+"""The break-open prior (`docs/BREAK_OPEN_PRIOR.md`).
 
 Builds the word reference matrix `M` bottom-up in `NUM_PAIRS` order,
 
@@ -17,7 +17,7 @@ cheaply for each `alpha`.
 
 Held-out comparison: score held-out identifiers under the first-order word
 Markov model `P_ref(b|a) = M(a,b) / sum_y M(a,y)` and compare the break-open
-prior against the independence prior `P_mar` (the C6 baseline).
+prior against the independence prior `P_mar` (the run-aware-dictionary baseline).
 
 Usage:
     break_open_prior.py --dir work/tw2040 --kappas 3,10,30,100,300,1000,3000

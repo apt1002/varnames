@@ -226,8 +226,8 @@ train/test binomial thinning), not by row similarity.  Concretely:
 
 ### Details, now settled
 
-(Tracked as **C5** in `PLAN.md`; C5 is compared against the **run-aware C6
-baseline**.)
+(This experiment is judged against the **run-aware dictionary baseline** of
+`docs/TREE_WORDS.md` §9.1 / `docs/WORD_COMPRESSIBILITY.md`.)
 
 * **`M_ref(w,w)` = `alpha·P(v,u)`.**  Both endpoints of the self-loop are the
   *same* word `w = (uv)`, so "break the later word" is undefined and breaking one
@@ -242,12 +242,12 @@ baseline**.)
   prior (§4).
 * **`alpha`** — its best value, and whether it must depend on `NUM_PAIRS`: every
   new word adds a row and a column, so a fixed per-cell `alpha` inflates the
-  total prior mass as the vocabulary grows.  To be swept in C5.
+  total prior mass as the vocabulary grows.  Swept below (§8).
 * **Run words are `k`-ary with `lc = rc = u`.**  A flat run word `(u^k)` is one
-  **`k`-ary** merge of `k` copies of `u` (one word per length, per A2), *not*
+  **`k`-ary** merge of `k` copies of `u` (one word per length), *not*
   `k−1` nested binary merges.  So `lc((u^k)) = rc((u^k)) = u`: breaking it once
   drops to `u`, its row/column priors use `P(u,·)` / `P(·,u)`, and its self-loop
-  prior is `alpha·P(u,u)`.  The dictionary is run-aware throughout (C6), so C5
+  prior is `alpha·P(u,u)`.  The dictionary is run-aware throughout, so this build
   sees run words only.
 
 Still open: whether "break the later word" should key on creation rank (chosen,
@@ -258,11 +258,11 @@ joint-vs-conditional choice is settled: both `M` and `P` are the joint — §5.
 Reproduce the table with the `tw2040` files and `scripts/tree_words.py`
 (`load_dictionary`, `load_adj`).
 
-## 8. C5: implemented, and judged on held-out data
+## 8. Implemented, and judged on held-out data
 
-*Code: `scripts/break_open_prior.py`.  Runner: `scripts/run_c5.sh`; logs
-`work/tw*_c5*.log`; saved traces `work/tw*_trace*.npy`.  Every number below is
-**mean bits per held-out identifier, lower is better**.*
+*Code: `scripts/break_open_prior.py`.  Runner: `scripts/run_break_open_prior.sh`;
+logs `work/tw*_breakopen*.log`; saved traces `work/tw*_trace*.npy`.  Every number
+below is **mean bits per held-out identifier, lower is better**.*
 
 ### 8.1 The build
 
@@ -305,9 +305,9 @@ the thinning approximation.
 
 ### 8.3 Results
 
-`mar` = independence `P_mar` (the C6 baseline); `break` = the break-open prior of
-§4; `breakz` = the same shape rescaled to total prior mass `alpha` (see §8.4).
-Best row per model in **bold**.
+`mar` = independence `P_mar` (the run-aware-dictionary baseline); `break` = the
+break-open prior of §4; `breakz` = the same shape rescaled to total prior mass
+`alpha` (see §8.4).  Best row per model in **bold**.
 
 **`tw96`** — vocab 160, 7.5% of held-out tokens unobserved in training
 
@@ -390,7 +390,7 @@ best `kappa` consequently drifts downwards as the vocabulary grows (3000 → 300
    sample (dictionary and counts from the 92 961 train lines, scored on the
    10 330 held-out lines of the same sample, `unobs%` 28.4%) gives `mar` 53.99,
    `break` 62.78, `breakz` 62.94 at `tw2040` — again a **8.79**-bit deficit.
-   (`work/tw2040_c5_split.log`.)
+   (`work/tw2040_breakopen_split.log`.)
 5. **5.6% of the cells between occurring words get exactly zero mass** (`tw2040`
    `break`: 248 334 of 4 414 201; `mar`: 0).  They are the cells whose `break`
    parent is itself a dead cell — the structural zero propagates outwards along
@@ -418,9 +418,9 @@ the signal that decides.
 
 The last conceivable rescue — interpolating the child row with the marginal,
 `prior(w,y) = alpha·[(1-lambda_w)·(child row) + lambda_w·P_mar(w,y)]`, with a
-*per-row* `lambda_w` — is **retired (C7 dropped, 2026-10-31; not needed)**.
+*per-row* `lambda_w` — is **retired (dropped 2026-10-31; not needed)**.
 §8.5(2) already answers the global-lambda version (no `lambda < 1` beats
 `lambda = 1`, and even a 1% weight on the break shape hurts), and findings 1 and
 3–5 locate the loss in the *shape* on exactly the unobserved cells the prior is
 meant to fill, so a per-row `lambda_w` has no failure mode left to repair.  The
-prior stays the independence `P_mar` over the C6 run-aware dictionary.
+prior stays the independence `P_mar` over the run-aware dictionary.

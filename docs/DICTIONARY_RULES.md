@@ -4,10 +4,10 @@
 common pair** of words.  It notes two things worth measuring:
 
 * the "most frequent pair" rule sees only bigrams, so it is a *proxy* for the
-  exact best move, "merge the pair that shrinks `CS` the most" (task **A3**);
+  exact best move, "merge the pair that shrinks `CS` the most";
 * the flat run word `(u^k)` and the ordinary bigram `(uv)` both compete for the
   same budget when a run abuts a different word, e.g. `uuuuv` as `(u⁴)v` versus
-  `uuu(uv)` (task **A4**).
+  `uuu(uv)`.
 
 This note reports the experiments.  Reproduce with
 
@@ -22,7 +22,7 @@ disjoint test half (both using their own MLE counts — i.e. how well the
 tokenisation the dictionary induces fits the test data).  The synthetic corpora
 are described in `scripts/dict_experiments.py`.
 
-## A3. Greedy by frequency vs greedy by `Δ`
+## Greedy by frequency vs greedy by `Δ`
 
 The exact greedy move minimises `Δ = CS' − CS` over candidate pairs;
 `docs/TREE_WORDS.md` shows `Δ` depends on the embedding (`A`, `B`, `Q`) and not
@@ -53,7 +53,7 @@ actually reverses by `NUM_PAIRS = 24`.  This is exactly the documented drawback:
 short-range patterns that do not generalise, whereas the most-frequent-pair rule
 is a robust, cheap proxy.  For real corpora, keep the frequency rule.
 
-## A4. The `(u^k)` run word vs the `(uv)` boundary word
+## The `(u^k)` run word vs the `(uv)` boundary word
 
 When a run `u^k` is followed by `v`, the flat run word `(u^k)` and the boundary
 word `(uv)` compete for the same slot.  Two regimes, both measured held-out.
@@ -114,7 +114,7 @@ run-aware rule, which spends **one word per length**, still beats plain BPE.  So
 * run lengths spread → let the boundary take the first slot, and pick up the
   runs length-by-length as the budget allows.
 
-The exact tie-break is, as ever, `Δ` (A3) — but on real data the frequency
+The exact tie-break is, as ever, `Δ` — but on real data the frequency
 proxy is good enough, and the rule above needs only the two counts `N(u,v)` and
 the run-length histogram.
 
@@ -126,7 +126,7 @@ candidates: count the `uu` joins against the `uv` joins and take the larger.
 The only subtlety is *which* `uu` count a candidate owns — a **single** run word
 claims just one length's slice, so it can lose to `(uv)` even when
 `N(u,u) > N(u,v)`; the **full** run-aware rule claims every length at once, so
-it *is* exactly `N(u,u) > N(u,v)`.  The genuinely new part of A4 is not the
+it *is* exactly `N(u,u) > N(u,v)`.  The genuinely new part is not the
 *selection* (still most-common-pair) but the *action*: when the top pair is a
 doubled word, collapse the run instead of merging two copies — which is why
 run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.

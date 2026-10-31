@@ -60,7 +60,7 @@ varnames/
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
-│   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior (C5: loses to P_mar)
+│   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -91,10 +91,10 @@ varnames/
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
 │   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
 │   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
-│   ├── break_open_prior.py              # C5: break-open prior vs P_mar on held-out data
-│   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency (A3/A4)
+│   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
+│   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
-│   └── run_c5.sh                        # run the C5 break-open-prior sweep
+│   └── run_break_open_prior.sh          # run the break-open-prior sweep
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
@@ -113,6 +113,26 @@ work/common<T>/     # ... one directory per threshold T
 
 `work/` also holds the corpus-build intermediates (`gems_dl/`, `*_src/`,
 `clean_ids/`, `*.shards`, per-ecosystem logs).
+
+## Repository conventions
+
+Two house rules keep the plan and the reports from drifting apart.
+
+**Keep plan identifiers out of reports and filenames.** `PLAN.md` labels each
+thread with a short identifier (`A1`, `B1`, `C5`, …). Those labels are *local to
+the plan* — the plan is a living document, and a thread can be renumbered or
+re-scoped, so any report that cites "C5" goes stale the moment it does.
+Experiment reports (`docs/*.md`), filenames and code therefore refer to an
+experiment by a **descriptive name** ("the break-open prior", "the run-aware
+dictionary"), never by its plan label. Plan identifiers appear only in
+`PLAN.md`.
+
+**`PLAN.md` is an index, not a report.** It records **execution status and
+success/failure only** — one line per thread, plus a pointer to the report that
+owns the detail. Design notes, derivations and experimental results do **not**
+belong in `PLAN.md`; they live in the individual experiment reports, which
+`PLAN.md` links to. This keeps the plan readable, and lets the reports evolve
+without touching it.
 
 ## CamelCase normalisation and common substrings
 

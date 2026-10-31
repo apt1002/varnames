@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Dictionary-rule experiments for `docs/TREE_WORDS.md` (tasks A3, A4).
+"""Dictionary-rule experiments for `docs/TREE_WORDS.md` / `docs/DICTIONARY_RULES.md`.
 
 Builds a pair-merge dictionary three ways and compares the corpus size it
 achieves at a fixed `NUM_PAIRS`:
 
   * `freq`  -- the plain rule: merge the most frequent pair (ordinary BPE);
-  * `runs`  -- the *run-aware* rule of A2: when the most frequent pair is a
+  * `runs`  -- the *run-aware* rule: when the most frequent pair is a
                doubled word `(u,u)`, collapse every maximal run `u^k` to a flat
                word `(u^k)` (one word per observed length) instead of merging
                two copies;
@@ -17,9 +17,9 @@ corpus; smaller is better.  Sequences are *linear* while the dictionary is
 built (as in the specification) and only bent into cycles for counting.
 
 The two experiments:
-  * A4 -- a synthetic corpus family with tunable run mass and boundary mass,
-          to locate the `(u^k)` vs `(uv)` crossover;
-  * A3 -- `freq` against `delta` on the same corpora.
+  * the run word vs the boundary word -- a synthetic corpus family with tunable
+          run mass and boundary mass, to locate the `(u^k)` vs `(uv)` crossover;
+  * frequency vs `delta` -- `freq` against `delta` on the same corpora.
 
 Usage: dict_experiments.py [--quick]
 """
@@ -277,8 +277,8 @@ def held_out_cs(train, test, rule, npairs, cand=8):
     return score(test, sym, rules)[0]
 
 
-def a4_spread(quick):
-    print("A4(a): full run-aware rule vs plain BPE, held-out CS (bits)")
+def run_vs_bpe(quick):
+    print("run word vs boundary: full run-aware rule vs plain BPE, held-out CS (bits)")
     print("       run lengths spread out (exponential); run mass N(u,u) = "
           "sum (k-1)*#runs(k)")
     print(f"{'runmean':>8}{'pbound':>7}{'N(u,u)':>8}{'N(u,v)':>8}"
@@ -298,7 +298,7 @@ def a4_spread(quick):
                   f"{f:>9.0f}{r:>9.0f}  {win}")
 
 
-def a4_single(quick):
+def run_vs_boundary(quick):
     print("\nA4(b): a *single* word -- flat run word (0^k) vs boundary (0,1)")
     print("       predictor: run word wins iff (k-1)*#runs(k) > N(u,v)")
     for name, gen, params in (
@@ -348,7 +348,7 @@ def a3(quick):
               f"({100.0 * (f - d) / f:+.1f}%)")
 
 
-def a3_real(path, quick):
+def freq_vs_delta_real(path, quick):
     """freq vs delta on a stride sample of a real corpus (identifiers)."""
     n = 4000 if quick else 8000
     lines = []
@@ -378,10 +378,10 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--quick', action='store_true')
     ap.add_argument('--real', default=None,
-                    help='corpus file for the A3 real-data comparison')
+                    help='corpus file for the frequency-vs-delta real-data comparison')
     args = ap.parse_args()
-    a4_spread(args.quick)
-    a4_single(args.quick)
+    run_vs_bpe(args.quick)
+    run_vs_boundary(args.quick)
     a3(args.quick)
     if args.real:
-        a3_real(args.real, args.quick)
+        freq_vs_delta_real(args.real, args.quick)
