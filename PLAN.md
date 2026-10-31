@@ -118,19 +118,26 @@ progress, `[x]` = done.
       `M_ref` against test counts — compare the break-open prior with the
       independence `P_mar`, at `tw96`/`tw512`/`tw2040`, and re-sweep `kappa`).
       Details to settle on the way:
-      * **Populating `M_ref(w,w)`** — which rule fills the self-loop of the new
-        word (row rule `P(v,v)`, column rule `P(u,u)`, the merge `L(Q)` term, or
-        a combination), and whether it needs the `Q` correction.
-      * **Decrement: subtract `N` or `M`?** — when a merge consumes a cell, do
-        we reduce its *observed count* `N` (leaving any prior mass in place) or
-        the whole cell `M`?  This decides whether "prior frozen at creation"
-        survives a decrement touching the same cell.
+      * **`M_ref(w,w)` — settled: `alpha·P(v,u)`.**  Both endpoints of the
+        self-loop are the *same* word `w = (uv)`, so "break the later word" is
+        undefined; breaking one side but not the other would be asymmetric.
+        Break **both** ends, giving the internal junction
+        `(rc(w), lc(w)) = (v, u)`.  (This also matches the observed self-loop
+        term: `Q = N(u,v,u,v)` sits at the `v→u` junction.)  The alternatives
+        "break only the left" (`P(v,w)`, via `N(v,(uv))`) or "only the right"
+        (`P(w,u)`, via `N((uv),u)`) are rejected as asymmetric.
+      * **Decrement: subtract `N` or `M`?** — count changes are `N`; a cell's
+        prior is frozen at creation and survives a mere count decrement, but a
+        cell that becomes *structurally impossible* is zeroed outright.  So
+        decrement `N`, zero a dead cell's `M`.
       * **`alpha`, and does it depend on `NUM_PAIRS`?** — the prior mass per
         cell (or per row/column); whether one `alpha` transfers across levels or
         must shrink as words are added (each new word adds a row and a column).
-      * **Run words** — how a flat `(u^k)` (the A2 rule) enters the construction:
-        as a chain of merges, or as one word with children `(u, (u^{k-1}))`,
-        which changes `rc`/`lc` and the "later word" calls.
+      * **Run words — `k`-ary, `lc = rc = u`.**  A flat run word `(u^k)` is a
+        single **`k`-ary** merge of `k` copies of `u` (one word per length, per
+        A2), *not* `k−1` nested binary merges.  Hence `lc((u^k)) = rc((u^k)) = u`;
+        breaking it once drops to `u`, and its self-loop prior is `alpha·P(u,u)`.
+        The dictionary is run-aware throughout (C6), so C5 sees run words only.
       * **Dead cells** — after `(uv)` is added, `M(u,v)` must be exactly **zero**
         (structural: no tokenised string has `u` then `v`).  Resolved in
         `BREAK_OPEN_PRIOR.md` §4 ("Where the dead cell's mass goes"): the
@@ -140,15 +147,13 @@ progress, `[x]` = done.
         conserved.  So "prior frozen at creation" holds only until a cell is
         structurally invalidated.
 
-- [ ] **C6. Re-run C1–C3 with the run-aware dictionary.**  C1–C3 (and
-      `docs/WORD_COMPRESSIBILITY.md`) use the **plain pair-merge** rule, so a run
-      `u^k` is built as nested `(uu)`, `((uu)u)`, … .  A2/A4 show the flat
-      **run-aware** rule (`(u^k)`) is preferable, so add a `--runs` mode to
-      `scripts/tree_words.py` (build the run-aware dictionary, tokenise, count,
-      score) and regenerate the held-out 64/128-bit table, then update
-      `WORD_COMPRESSIBILITY.md`.  Depends on the A2 rule; independent of C5.
-      (Caveat noted inline in `WORD_COMPRESSIBILITY.md`; the current numbers
-      stand as the plain-BPE baseline for comparison.)
+- [ ] **C6. Re-run C1–C3 with the run-aware dictionary (this is C5's
+      baseline).**  Make the run-aware rule (`(u^k)`, A2) the **only** dictionary
+      in `scripts/tree_words.py`; the plain pair-merge version is obsolete and
+      all records of it (outside git history) are removed.  Regenerate the
+      `tw*` artifacts and the held-out 64/128-bit table and rewrite
+      `docs/WORD_COMPRESSIBILITY.md` on the run-aware rule.  Its results are the
+      **baseline that C5 is compared against**.
 
 ## Housekeeping / deferred regenerations
 
@@ -159,10 +164,14 @@ progress, `[x]` = done.
 - [ ] **H2. Corpus hardening** (deferred, optional): Ruby heredoc markers /
       UUID fixtures.
 
-## Decisions to confirm (see questions to the PI)
+## Decisions
 
-- D1. New-doc name + how much of `ADJACENCY_MODEL.md` folds into it.
-- D2. Which `NUM_PAIRS` values to prototype (and how to map them to the
-      `common<T>` vocabularies).
-- D3. Held-out sample size / training-split policy for C3.
-- D4. Whether C4's prior is wanted inside C2, or kept as a separate study.
+- D1. New-doc name + how much of `ADJACENCY_MODEL.md` folds into it. — *past*
+  (settled by `ADJACENCY_MATRIX.md`).
+- D2. Which `NUM_PAIRS` values to prototype. — *past* (`tw96`/`tw512`/`tw2040`).
+- D3. Held-out sample size / training-split policy for C3. — *past* (the 9:1
+  interleaved split, `split_corpus.py`).
+- D4. Whether C4's prior sits inside C2 or stays separate. — **this is the
+  question studied by C5**: the break-open prior as a *replacement for* the
+  independence `P_mar` inside the counting prior, judged against the C6
+  baseline on held-out data.

@@ -61,6 +61,15 @@ recursion.  The **base case is when both `a` and `b` are single characters**;
 there the prior is the character-level `P_mar` of `docs/ADJACENCY_MATRIX.md` §6
 (`P_mar(a,b) = (r_a/T)(c_b/T)`).
 
+Two special cases fall out of "break the **later** word":
+
+* **`a = b` (a self-loop).**  The two endpoints are the *same* word, so there is
+  no later one; breaking a single side would be asymmetric.  Break **both**, so
+  the prior of a self-loop `(w,w)` is `alpha·P(rc(w), lc(w))` (§4 fixes this for
+  a newly created `w`).
+* **Run words.**  A flat `(u^k)` is one **`k`-ary** node, not a chain of binary
+  merges, so it has `lc = rc = u`: breaking it drops straight to `u`.
+
 ## 3. The recursion, top-down (for intuition)
 
 For a cell `(a, b)`, repeatedly replace the later word by its boundary child: if
@@ -215,32 +224,36 @@ train/test binomial thinning), not by row similarity.  Concretely:
 3. keep it only if it beats independence by more than noise *and* the win grows
    with sparsity — the signature the `kappa` prior showed.
 
-### Details to settle while implementing
+### Details, now settled
 
-(Tracked as **C5** in `PLAN.md`.)
+(Tracked as **C5** in `PLAN.md`; C5 is compared against the **run-aware C6
+baseline**.)
 
-* **`M_ref(w,w)`.**  Which rule fills the new word's self-loop — the row rule
-  `alpha·P(v,v)`, the column rule `alpha·P(u,u)`, the merge term `L(Q)`, or a
-  combination — and whether the `Q` correction is needed there.
-* **Decrement by `N` or by `M`?**  When a merge consumes a cell, do we reduce its
-  *observed count* (leaving any frozen prior mass in place) or the whole cell?
-  This decides whether "prior frozen at creation" survives a later decrement of
-  the same cell.
+* **`M_ref(w,w)` = `alpha·P(v,u)`.**  Both endpoints of the self-loop are the
+  *same* word `w = (uv)`, so "break the later word" is undefined and breaking one
+  side only would be asymmetric.  Break **both** ends to get the internal
+  junction `(rc(w), lc(w)) = (v, u)`.  This also matches the observed self-loop
+  term — `Q = N(u,v,u,v)` is exactly the `v→u` junction.  Rejected alternatives:
+  breaking only the left (a `P(v,w)` prior, i.e. via `N(v,(uv))`) or only the
+  right (`P(w,u)`, via `N((uv),u)`).
+* **Decrement by `N`; zero a dead cell's `M`.**  A count decrement touches only
+  the observed `N`; the prior is frozen at creation.  A cell that becomes
+  *structurally impossible* (the dead `(u,v)`) is zeroed outright — count and
+  prior (§4).
 * **`alpha`** — its best value, and whether it must depend on `NUM_PAIRS`: every
   new word adds a row and a column, so a fixed per-cell `alpha` inflates the
-  total prior mass as the vocabulary grows.
-* **Run words.**  How a flat `(u^k)` (the A2 rule) enters the tree — as a chain
-  of merges or as one word with children `(u, u^{k-1})` — which changes `rc`/`lc`
-  and the "later word" call.
-* **Dead cells.**  Once `(uv)` is added, `M(u,v)` is never used again and must be
-  exactly **zero**; likewise any cell whose endpoints can no longer be adjacent.
-  Leaving stale prior mass there would bias the row/column sums.
+  total prior mass as the vocabulary grows.  To be swept in C5.
+* **Run words are `k`-ary with `lc = rc = u`.**  A flat run word `(u^k)` is one
+  **`k`-ary** merge of `k` copies of `u` (one word per length, per A2), *not*
+  `k−1` nested binary merges.  So `lc((u^k)) = rc((u^k)) = u`: breaking it once
+  drops to `u`, its row/column priors use `P(u,·)` / `P(·,u)`, and its self-loop
+  prior is `alpha·P(u,u)`.  The dictionary is run-aware throughout (C6), so C5
+  sees run words only.
 
-Still open conceptually: whether "break the later word" should break by depth or
-by `N` (the first draft) rather than by wordlist order (chosen here, for
-determinism); and how the prior interacts with the *cyclic* structure (the
-target bigrams include `(a, \n)` and `(\n, b)`).  The joint-vs-conditional choice
-is settled: both `M` and `P` are the joint — §5.
+Still open: whether "break the later word" should key on creation rank (chosen,
+for determinism) versus depth or `N`; and how the prior interacts with the
+*cyclic* structure (the target bigrams include `(a, \n)` and `(\n, b)`).  The
+joint-vs-conditional choice is settled: both `M` and `P` are the joint — §5.
 
 Reproduce the table with the `tw2040` files and `scripts/tree_words.py`
 (`load_dictionary`, `load_adj`).
