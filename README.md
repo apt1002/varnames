@@ -1,11 +1,11 @@
 # varnames — a corpus of programming-language identifiers
 
 **Goal.** Construct a **bijection from programming-language identifiers to the
-integers**, one that can be *expressed compactly* — on the order of 20 KB of
-code plus its tables. A 64-bit hash function is usable as a bijection in
-practice, but its *inverse* is far too large; so instead we are trying to build
-a **compression algorithm** that encodes an identifier as an integer and can
-recover it.
+integers**, one that can be *expressed compactly* — on the order of 20 KB
+**total**, counting the code *and* its tables together. A 64-bit hash function
+is usable as a bijection in practice, but its *inverse* is far too large; so
+instead we are trying to build a **compression algorithm** that encodes an
+identifier as an integer and can recover it.
 
 Identifiers are restricted to the form
 
