@@ -68,6 +68,27 @@ labels (see `README.md`).
       *Done* — `docs/WORD_COMPRESSIBILITY.md`.
 - [x] **C7. Smooth the break-open shape, or drop it.** *DROPPED (not needed).*
 
+- [x] **C8. Tokeniser speed: precedence parser vs buckets.** *Negative for the
+      precedence parser (faster but inequivalent); a correct ascending-rank
+      bucket parser is 1.4× faster and now production.* `docs/TOKENISATION.md`.
+- [ ] **C9. Re-target the adjacency experiments to tree words.** Move
+      `ADJACENCY_MODEL.md` and `HELLINGER_FACTORISATION.md` off the
+      common-substring vocabulary onto the run-aware tree-word `word list`,
+      splitting identifiers only at word boundaries. *Open.*
+- [ ] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
+      Use "`(ab)` is a word", and the ancestor conditions, to zero structurally
+      impossible cells of the independence prior and renormalise. *Open.*
+- [x] **C11. Retract the break-open prior on absorbed row/column mass.**
+      *Tested (`--shrink prop|hard`): REJECTED — worsens finding 5 and the
+      held-out rate.* `docs/BREAK_OPEN_PRIOR.md` §9.
+- [ ] **C12. Word list: overshoot then prune by `Δ_CS`.** Build past the target
+      size, then repeatedly remove the removable word (not a child) with the
+      smallest `Δ_CS`. *Open.*
+- [ ] **C13. Compress the word adjacency matrix by left/right K-means
+      clustering.** Cluster predecessors and successors (Hellinger distance),
+      model the cluster × cluster matrix plus word→cluster / cluster→word
+      tables. *Open.*
+
 ## Housekeeping / deferred regenerations
 
 - [x] **H1. Rebuild `work/*/pair_stats.txt` and `pair_factors_L*.npy`** with the
