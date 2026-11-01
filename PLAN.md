@@ -67,28 +67,24 @@ labels (see `README.md`).
 - [x] **C7. Smooth the break-open shape, or drop it.** *DROPPED (not needed).*
 
 - [x] **C8. Tokeniser speed: precedence parser vs buckets.** *Negative for the
-      precedence parser (faster but inequivalent); a correct ascending-rank
-      bucket parser is 1.4× faster and now production.* `docs/TOKENISATION.md`.
+      precedence parser (faster but inequivalent); the correct ascending-rank
+      bucket parser is equivalent and faster, and is now production.*
+      `docs/TOKENISATION.md`.
 - [x] **C9. Re-target the adjacency experiments to tree words.** *Done* — the
-      Hellinger factorisation of the word matrix wins by joint KL from `L≈16`
-      up, but factorising *loses* held-out compression vs the full table.
+      Hellinger factorisation of the word matrix is the best low-rank model but
+      loses held-out compression vs the full table.
       `docs/HELLINGER_FACTORISATION.md`, `scripts/hfactor_words.py`.
 - [x] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
-      *Done — NEGLIGIBLE: the mask is exact (zero false positives) but is
-      ~3–4% of the prior mass and moves held-out bits by ≤0.06.*
-      `docs/STRUCTURAL_ZEROS.md`.
+      *Done — NEGLIGIBLE.* `docs/STRUCTURAL_ZEROS.md`.
 - [x] **C11. Retract the break-open prior on absorbed row/column mass.**
-      *Tested (`--shrink prop|hard`): REJECTED — worsens finding 5 and the
-      held-out rate.* `docs/BREAK_OPEN_PRIOR.md` §9.
-- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Succeeded* — 1.5×
-      overshoot, pruned to size, beats the greedy build by **0.86 bits** at
-      `NUM_PAIRS = 512`; 80 of the 256 removals are greedy words, so the
-      overshoot does real work. `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
+      *Tested (`--shrink prop|hard`): REJECTED.* `docs/BREAK_OPEN_PRIOR.md` §9.
+- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Succeeded* — the
+      pruned list beats the plain greedy build at equal size.
+      `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
 - [x] **C13. Compress the word adjacency matrix by left/right K-means
       clustering.** *Succeeded* — the co-clustered block model beats the
-      Hellinger factorisation at equal storage; `k/N = 20` shrinks the matrix to
-      ~0.3% of its cells. The removable-word refinement is negligible.
-      `docs/CLUSTER_WORDS.md`, `scripts/cluster_words.py`.
+      Hellinger factorisation at equal storage. `docs/CLUSTER_WORDS.md`,
+      `scripts/cluster_words.py`.
 
 ## Housekeeping / deferred regenerations
 
