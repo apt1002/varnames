@@ -69,13 +69,14 @@ labels (see `README.md`).
 - [x] **C8. Tokeniser speed: precedence parser vs buckets.** *Negative for the
       precedence parser (faster but inequivalent); a correct ascending-rank
       bucket parser is 1.4× faster and now production.* `docs/TOKENISATION.md`.
-- [ ] **C9. Re-target the adjacency experiments to tree words.** Move
-      `HELLINGER_FACTORISATION.md` off the common-substring vocabulary onto the
-      run-aware tree-word `word list`, splitting identifiers only at word
-      boundaries. *Open.*
-- [ ] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
-      Use "`(ab)` is a word", and the ancestor conditions, to zero structurally
-      impossible cells of the independence prior and renormalise. *Open.*
+- [x] **C9. Re-target the adjacency experiments to tree words.** *Done* — the
+      Hellinger factorisation of the word matrix wins by joint KL from `L≈16`
+      up, but factorising *loses* held-out compression vs the full table.
+      `docs/HELLINGER_FACTORISATION.md`, `scripts/hfactor_words.py`.
+- [x] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
+      *Done — NEGLIGIBLE: the mask is exact (zero false positives) but is
+      ~3–4% of the prior mass and moves held-out bits by ≤0.06.*
+      `docs/STRUCTURAL_ZEROS.md`.
 - [x] **C11. Retract the break-open prior on absorbed row/column mass.**
       *Tested (`--shrink prop|hard`): REJECTED — worsens finding 5 and the
       held-out rate.* `docs/BREAK_OPEN_PRIOR.md` §9.

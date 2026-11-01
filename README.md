@@ -65,7 +65,8 @@ varnames/
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
 │   ├── ADJACENCY_MATRIX.md              # how to build the adjacency matrix + the κ prior
-│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
+│   ├── HELLINGER_FACTORISATION.md       # square-root factorisation of the word matrix
+│   ├── STRUCTURAL_ZEROS.md              # structural zeros of the word prior (negligible)
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
@@ -89,7 +90,6 @@ varnames/
 │   ├── code_lengths.py                  # ideal code length + 64/128-bit fit rates
 │   ├── pair_matrix_lib.py               # adjacency M + SVD/NMF helpers (library)
 │   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
-│   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + unobserved-pairs prior
 │   ├── choose_kappa.py                  # choose the prior strength κ by held-out likelihood
 │   ├── cluster_substrings_lib.py        # K-means helpers (library)
 │   ├── cluster_substrings.py            # CLI: K-means on the Hellinger embedding
@@ -101,6 +101,7 @@ varnames/
 │   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
 │   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
 │   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
+│   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
