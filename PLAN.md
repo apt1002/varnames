@@ -80,9 +80,10 @@ labels (see `README.md`).
 - [x] **C11. Retract the break-open prior on absorbed row/column mass.**
       *Tested (`--shrink prop|hard`): REJECTED — worsens finding 5 and the
       held-out rate.* `docs/BREAK_OPEN_PRIOR.md` §9.
-- [ ] **C12. Word list: overshoot then prune by `Δ_CS`.** Build past the target
-      size, then repeatedly remove the removable word (not a child) with the
-      smallest `Δ_CS`. *Open.*
+- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Succeeded* — 1.5×
+      overshoot, pruned to size, beats the greedy build by **0.86 bits** at
+      `NUM_PAIRS = 512`; 80 of the 256 removals are greedy words, so the
+      overshoot does real work. `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
 - [ ] **C13. Compress the word adjacency matrix by left/right K-means
       clustering.** Cluster predecessors and successors (Hellinger distance),
       model the cluster × cluster matrix plus word→cluster / cluster→word

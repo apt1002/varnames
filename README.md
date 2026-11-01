@@ -72,6 +72,7 @@ varnames/
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
+│   ├── PRUNE_WORDS.md                   # overshoot the word list, prune by removal cost
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 ├── scripts/
@@ -102,6 +103,7 @@ varnames/
 │   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
 │   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
+│   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
