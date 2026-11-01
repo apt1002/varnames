@@ -9,12 +9,7 @@ word boundaries**.  There is no common-substring vocabulary anywhere in the
 experiment.
 
 Status: the square-root (Hellinger) factorisation is the recommended low-rank
-model and is the one `scripts/hfactor_words.py` reports.  The earlier
-prefix/suffix version of this note is retired (git history); the low-rank study
-of the prefix/suffix matrix ([`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md)) is
-retired too, because only its NMF and square-root factorisations were
-principled, NMF is clearly inferior, and the square-root factorisation is the
-same model applied to a different matrix.
+model and is the one `scripts/hfactor_words.py` reports.
 
 ## The matrix
 
