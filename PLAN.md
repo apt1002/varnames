@@ -15,8 +15,6 @@ labels (see `README.md`).
 - [x] Corpus build + case normalisation — `docs/CORPUS.md`,
       `docs/CASE_NORMALISATION.md`.
 - [x] Character-level fixed-budget compressibility — `docs/CODE_LENGTHS.md`.
-- [x] Prefix/suffix adjacency model, low-rank + reversal symmetry —
-      `docs/ADJACENCY_MODEL.md`.
 - [x] Square-root (Hellinger) factorisation + unobserved-pairs counting fix —
       `docs/HELLINGER_FACTORISATION.md`.
 - [x] Choosing `k` and `N` for the model size — `docs/CLUSTER_SIZE_STUDY.md`.
@@ -72,9 +70,9 @@ labels (see `README.md`).
       precedence parser (faster but inequivalent); a correct ascending-rank
       bucket parser is 1.4× faster and now production.* `docs/TOKENISATION.md`.
 - [ ] **C9. Re-target the adjacency experiments to tree words.** Move
-      `ADJACENCY_MODEL.md` and `HELLINGER_FACTORISATION.md` off the
-      common-substring vocabulary onto the run-aware tree-word `word list`,
-      splitting identifiers only at word boundaries. *Open.*
+      `HELLINGER_FACTORISATION.md` off the common-substring vocabulary onto the
+      run-aware tree-word `word list`, splitting identifiers only at word
+      boundaries. *Open.*
 - [ ] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
       Use "`(ab)` is a word", and the ancestor conditions, to zero structurally
       impossible cells of the independence prior and renormalise. *Open.*

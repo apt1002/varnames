@@ -2,8 +2,7 @@
 
 This is the canonical reference for how the **prefix/suffix adjacency matrix**
 `M` is built, and for the prior (`κ`) that fills its unobserved cells.  The
-documents that *study* this matrix — the low-rank model
-([`ADJACENCY_MODEL.md`](ADJACENCY_MODEL.md)), the Hellinger factorisation
+documents that *study* this matrix — the Hellinger factorisation
 ([`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) and the character
 successor model ([`CODE_LENGTHS.md`](CODE_LENGTHS.md)) — refer back here rather
 than restating the construction.
@@ -79,7 +78,6 @@ with relative Frobenius residual `0.0` (`scripts/symmetry_check.py`, on
 useful debugging invariant, and it is why a *reversed* corpus is a genuinely
 different dataset: the identifier corpus is **not** reversal-symmetric, so the
 row (left-context) and column (right-context) behaviour legitimately differ.
-See [`ADJACENCY_MODEL.md`](ADJACENCY_MODEL.md) for the measured asymmetry.
 
 ## 5. Density and structural zeros
 

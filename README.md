@@ -65,7 +65,6 @@ varnames/
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
 │   ├── ADJACENCY_MATRIX.md              # how to build the adjacency matrix + the κ prior
-│   ├── ADJACENCY_MODEL.md               # low-rank prefix/suffix adjacency model
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
@@ -90,10 +89,8 @@ varnames/
 │   ├── code_lengths.py                  # ideal code length + 64/128-bit fit rates
 │   ├── pair_matrix_lib.py               # adjacency M + SVD/NMF helpers (library)
 │   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
-│   ├── latent_probabilities.py          # negative-entry remedies, scored by KL
 │   ├── sqrt_and_smooth.py               # Hellinger (sqrt) factorisation + unobserved-pairs prior
 │   ├── choose_kappa.py                  # choose the prior strength κ by held-out likelihood
-│   ├── rank1_marginals.py               # rank-1 SVD vs the independence model
 │   ├── cluster_substrings_lib.py        # K-means helpers (library)
 │   ├── cluster_substrings.py            # CLI: K-means on the Hellinger embedding
 │   ├── cluster_entropy.py               # successor entropy (bits) per cluster
@@ -283,32 +280,35 @@ exact curve is ever wanted), but the qualitative result stands.
 Headline: the static 64-bit success rate runs from **52% to 89%** across
 thresholds 500–100000 (and 93%–99% at 128 bits).
 
-## The low-rank prefix/suffix adjacency model
+## Factorising the word adjacency matrix (Hellinger)
 
-`scripts/pair_matrix.py` builds the `N x N` prefix/suffix adjacency matrix `M`
-(longest common substring that is a suffix of the left half against the longest
-common substring that is a prefix of the right half) and approximates it with a
-rank-`L` factorisation — by default in the square-root (Hellinger) domain,
-`M ~ (√M)_L²`, which is non-negative by construction and minimises the metric
-that matches KL (`--no-sqrt` for the old count-space SVD). All of these are
-scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix_lib.kl_joint`), which
-differs from the older occurrence-weighted *conditional* KL only by a
-model-independent constant, so no conditional `p(b|a)` is formed.
-`scripts/latent_probabilities.py` measures ways of coping with the negative
-entries that factorisation introduces, and `scripts/sqrt_and_smooth.py`
-explores a better fix: factorise `√M` (the occurrence-weighted Hellinger
-embedding — rooting the counts already builds in the weighting) and square the
-reconstruction back, which is both non-negative by construction and ~30% lower
-KL than any remedy. It also studies a *counting* fix for unobserved pairs — an
-independence-shaped prior of fixed mass (`M + κ·N·P_mar`, κ = 1000) added to the
-reference matrix — in `docs/HELLINGER_FACTORISATION.md`.
+The word × word adjacency matrix of the run-aware dictionary (§ above) is the
+largest table in the model, so it is the natural thing to factorise. The
+**Hellinger (square-root) factorisation** roots the counts, truncates the SVD of
+`√M` to rank `L`, and squares the reconstruction back:
 
-The adjacency matrix is low-rank for the frequent contexts but close to
-full-rank for the tail. The model, the rank-1 comparison, the reversal-symmetry
-check and the negative-entry remedies are in
-[`docs/ADJACENCY_MODEL.md`](docs/ADJACENCY_MODEL.md); the square-root
-factorisation and the unobserved-pairs prior are in
-[`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md).
+    M ≈ (√M)_L²   —   non-negative by construction, and fitted in the metric
+    that matches KL.
+
+It is scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix_lib.kl_joint`),
+which differs from the occurrence-weighted *conditional* KL only by a
+model-independent constant, so no conditional `p(b|a)` is formed. A *counting*
+fix for unobserved pairs — an independence-shaped prior of fixed mass
+(`M + κ·N·P_mar`, κ = 1000) added to the reference matrix — is described in
+`docs/ADJACENCY_MATRIX.md` §6 and studied in
+[`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md), which also
+carries the negative-entry remedies (clip, `|M̂|`, backoff, NMF) that the
+Hellinger model supersedes.
+
+An earlier low-rank study of the *prefix/suffix* adjacency matrix (longest
+common substring that is a suffix of the left half against the longest common
+substring that is a prefix of the right half) is retired: only its NMF and
+square-root factorisations were principled, NMF is clearly inferior, and the
+square-root factorisation is the same Hellinger model now applied to the word
+matrix. It lives in git history. The prefix/suffix matrix construction itself
+remains the canonical reference in
+[`docs/ADJACENCY_MATRIX.md`](docs/ADJACENCY_MATRIX.md), and its reversal-symmetry
+invariant is checked by `scripts/symmetry_check.py`.
 
 A separate line of work builds a **dictionary by repeatedly merging the most
 common adjacent word pair** and models the tokenised corpus with a first-order
