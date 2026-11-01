@@ -84,10 +84,11 @@ labels (see `README.md`).
       overshoot, pruned to size, beats the greedy build by **0.86 bits** at
       `NUM_PAIRS = 512`; 80 of the 256 removals are greedy words, so the
       overshoot does real work. `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
-- [ ] **C13. Compress the word adjacency matrix by left/right K-means
-      clustering.** Cluster predecessors and successors (Hellinger distance),
-      model the cluster × cluster matrix plus word→cluster / cluster→word
-      tables. *Open.*
+- [x] **C13. Compress the word adjacency matrix by left/right K-means
+      clustering.** *Succeeded* — the co-clustered block model beats the
+      Hellinger factorisation at equal storage; `k/N = 20` shrinks the matrix to
+      ~0.3% of its cells. The removable-word refinement is negligible.
+      `docs/CLUSTER_WORDS.md`, `scripts/cluster_words.py`.
 
 ## Housekeeping / deferred regenerations
 

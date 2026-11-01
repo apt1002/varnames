@@ -73,6 +73,7 @@ varnames/
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   ├── PRUNE_WORDS.md                   # overshoot the word list, prune by removal cost
+│   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 ├── scripts/
@@ -104,6 +105,7 @@ varnames/
 │   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
+│   ├── cluster_words.py                 # K-means co-clustering of the word matrix
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
@@ -326,6 +328,14 @@ conditional entropies whose linear term in `m − 1` also cancels, leaving a
 manifestly non-positive quadratic form: every merge weakly *shrinks* the
 dictionary. The identities are regression-tested by
 `scripts/check_merge_delta.py`.
+
+Two levers on the resulting model are measured. Building the word list 1.5× too
+large and pruning the least valuable words down to size beats the plain greedy
+build by 0.86 bits at `NUM_PAIRS = 512`
+([`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md)). And the word × word matrix — the
+largest table — compresses better by two-sided K-means co-clustering than by
+the Hellinger factorisation of equal storage
+([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)).
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds:
