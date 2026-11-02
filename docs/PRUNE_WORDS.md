@@ -90,3 +90,18 @@ The result is a clear win at 1.5× with a modest 0.86-bit gain, and the deleted
 words are mostly overshoot-tail words rather than greedy words (176 of 256) —
 so 1.5× is a reasonable setting; the gain per extra word is already small, so a
 much larger overshoot would buy little more.
+
+Where do the 80 kept new words come from within the overshoot?  Creation order
+is roughly descending pair frequency, and the kept words are **front-loaded but
+not confined to the front**.  Counting new words kept per 32 created, in
+creation order:
+
+| overshoot rank | 1–32 | 33–64 | 65–96 | 97–128 | 129–160 | 161–192 | 193–224 | 225–256 |
+|---|---|---|---|---|---|---|---|---|
+| kept / 32 | 15 | 14 | 12 | 12 | 13 | 4 | 3 | 7 |
+
+66 of the 80 sit in the first 160 ranks (median rank 95), so the earlier overshoot
+is much the more productive half.  But the tail still contributes 14 words the
+greedy-512 build never reached (e.g. `eed`, `aut`, `air`, `del`, `vi`), so the
+whole overshoot is doing some work — just with sharply diminishing returns,
+which is exactly why 1.5× is enough.
