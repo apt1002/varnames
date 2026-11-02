@@ -236,6 +236,41 @@ alone yields a compact, near-lossless table — the block model wants a small `k
 direct coding wants a large `N`, and the two curves cross well above the
 projected budget.
 
+### Top-`N` cells vs the `k = 105` block model at *matched size*
+
+The curve above is read by *matched accuracy*: to reach the block model's
+accuracy the top-`N` table needs ~300K cells.  Read the other way — at *matched
+model size* — the two curves answer whether a top-`N` table is competitive with
+the cluster model at its operating point.  On `tw2040` (stride-20 validation)
+the `k = 105` model's store is `k² + 2V = 15 233`:
+
+| model | store (numbers) | held-out bits |
+|---|---:|---:|
+| top-`N`, `N = 10 000` + independence prior | 10 000 | 55.958 |
+| top-`N`, `N = 15 233` + independence prior | 15 233 | 54.240 |
+| co-clustering, `k = 76` | 9 984 | 55.985 |
+| co-clustering, `k = 105` | 15 233 | 55.354 |
+
+Under the project's store convention — a model's size is its number of stored
+**numbers** — the top-`N` + independence-prior table is *competitive with, and
+at equal store slightly better than, the `k = 105` block model*: 54.240 vs
+55.354 (~1.1 bits at store 15 233), and at `N = 10 000` it ties `k = 76`
+(55.958 vs 55.985, store ~10K).  Both sit ~8.5–10 bits above the full table
+(45.77).
+
+**This tie is an artefact of the store convention, and it reverses under a
+bit-accurate accounting.**  `k² + 2V` counts only *entries*: the block matrix's
+positions are implied by a dense `k × k` array, and the cluster labels cost only
+`V·log₂k ≈ 14 kbit`.  The top-`N` scheme must *additionally transmit which* `N`
+of the `V²` cells are coded — a subset entropy of `≳ N·log₂V² ≈ N·22` bits, or
+≈147 kbit at `N = 15 233`, ~10× the cluster labels.  Charging both models for
+their index metadata at equal bits per number, the top-`N` table at matched
+*true* size is ~1.3–4 bits **worse** than `k = 105` (e.g. at 8 bits/number the
+block model is ~136 kbit total, matched by `N ≈ 5 400` → ≈59 bits).  So it is a
+genuine tie in the counting convention this project uses, not a clean compression
+win; the block model keeps a small edge once storage is counted honestly, and
+neither is near the full table.
+
 ## Conclusions
 
 0. Factorise the **word × word** matrix `√M_ref` (the occurrence-weighted
@@ -255,5 +290,9 @@ projected budget.
    Storing the largest `N` cells verbatim over the independence prior stays
    within ~1 bit only at `N ≈ 300K` (`tw2040`, 6.8% of `V²`) / `~100K` (`tw512`, 30% of `V²`);
    a low-rank/M_mar fit leaves its error spread over 10–20% of `V²` at every
-   rank.  Combined with the clustering study, neither route gives a
-   compact, near-lossless table.  `scripts/matrix_compress.py`.
+   rank.  At *matched store* the scheme is nevertheless competitive with the
+   `k = 105` co-clustering (54.240 vs 55.354 bits at store 15 233), but that tie
+   is a counting artefact: it ignores the cost of transmitting *which* cells are
+   coded (`≈ N·log₂V²` bits, ~10× the cluster labels), after which the block
+   model wins by ~1.3–4 bits.  Combined with the clustering study, neither route
+   gives a compact, near-lossless table.  `scripts/matrix_compress.py`.

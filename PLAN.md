@@ -105,8 +105,9 @@ labels (see `README.md`).
       unavoidable for the block model. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
 - [x] **C19. Compress the word × word matrix directly.** *Closed, negative* —
-      the residual is not sparse, and direct coding stays far from the block
-      model's size; no compact near-lossless table.
+      the residual is not sparse; at matched store a top-`N` table only ties the
+      block model, and that tie reverses once the cost of naming the coded cells
+      is counted; no compact near-lossless table.
       `docs/HELLINGER_FACTORISATION.md`, `scripts/matrix_compress.py`.
 - [~] **C20. Rank-4 factor clouds (visualisation).** *Tool ready* — plot the
       left/right `√M_ref` factorisation as 3D point clouds to look for structure
