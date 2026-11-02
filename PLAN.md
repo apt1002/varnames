@@ -102,3 +102,10 @@ labels (see `README.md`).
       `PAIR_THRESHOLDS`; log `work/afk_pairmatrix.log`.
 - [ ] **H2. Corpus hardening** (deferred, optional): Ruby heredoc markers /
       UUID fixtures.
+- [ ] **H3. Broaden the corpus** (deferred, not started): add identifier
+      harvests from more namespace-rich ecosystems — Java (Maven Central), Lua
+      (LuaRocks), OCaml (OPAM), Haskell (Hackage) — and rebuild the union. Keep
+      the harvest reproducible and the corpus **stable** (a frozen, versioned
+      snapshot) so every downstream experiment can be regenerated on it later;
+      the plan is a future full rebuild of all results on the larger, broader
+      corpus. `docs/CORPUS.md`.
