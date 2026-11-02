@@ -95,10 +95,9 @@ labels (see `README.md`).
       objective mismatch; recomputation cancelled. `docs/PRUNE_WORDS.md`.
 - [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned list.** *Cancelled.*
       `docs/WORD_COMPRESSIBILITY.md`.
-- [ ] **C18. Cluster loss vs `k`.** (Deferred.) Measure held-out bits against the
-      number of clusters `k` (well beyond `V/20`) to bound how much of the
-      full-table → co-clustered loss (~45 → 55 bits/identifier at `k = 105`) is
-      avoidable by clustering at all. `docs/CLUSTER_WORDS.md`,
+- [x] **C18. Cluster loss vs `k`.** *Closed* — the loss closes smoothly with no
+      knee; ~1 bit only at `k ≈ V/2` (~25 % of the matrix), so it is essentially
+      unavoidable for the block model. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
 - [ ] **C19. Compress the word × word matrix directly.** (Deferred.) Inspect the
       residual `M − (low-rank / M_mar fit)` — is it sparse? If so, encode

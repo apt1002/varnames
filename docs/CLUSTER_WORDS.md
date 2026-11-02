@@ -120,6 +120,60 @@ the factorisation (see above).
   real but weak: coarser than a few hundred clusters, the block approximation
   loses a lot.
 
+## How the loss scales with `k`
+
+The question behind this sweep: the loss from the full `V×V` table to the
+`k×k` block model is large (~10 bits at `k = V/20`), but is it *fundamental* to
+the block-constant restriction, or does it close if we simply allow more
+clusters?  Sweeping `k` up to `V/2` (same harness, `kappa = 300`) answers it.
+
+**`tw2040`** (V = 2104, full table 45.765 bits; `store = k² + 2V`):
+
+| `k` | store | % of `V²` | assoc | Δ vs full | 1-sided | Δ vs full |
+|---:|---:|---:|---:|---:|---:|---:|
+| 26 | 4,884 | 0.11 % | 57.33 | +11.57 | 54.90 | +9.14 |
+| 52 | 6,912 | 0.16 % | 56.58 | +10.82 | 53.69 | +7.92 |
+| 105 | 15,233 | 0.35 % | 55.35 | +9.59 | 52.16 | +6.39 |
+| 210 | 48,308 | 1.09 % | 53.43 | +7.67 | 50.61 | +4.84 |
+| 420 | 180,608 | 4.1 % | 50.98 | +5.21 | 48.68 | +2.92 |
+| 840 | 709,808 | 16.0 % | 48.58 | +2.82 | 47.24 | +1.48 |
+| 1052 | 1,110,912 | 25.1 % | 47.78 | +2.01 | 46.80 | +1.04 |
+
+**`tw512`** (V = 576, full table 54.164 bits):
+
+| `k` | store | % of `V²` | assoc | Δ vs full | 1-sided | Δ vs full |
+|---:|---:|---:|---:|---:|---:|---:|
+| 14 | 1,348 | 0.41 % | 69.68 | +15.52 | 66.61 | +12.44 |
+| 29 | 1,993 | 0.60 % | 68.00 | +13.83 | 64.23 | +10.07 |
+| 58 | 4,516 | 1.4 % | 65.64 | +11.47 | 61.67 | +7.50 |
+| 115 | 14,377 | 4.3 % | 61.77 | +7.61 | 58.61 | +4.44 |
+| 230 | 54,052 | 16.3 % | 57.62 | +3.46 | 55.98 | +1.82 |
+| 288 | 84,096 | 25.3 % | 56.33 | +2.16 | 55.30 | +1.13 |
+| 432 | 187,776 | 56.6 % | 54.67 | +0.51 | 54.43 | +0.26 |
+
+What the curves say:
+
+* **The loss closes smoothly, with no knee.**  Each doubling of `k` buys roughly
+  2–3 bits low down and 1–1.5 bits high up; there is no cluster count at which
+  the block model suddenly becomes near-lossless.
+* **"Low loss" means storing a large fraction of the matrix.**  To get within
+  ~1 bit of the full table needs `k ≈ V/2`, i.e. `store ≈ V²/4` (25 % of the
+  cells).  At the practical operating point `k = V/20` (0.3–0.6 % of `V²`) the
+  loss is 9.6 bits (`tw2040`) / 13.8 bits (`tw512`).
+* **So the loss is essentially unavoidable for the block-constant model.**  It is
+  not the choice of `k` that hurts; it is the restriction itself.  Clustering
+  cannot be both small and accurate, which is the case for compressing the
+  matrix *directly* (sparse residual from a low-rank/`M_mar` fit) rather than
+  approximating it by blocks.
+* **The factorisation penalty shrinks with `k`.**  `assoc − 1-sided` falls from
+  ~2.4 bits at `k = 26` to ~0.4 bits at `k = 1052` (as clusters become small,
+  `P(right word | right cluster)` carries almost all the information).
+* **At large store, even the low-rank model overtakes clustering.**  At matched
+  storage the `sqrtcnt` factorisation is worse than `assoc` up to `k ≈ 420`
+  (51.84 vs 50.98) but better beyond it (`k = 840`: 47.96 vs 48.58;
+  `k = 1052`: 47.05 vs 47.78).  Neither reaches the full table: at ~25 % storage
+  both sit 1–2 bits above it.
+
 ## The removable-word refinement
 
 The plan suggested also dropping pair words `(uv)` whose left cluster equals
@@ -133,4 +187,7 @@ saves a negligible number of labels and was not pursued.
 K-means co-clustering is the better way to compress the word × word matrix:
 stored as a `k × k` block matrix plus linear tables it dominates the Hellinger
 factorisation of equal storage, and at `k/N = 20` it shrinks the matrix to ~0.3%
-of its cells for ~10 bits/identifier.  `scripts/cluster_words.py`.
+of its cells for ~10 bits/identifier.  But that loss is not avoidable by adding
+clusters: it falls smoothly and only reaches ~1 bit at `k ≈ V/2`, i.e. ~25 % of
+the matrix.  For a compact standard, the block model alone will not do.
+`scripts/cluster_words.py`.
