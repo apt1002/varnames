@@ -73,7 +73,7 @@ varnames/
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
 │   ├── BOUNDARY_TRIGRAM.md              # boundary words (v\n) are worth ~1% held-out
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
-│   ├── PRUNE_WORDS.md                   # overshoot the word list, prune by removal cost
+│   ├── PRUNE_WORDS.md                   # overshoot/prune the word list (unsuccessful: hurts the clustered model)
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
@@ -333,9 +333,11 @@ dictionary. The identities are regression-tested by
 
 Two levers on the resulting model are measured. Building the word list 1.5× too
 large and pruning the least valuable words down to size beats the plain greedy
-build by 0.86 bits at `NUM_PAIRS = 512`
-([`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md)). And the word × word matrix — the
-largest table — compresses better by two-sided K-means co-clustering than by
+build on the *raw bigram score* (0.86 bits at `NUM_PAIRS = 512`), **but that
+word list is worse once the word × word matrix is co-clustered** — the prune
+optimises a different objective — so this lever is judged **unsuccessful**
+([`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md)). The word × word matrix — the
+largest table — does compress better by two-sided K-means co-clustering than by
 the Hellinger factorisation of equal storage
 ([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)).
 

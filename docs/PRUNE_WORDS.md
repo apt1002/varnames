@@ -1,12 +1,16 @@
 # Overshoot the word list, then prune by removal cost
 
-Status: **succeeded.**  Building the run-aware dictionary 1.5× too large and
+Status: **unsuccessful.**  Building the run-aware dictionary 1.5× too large and
 then deleting the least valuable words down to size gives a word list that codes
 held-out identifiers **0.86 bits better** than the plain greedy build of the
 same size (63.77 → 62.91 bits at `NUM_PAIRS = 512`), recovering most of the
-1.52-bit advantage of the 1.5× larger list (62.25 bits).  At `NUM_PAIRS = 2040`
-the win is smaller but still positive (**+0.145 bits**, 59.22 → 59.08; the
-overshoot 3060 list is 58.22).
+1.52-bit advantage of the 1.5× larger list (62.25 bits); at `NUM_PAIRS = 2040`
+the win is smaller but still positive (+0.145 bits, 59.22 → 59.08).  **But this
+is the *raw bigram* score only.**  The word list is *worse* once the word × word
+matrix is compressed by co-clustering — the representation the project would
+actually ship — so overshoot/pruning is judged a failure and the plain greedy
+list is kept.  The raw-score win is real but optimises the wrong objective; see
+[§Why the win does not carry](#why-the-win-does-not-carry).
 
 ## Idea
 
@@ -78,7 +82,7 @@ motivates the overshoot-size sweep (plan C14).  Per-32 rank counts of the kept
 new words and the 80-of-256 / 232-of-1020 greedy-deletion figures appear in
 `work/prune_512_removed.txt` / `work/prune_2040_removed.txt`.
 
-### Caveat: the gain does *not* carry to the clustered model
+### Why the win does not carry
 
 The pruned list is better only for the **un-clustered** bigram model.  Padding
 it through the co-clustering pipeline of [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md)
@@ -155,10 +159,14 @@ replaces them with 80 words the greedy-512 build never reached.
 
 ## Reading the overshoot size
 
-The result is a clear win at 1.5× with a modest 0.86-bit gain, and the deleted
-words are mostly overshoot-tail words rather than greedy words (176 of 256) —
-so 1.5× is a reasonable setting; the gain per extra word is already small, so a
-much larger overshoot would buy little more.
+(These diagnostics explain the *raw-score* behaviour, which the clustered
+verdict above overrides.)
+
+The raw-score win at 1.5× is modest (0.86 bits at 512), and the deleted
+words are mostly overshoot-tail words rather than greedy words (176 of 256).
+The gain per extra word is already small, so a much larger overshoot would buy
+little more — consistent with the 2040 result, where the same 1.5× overshoot
+buys only 0.145 bits.
 
 Where do the 80 kept new words come from within the overshoot?  Creation order
 is roughly descending pair frequency, and the kept words are **front-loaded but

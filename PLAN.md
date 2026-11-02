@@ -82,8 +82,10 @@ labels (see `README.md`).
       *Done — NEGLIGIBLE.* `docs/STRUCTURAL_ZEROS.md`.
 - [x] **C11. Retract the break-open prior on absorbed row/column mass.**
       *Tested (`--shrink prop|hard`): REJECTED.* `docs/BREAK_OPEN_PRIOR.md` §9.
-- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Succeeded* — the
-      pruned list beats the plain greedy build at equal size.
+- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Unsuccessful* — the
+      pruned list beats the plain greedy build on the raw bigram score, but is
+      *worse* once the word matrix is co-clustered (the prune optimises the full
+      bigram model, not the clustered/restricted one). Not adopted.
       `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
 - [x] **C13. Compress the word adjacency matrix by left/right K-means
       clustering.** *Succeeded* — the co-clustered block model beats the
@@ -97,16 +99,14 @@ labels (see `README.md`).
       (`work/tw2040p`) and it beats greedy by +0.145 bits un-clustered, but it
       is *worse* through the co-clustering pipeline; decided **not to adopt**.
       `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
-- [ ] **C16. Why does the pruned list regress under co-clustering?** *Open* —
-      the co-clustering tables on `work/tw2040p` are 1-2 bits worse than on the
-      greedy `work/tw2040` despite the better full table; diagnose it (a word
-      list tuned for the *full* bigram model apparently hurts the *restricted*
-      clustered model). The lesson would be that the word list should be tuned
-      against the clustered objective, not `Delta_CS`. `docs/CLUSTER_WORDS.md`,
-      `docs/PRUNE_WORDS.md`.
-- [ ] **C17. `WORD_COMPRESSIBILITY.md` on the pruned 2040 word list.**
-      *Open (informational)* — the pruned list is not adopted, so this is for
-      reference only; re-run the 2040 row on `work/tw2040p`.
+- [x] **C16. Why does the pruned list regress under co-clustering?** *Closed* —
+      diagnosed: the pruned matrix is intrinsically harder to approximate by a
+      few hundred clusters (clustered excess over full rises 1.71 → 1.97
+      bits/transition; less low-rank Hellinger energy), i.e. an objective
+      mismatch with `Delta_CS`. No further work; the recomputation tasks
+      (re-cluster / adopt) are **cancelled**. `docs/PRUNE_WORDS.md`.
+- [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned 2040 word list.**
+      *Cancelled* — the pruned list is not adopted, so no recomputation.
       `docs/WORD_COMPRESSIBILITY.md`.
 
 ## Housekeeping / deferred regenerations
