@@ -71,6 +71,7 @@ varnames/
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
+│   ├── BOUNDARY_TRIGRAM.md              # boundary words (v\n) are worth ~1% held-out
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   ├── PRUNE_WORDS.md                   # overshoot the word list, prune by removal cost
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
@@ -109,6 +110,7 @@ varnames/
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
+│   ├── boundary_trigram.py              # bits the identifier-boundary trigram (u,v,\n) is worth
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   └── run_break_open_prior.sh          # run the break-open-prior sweep
 └── data/
@@ -336,6 +338,13 @@ build by 0.86 bits at `NUM_PAIRS = 512`
 largest table — compresses better by two-sided K-means co-clustering than by
 the Hellinger factorisation of equal storage
 ([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)).
+
+A third design question — whether to let a word span the identifier's end, so a
+token `v\n` captures the trigram `(u,v,\n)` — is answered negatively: the
+boundary trigram is worth only ≈0.5 bits/string (≈1 % of the compressed size,
+held out), which is an upper bound on any such word, and it would cost the
+exact `CS = S1 − S2` form and the causal start
+([`docs/BOUNDARY_TRIGRAM.md`](docs/BOUNDARY_TRIGRAM.md)).
 
 `scripts/run_sweep.sh` runs the successor, code-length and factorisation
 analyses over a list of thresholds:

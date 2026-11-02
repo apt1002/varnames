@@ -41,6 +41,10 @@ labels (see `README.md`).
 - [ ] **A6. Run-fusion theory** (mirror A1 for runs). *Empirical only* — a
       symbolic proof and the `Δ = 0`-under-Markov question are open.
       `docs/TREE_WORDS.md` §9.1.
+- [x] **A7. Boundary words (`v\n`): is the boundary trigram worth it?**
+      *Negative* — the trigram `(u,v,\n)` is worth ≈0.5 bits/string (≈1 %,
+      held out), an upper bound on any such word; not adopted.
+      `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
 
 ## B. Adjacency matrix construction
 
