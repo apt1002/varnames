@@ -59,7 +59,7 @@ varnames/
 │   ├── identifiers.multilang.txt        # union of all 6 ecosystems (2,365,468)
 │   └── by_language/
 │       ├── ruby.txt  rust.txt  python.txt  go.txt  javascript.txt  perl.txt
-├── PLAN.md                              # index of the parallel research lines
+├── PLAN.md                              # index of the research lines (+ long-term productisation horizon)
 ├── docs/
 │   ├── CORPUS.md                        # corpus statistics + reproduction
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings

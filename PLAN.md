@@ -112,6 +112,37 @@ labels (see `README.md`).
       normalisation step help? Re-run a standard experiment with and without it.
       `docs/CASE_NORMALISATION.md`.
 
+## E. Productisation (long-term horizon)
+
+The distant target. **Not started** — recorded so the research lines above can be
+steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
+(E2–E4) precede the standard (E6).
+
+- [ ] **E1. Design the encoding.** Little-endian; the stop token is a zero-length
+      code placed beyond the target compressed length (64 or 128 bits).
+- [ ] **E2. Write up the best algorithm** — corpus, case normalisation, word
+      list, tokenisation, adjacency matrix, clustering, encoding.
+- [ ] **E3. Write up rejected alternatives** — reframe the gathered data as
+      justifications for the design decisions.
+- [ ] **E4. Ablation study** (design TBD).
+- [ ] **E5. Study the 64-bit and 128-bit identifier sets** — what fraction of
+      real identifiers fit; longest compressed length that fits vs shortest
+      uncompressed length that does not; use the model generatively to ask what
+      random identifiers look like.
+- [ ] **E6. Propose a standard** — a language-neutral bijection between
+      identifiers and integers; define the 64-bit and 128-bit sets; decide how
+      to publish the lookup tables. (Hash fallback is out of scope.)
+- [ ] **E7. Reference implementation (Python)** — runnable, readable; for people
+      porting the library.
+- [ ] **E8. Engineering implementation (Rust)** — runnable, readable; for people
+      writing compilers.
+- [ ] **E9. Standard vs custom tables** — both implementations default to the
+      standardised tables but accept non-standard tables. (Hash fallback still
+      out of scope.)
+- [ ] **E10. Publish table-building tools** — easy to use and modify; need not
+      be language-neutral.
+- [ ] **E11. Licence** — permissive.
+
 ## Housekeeping / deferred regenerations
 
 - [x] **H1. Rebuild `work/*/pair_stats.txt` and `pair_factors_L*.npy`** with the
