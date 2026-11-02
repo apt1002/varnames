@@ -62,3 +62,60 @@ THRESHOLD=2000 sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt
 
 The case-normalisation artefacts always go to the CamelCase directory
 (`work/camel`); the common-substring artefacts go to `work/common<THRESHOLD>`.
+
+## Ablation: does case normalisation actually help?
+
+Reproducing the ablation:
+
+```sh
+mkdir -p work/raw
+python3 scripts/split_corpus.py corpus/identifiers.multilang.txt \
+        work/raw/merged_training.txt work/raw/merged_validation.txt --every 10
+python3 scripts/tree_words.py train --corpus work/raw/merged_training.txt \
+        --num-pairs 2040 --sample 20 --outdir work/tw2040raw
+python3 scripts/case_ablation.py work/tw2040 work/tw2040raw
+```
+
+Two corpora were built from the same raw union (`corpus/identifiers.multilang.txt`,
+2,365,468 identifiers, already sorted-unique) and split 9:1 identically
+(interleaved, `scripts/split_corpus.py --every 10`):
+
+* **normalised** — `classify`/`camelize`/`merge` → `work/camel/merged.txt`, the
+  existing pipeline (`merged_training` / `merged_validation`);
+* **raw** — the union as-is → `work/raw/merged_training` / `merged_validation`.
+
+The same word model is fitted to each (NUM_PAIRS = 2040, dictionary on a
+stride-20 sample, adjacency on the full training corpus), and each is scored on
+its own held-out set (stride 20, `kappa = 300`):
+
+| target ids | model trained on | full table | cluster `k = 105` (`assoc`) |
+|---|---|---:|---:|
+| canonical (normalised split) | normalised | **45.77** | **55.35** |
+| raw (raw split) | raw | 50.30 | 62.91 |
+
+The two test sets differ, so this alone is not decisive.  The clean **paired**
+test scores identifiers that normalisation leaves *unchanged* — the CamelCase
+subset of the raw held-out set (3,598 of 11,828), which is the *same string* in
+both corpora:
+
+| model trained on | bits on the 3,598 CamelCase ids |
+|---|---:|
+| normalised | **48.01** |
+| raw | 53.42 |
+
+Training on the case-normalised corpus makes even the untouched CamelCase
+identifiers **5.4 bits shorter**: normalisation consolidates the three casing
+conventions (`foo_bar`, `FOO_BAR`, `fooBar`) so each word's counts — and hence the
+word-bigram statistics — are estimated from more evidence.  It must be applied
+consistently: a normalised-trained model scored on *raw* identifiers costs
+64.62 bits (a mismatch penalty of ~14 bits), so the encoder must normalise its
+input the same way the corpus was normalised.
+
+**Caveat — normalisation is lossy.**  On the current corpus it rewrites 69.7% of
+identifiers (1,284,233 lower-case + 365,316 upper-case; 715,730 are already
+CamelCase) and collapses 70,128 of them onto an existing canonical form, so the
+*exact* raw identifier is not recoverable from its canonical form without extra
+case/underscore information, which these numbers do not charge for.  If the
+target is the canonical form (the assumption throughout this repository),
+normalisation is a clear win and is kept; if exact raw recovery is required, the
+case pattern must be carried separately.

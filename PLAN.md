@@ -109,9 +109,12 @@ labels (see `README.md`).
 
 ## D. Corpus preprocessing
 
-- [ ] **D1. Case-normalisation ablation.** (Deferred.) Does the case
-      normalisation step help? Re-run a standard experiment with and without it.
-      `docs/CASE_NORMALISATION.md`.
+- [x] **D1. Case-normalisation ablation.** *Closed* — normalisation helps: a
+      paired test on the CamelCase subset (identical strings) is 5.4 bits
+      shorter when trained on the normalised corpus; it must be applied
+      consistently (raw input costs +14 bits).  Caveat: lossy (3.0% of ids
+      collapse), so exact raw recovery would need the case pattern.
+      `docs/CASE_NORMALISATION.md`, `scripts/case_ablation.py`.
 
 ## E. Productisation (long-term horizon)
 
