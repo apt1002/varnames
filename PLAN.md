@@ -89,26 +89,25 @@ labels (see `README.md`).
       clustering.** *Succeeded* — the co-clustered block model beats the
       Hellinger factorisation at equal storage. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
-- [ ] **C14. Word list: how large an overshoot is worth it?** *Open* — sweep the
-      overshoot factor (e.g. 1.5× vs 2×, 3×) for the pruned build against the
-      plain greedy build at equal size; the kept-new words are front-loaded in
-      the overshoot (`docs/PRUNE_WORDS.md`), so measure how fast the gain
-      saturates and where the extra build cost stops paying. `scripts/prune_words.py`.
-- [~] **C15. Adopt the pruned 2040 word list as the reference.** *Built* —
-      dictionary artifact `work/tw2040p` (dict + `sym` + `adj.npz`, full-corpus
-      adjacency); beats greedy by +0.145 bits un-clustered. **Adoption blocked**
-      on C16: the pruned list is *worse* through the co-clustering pipeline, so
-      it is not yet a drop-in replacement. `docs/PRUNE_WORDS.md`,
-      `scripts/prune_words.py`.
-- [ ] **C16. Recompute `CLUSTER_WORDS.md` on the pruned 2040 word list, and
-      resolve the clustered regression.** *Open* — the co-clustering tables on
-      `work/tw2040p` are 1-2 bits *worse* than on the greedy `work/tw2040`
-      despite the better full table; re-tune the clustering for the pruned
-      matrix (k, weighting) or decide the pruned list is not worth adopting.
-      `docs/CLUSTER_WORDS.md`, `docs/PRUNE_WORDS.md`, `scripts/cluster_words.py`.
-- [ ] **C17. Recompute `WORD_COMPRESSIBILITY.md` on the pruned 2040 word
-      list.** *Open* — re-run the dictionary-size table and the 2040 row on
-      `work/tw2040p`. `docs/WORD_COMPRESSIBILITY.md`.
+- [x] **C14. Word list: how large an overshoot is worth it?** *Closed* — the
+      gain shrinks with size (512: +0.86 bits, 2040: +0.15 bits); the two sizes
+      already tell us what we need, so no further overshoot sweep.
+      `docs/PRUNE_WORDS.md`.
+- [x] **C15. Adopt the pruned 2040 word list as the reference?** *No* — built
+      (`work/tw2040p`) and it beats greedy by +0.145 bits un-clustered, but it
+      is *worse* through the co-clustering pipeline; decided **not to adopt**.
+      `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
+- [ ] **C16. Why does the pruned list regress under co-clustering?** *Open* —
+      the co-clustering tables on `work/tw2040p` are 1-2 bits worse than on the
+      greedy `work/tw2040` despite the better full table; diagnose it (a word
+      list tuned for the *full* bigram model apparently hurts the *restricted*
+      clustered model). The lesson would be that the word list should be tuned
+      against the clustered objective, not `Delta_CS`. `docs/CLUSTER_WORDS.md`,
+      `docs/PRUNE_WORDS.md`.
+- [ ] **C17. `WORD_COMPRESSIBILITY.md` on the pruned 2040 word list.**
+      *Open (informational)* — the pruned list is not adopted, so this is for
+      reference only; re-run the 2040 row on `work/tw2040p`.
+      `docs/WORD_COMPRESSIBILITY.md`.
 
 ## Housekeeping / deferred regenerations
 

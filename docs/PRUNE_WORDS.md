@@ -96,10 +96,15 @@ un-clustered, loses ~1-2 bits clustered; the sqrtcnt-match columns are worse by
 the same margin, and the result is stable to the k-means seed.)  The pruned list
 tokenises to slightly *more*, more fragmented tokens (N 14.13 M vs 13.92 M over
 the same 2 065 806 identifiers), which apparently makes the matrix harder to
-approximate by a few hundred clusters.  So the 2040 prune is a win for the raw
-bigram score but **not** a drop-in win for the co-clustered production model;
-re-tuning the clustering for the pruned matrix (or reconsidering adoption) is
-the open question — plan C16.
+approximate by a few hundred clusters.
+
+**Decision: not adopted.**  The 2040 prune is a win for the raw bigram score but
+not for the co-clustered production model, so the plain greedy `work/tw2040`
+stays the reference word list.  The apparent reason is a mismatch of
+objectives: `Delta_CS` optimises the *full* bigram model, and the word list that
+minimises it is not the one that best fits the *restricted* clustered model.
+Tuning the word list against the clustered objective directly is left open
+(plan C16).
 
 ## Which pairs are removed
 
