@@ -78,6 +78,29 @@ motivates the overshoot-size sweep (plan C14).  Per-32 rank counts of the kept
 new words and the 80-of-256 / 232-of-1020 greedy-deletion figures appear in
 `work/prune_512_removed.txt` / `work/prune_2040_removed.txt`.
 
+### Caveat: the gain does *not* carry to the clustered model
+
+The pruned list is better only for the **un-clustered** bigram model.  Padding
+it through the co-clustering pipeline of [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md)
+(the representation that is actually competitive with the Hellinger
+factorisation at matched storage) it is consistently *worse*:
+
+| `k` | store | greedy `work/tw2040` assoc / 1-sided | pruned `work/tw2040p` assoc / 1-sided |
+|---:|---:|---:|---:|
+| 26 | 4 884 | 57.33 / 54.90 | **59.09 / 56.21** |
+| 52 | 6 912 | 56.58 / 53.69 | **57.91 / 54.67** |
+| 105 | 15 233 | 55.35 / 52.16 | **56.31 / 52.96** |
+
+(held-out full table: greedy 45.77, pruned **45.42** — the pruned list wins
+un-clustered, loses ~1-2 bits clustered; the sqrtcnt-match columns are worse by
+the same margin, and the result is stable to the k-means seed.)  The pruned list
+tokenises to slightly *more*, more fragmented tokens (N 14.13 M vs 13.92 M over
+the same 2 065 806 identifiers), which apparently makes the matrix harder to
+approximate by a few hundred clusters.  So the 2040 prune is a win for the raw
+bigram score but **not** a drop-in win for the co-clustered production model;
+re-tuning the clustering for the pruned matrix (or reconsidering adoption) is
+the open question — plan C16.
+
 ## Which pairs are removed
 
 Deletion is in increasing removal cost.  The **first** words removed (the least
