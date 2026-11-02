@@ -43,6 +43,11 @@ labels (see `README.md`).
       `docs/TREE_WORDS.md` §9.1.
 - [x] **A7. Boundary words (`v\n`).** *Negative* — not worth it; not adopted.
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
+- [ ] **A8. Rescan-based dictionary builder** (deferred): drop the position
+      index for a global per-merge rescan. Prototype `scripts/word_build_rescan.py`
+      gives an identical word list and is ~2× faster / ~30 % lighter on the
+      stride-20 sample; adopt only after a stride-0 timing.
+      `docs/TREE_WORDS.md`.
 
 ## B. Adjacency matrix construction
 
