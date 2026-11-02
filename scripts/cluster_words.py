@@ -18,7 +18,7 @@ Two block models are reported:
 
 * **block** -- the plain block mean of ``M`` (constant on each cluster pair);
 * **assoc** -- the marginal-factored block model
-  ``M_hat[a,b] = r[a] c[b]/T * D[lc(a), rc(b)]``, where ``D`` is the block mean
+  ``M_hat[a,b] = r[a] c[b]/T * D[lcl(a), rcl(b)]``, where ``D`` is the block mean
   of the *ratio* ``M / (r c^T / T)`` (so each block's mass is preserved exactly).
 
 They are scored by the joint KL against the ``kappa`` reference and by the
@@ -55,24 +55,25 @@ def cluster_axis(M, k, rng, axis):
     return labels, centers
 
 
-def block_sum(M, lc, rc, kL, kR, W):
-    idx = (lc[:, None] * kR + rc[None, :]).ravel()
+def block_sum(M, lcl, rcl, kL, kR, W):
+    # lcl / rcl = left / right cluster label of each word (not lc/rc = children).
+    idx = (lcl[:, None] * kR + rcl[None, :]).ravel()
     return np.bincount(idx, weights=W.ravel(),
                        minlength=kL * kR).reshape(kL, kR)
 
 
-def models(M, lc, rc, kL, kR):
+def models(M, lcl, rcl, kL, kR):
     r = M.sum(1)
     c = M.sum(0)
     T = float(M.sum())
     e = np.outer(r, c) / T
-    nL = np.bincount(lc, minlength=kL).astype(float)
-    nR = np.bincount(rc, minlength=kR).astype(float)
-    blk = block_sum(M, lc, rc, kL, kR, M) / np.maximum(np.outer(nL, nR), 1.0)
-    D = (block_sum(M, lc, rc, kL, kR, M)
-         / np.maximum(block_sum(M, lc, rc, kL, kR, e), 1e-300))
-    assoc = e * D[lc][:, rc]
-    return blk[lc][:, rc], assoc
+    nL = np.bincount(lcl, minlength=kL).astype(float)
+    nR = np.bincount(rcl, minlength=kR).astype(float)
+    blk = block_sum(M, lcl, rcl, kL, kR, M) / np.maximum(np.outer(nL, nR), 1.0)
+    D = (block_sum(M, lcl, rcl, kL, kR, M)
+         / np.maximum(block_sum(M, lcl, rcl, kL, kR, e), 1e-300))
+    assoc = e * D[lcl][:, rcl]
+    return blk[lcl][:, rcl], assoc
 
 
 def bits_of(P, chars, rules, nchars, lines):
@@ -124,15 +125,15 @@ def main():
           "sqrtcnt-match: L store bits")
     for k in ks:
         rng = np.random.default_rng(args.seed)
-        lc, CL = cluster_axis(M_ref, k, rng, 0)
+        lcl, CL = cluster_axis(M_ref, k, rng, 0)
         rng = np.random.default_rng(args.seed + 1)
-        rc, CR = cluster_axis(M_ref, k, rng, 1)
-        blk, assoc = models(M_ref, lc, rc, k, k)
+        rcl, CR = cluster_axis(M_ref, k, rng, 1)
+        blk, assoc = models(M_ref, lcl, rcl, k, k)
         ba = heldout_bits(assoc, chars, rules, nchars, lines)
-        # one-sided: predict p(.|a) by the pooled row distribution of lc(a)
+        # one-sided: predict p(.|a) by the pooled row distribution of lcl(a)
         P1 = np.maximum(CL.astype(np.float64), 0.0) ** 2
         P1 = P1 / np.maximum(P1.sum(1, keepdims=True), 1e-300)
-        b1 = bits_of(P1[lc], chars, rules, nchars, lines)
+        b1 = bits_of(P1[lcl], chars, rules, nchars, lines)
         store = k * k + 2 * V
         drop = 0
         npair = 0
@@ -141,7 +142,7 @@ def main():
                 npair += 1
                 _, (a, b), _ = item
                 wid = nchars + 1 + r
-                if lc[wid] == lc[b] and rc[wid] == rc[a]:
+                if lcl[wid] == lcl[b] and rcl[wid] == rcl[a]:
                     drop += 1
         L = max(1, int(round(store / (2.0 * V))))
         Ms = hf.sqrtcnt(M_ref, min(L, V))

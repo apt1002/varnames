@@ -19,16 +19,18 @@ each word is given:
 * a **right cluster** (successor side): words are clustered by their predecessor
   distribution `p(·|b)`.
 
-Clustering is K-means in the **Hellinger** embedding `√p`, occurrence-weighted
+Write `lcl(a)` and `rcl(a)` for the left and right cluster labels of the word
+`a` (deliberately *not* `lc`/`rc`, which this project uses for a word's left and
+right child).  Clustering is K-means in the **Hellinger** embedding `√p`, occurrence-weighted
 (the helpers of `cluster_substrings_lib`, `kmeans_sphere`).  Two block models
 are built:
 
 * **assoc** — the marginal-factored block model
-  `M̂[a,b] = r[a] c[b]/T · D[lc(a), rc(b)]`, where `D` is the block mean of the
+  `M̂[a,b] = r[a] c[b]/T · D[lcl(a), rcl(b)]`, where `D` is the block mean of the
   ratio `M / (r cᵀ/T)`; every block's mass is preserved exactly, and `r`, `c`
   are the row/column marginals.
 * **1-sided** — the pooled-row model: predict `p(·|a)` by the mean successor
-  distribution of `lc(a)` (the direct word-level analogue of the character
+  distribution of `lcl(a)` (the direct word-level analogue of the character
   successor model).
 
 Storage: **assoc** is `k² + 2V` numbers; **1-sided** is `k·V`.  The Hellinger
