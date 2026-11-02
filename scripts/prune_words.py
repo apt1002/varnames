@@ -314,15 +314,17 @@ def cmd_run(args):
 
     kept = remap_rules(rules_over, nchars, alive)
     greedy = tw.build_dictionary(lines_build, args.target)[1]
-    # overlap diagnostics: which kept/removed words the greedy build would keep
+    # overlap diagnostics: which kept/removed words the greedy build would keep.
+    # NB use the *original* oversize ids for names (sym_over is indexed by those);
+    # `kept` has been renumbered, so read names off `rules_over`/`alive` instead.
     g_chars, g_rules, g_sym = tw.build_dictionary(lines_build, args.target)
     greedy_words = set()
     for item in g_rules:
         if item[0] == 'pair':
             greedy_words.add(g_sym[item[2]])
     kept_words = set()
-    for item in kept:
-        if item[0] == 'pair':
+    for r, item in enumerate(rules_over):
+        if item[0] == 'pair' and item[2] in alive:
             kept_words.add(sym_over[item[2]])
     removed_names = [sym_over[wid] for _, wid, _ in removed]
     n_rm_greedy = sum(1 for nm in removed_names if nm in greedy_words)

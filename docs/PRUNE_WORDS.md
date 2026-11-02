@@ -68,15 +68,25 @@ valuable of the overshoot) are short frequent fragments — `Be`, `ave`, `imit`,
 
 The overlap diagnostic (`prune_words.py` prints it, and writes the full list to
 `work/prune_512_removed.txt`) answers "is the overshoot the right size?": of the
-256 deleted words, **80 are words the greedy-512 build would itself have kept**,
-and **14 kept words are new** (not in greedy-512).  So pruning is doing real work
-rather than truncating — it drops 80 early-created words the greedy build
-believed in (e.g. the rare `_Vtbl`) and replaces them with 14 words the greedy
-512 never reached.
+256 deleted words, **80 are words the greedy-512 build would itself have kept**
+and **176 are overshoot words**; so of the 512 kept words **432 are greedy-512
+words and 80 are new** (not in greedy-512).  The two numbers are forced to
+match: the overshoot pool is exactly greedy-512 ∪ 256 new words (the greedy
+build is a prefix process), so `kept new = 256 − 176 = 80 = 80 removed greedy`.
+Pruning is thus doing real work rather than truncating — it drops 80
+early-created words the greedy build believed in (e.g. the rare `_Vtbl`) and
+replaces them with 80 words the greedy-512 build never reached.
+
+> An earlier revision of this section reported "14 kept words are new".  That
+> was a bug in the diagnostic: `remap_rules` renumbers the kept words, but the
+> overlap count indexed the *original* oversize symbol table with the *new* ids,
+> so the kept-word names were read from the wrong slots.  The correct count is
+> 80, which is the only value consistent with the 80/256 greedy deletions
+> recorded in `work/prune_512_removed.txt`.
 
 ## Reading the overshoot size
 
-The result is a clear win at 1.5× with a modest 0.86-bit gain, and the
-deleted words are overwhelmingly overshoot-tail words rather than greedy words —
+The result is a clear win at 1.5× with a modest 0.86-bit gain, and the deleted
+words are mostly overshoot-tail words rather than greedy words (176 of 256) —
 so 1.5× is a reasonable setting; the gain per extra word is already small, so a
 much larger overshoot would buy little more.
