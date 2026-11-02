@@ -99,11 +99,13 @@ labels (see `README.md`).
       knee; ~1 bit only at `k ≈ V/2` (~25 % of the matrix), so it is essentially
       unavoidable for the block model. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
-- [ ] **C19. Compress the word × word matrix directly.** (Deferred.) Inspect the
-      residual `M − (low-rank / M_mar fit)` — is it sparse? If so, encode
-      codewords for the probable entries and fall back to an `M_mar`-based
-      encoding for the rare ones. `docs/HELLINGER_FACTORISATION.md`,
-      `docs/CLUSTER_WORDS.md`.
+- [x] **C19. Compress the word × word matrix directly.** *Closed* — the residual
+      is not sparse (a rank-256 fit spreads 90% of its error over 19% of `V²`),
+      and top-`N` cells over a flat floor stays within ~1 bit only at `N ≈ 300K`
+      (`tw2040`, ~15× smaller than `V²`).  Neither clustering nor direct coding
+      gives a compact, near-lossless table.
+      `docs/HELLINGER_FACTORISATION.md`, `docs/CLUSTER_WORDS.md`,
+      `work/c19_matrix.py`, `work/c19_hybrid.py`, `work/c19_cluster_hybrid.py`.
 
 ## D. Corpus preprocessing
 
