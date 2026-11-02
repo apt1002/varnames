@@ -76,7 +76,8 @@ varnames/
 │   ├── PRUNE_WORDS.md                   # overshoot/prune the word list (unsuccessful: hurts the clustered model)
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
-│   └── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
+│   ├── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
+│   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
 │   ├── fetch_gems.py                    # parallel RubyGem downloader

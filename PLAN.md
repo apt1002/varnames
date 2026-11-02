@@ -116,7 +116,8 @@ labels (see `README.md`).
 
 The distant target. **Not started** — recorded so the research lines above can be
 steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
-(E2–E4) precede the standard (E6).
+(E2–E4) precede the standard (E6). Design intent, scope and audiences:
+`docs/PRODUCTISATION.md`.
 
 - [ ] **E1. Design the encoding.** Little-endian; the stop token is a zero-length
       code placed beyond the target compressed length (64 or 128 bits).
