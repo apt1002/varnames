@@ -109,6 +109,7 @@ varnames/
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
 │   ├── cluster_words.py                 # K-means co-clustering of the word matrix
 │   ├── matrix_compress.py               # direct compression of the word matrix (residual + top-N curve)
+│   ├── factor_cloud.py                  # 3D cloud viz of the rank-4 sqrt factorisation
 │   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus

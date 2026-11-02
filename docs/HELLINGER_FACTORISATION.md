@@ -169,6 +169,12 @@ makes sense if the table size itself is the binding constraint (the projected
 Hellinger factorisation remains the best *low-rank* reconstruction of the table
 (the KL tables above), and is the natural starting point for that compression.
 
+*(Visualising the rank-`L` clouds: `scripts/factor_cloud.py` plots `U√Σ` and
+`V√Σ` as two 3D point clouds from just `work/tw2040/adj.npz` and `sym.npy`.  At
+rank 4 on `tw2040` the leading singular values are 2749 / 1129 / 603 / 508
+(65 % of the Frobenius energy); the right cloud shows a marked two-lobed / cross
+structure while the left cloud is closer to isotropic.)*
+
 ## Compressing the table directly: is the residual sparse?
 
 [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md) concluded that the block (cluster)

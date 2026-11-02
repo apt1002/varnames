@@ -48,6 +48,12 @@ labels (see `README.md`).
       gives an identical word list and is ~2× faster / ~30 % lighter on the
       stride-20 sample; adopt only after a stride-0 timing.
       `docs/TREE_WORDS.md`.
+- [ ] **A9. No run words** (deferred): never build a run word, not even `(uu)`,
+      so a doubled character is absorbed only through a neighbouring pair word.
+      Measure the held-out cost, especially the 64/128-bit *fit rates* rather
+      than the mean.  Middle ground (allow `(uu)` only for isolated length-2
+      runs, never longer) is nearly the current rule, since 99 % of runs are
+      length 2.  `docs/RUN_LENGTHS.md`, `docs/WORD_COMPRESSIBILITY.md`.
 
 ## B. Adjacency matrix construction
 
@@ -102,6 +108,24 @@ labels (see `README.md`).
       the residual is not sparse, and direct coding stays far from the block
       model's size; no compact near-lossless table.
       `docs/HELLINGER_FACTORISATION.md`, `scripts/matrix_compress.py`.
+- [~] **C20. Rank-4 factor clouds (visualisation).** *Tool ready* — plot the
+      left/right `√M_ref` factorisation as 3D point clouds to look for structure
+      worth compressing.  `scripts/factor_cloud.py`,
+      `docs/HELLINGER_FACTORISATION.md`.
+- [ ] **C21. Where the co-clustering loss lives** (deferred): attribute the
+      `assoc`-vs-word×word loss to each (left cluster, right cluster) pair — is
+      it concentrated in the high-mass pairs, the tail, or the junk clusters?
+      `docs/CLUSTER_WORDS.md`.
+- [ ] **C22. Structure of a high-loss cluster-pair block** (deferred): for a
+      chosen `(a, b)`, study `P(u, v | a, b)` — is the block low-rank, or a
+      sparse deviation from its marginal?  Feasibility of a per-cluster-pair
+      "splat" model for the whole matrix.  `docs/CLUSTER_WORDS.md`.
+- [ ] **C23. Word-list size vs cluster-matrix budget** (deferred): spend more on
+      the word list (e.g. 4478 or 11758 words) and less on the `k × k` matrix;
+      compression improves with the word list even at constant `k`.  Note the
+      memory obstacle: `V = 11758` makes a dense `V²` matrix ~1.1 GB, so this
+      needs a sparse/streaming path.  `docs/CLUSTER_WORDS.md`,
+      `docs/WORD_COMPRESSIBILITY.md`.
 
 ## D. Corpus preprocessing
 
