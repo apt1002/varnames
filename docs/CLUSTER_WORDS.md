@@ -26,9 +26,11 @@ right child).  Clustering is K-means in the **Hellinger** embedding `√p`, occu
 are built:
 
 * **assoc** — the marginal-factored block model
-  `M̂[a,b] = r[a] c[b]/T · D[lcl(a), rcl(b)]`, where `D` is the block mean of the
-  ratio `M / (r cᵀ/T)`; every block's mass is preserved exactly, and `r`, `c`
-  are the row/column marginals.
+  `M̂[a,b] = r[a] c[b]/T · D[lcl(a), rcl(b)]`, where `D` is the block mean of `M`
+  divided by the block mean of `r cᵀ/T` — equivalently the ratio of their block
+  sums, since the block sizes cancel (this is *not* the mean of the ratio
+  `M / (r cᵀ/T)`); every block's mass is preserved exactly, and `r`, `c` are the
+  row/column marginals.
 * **1-sided** — the pooled-row model: predict `p(·|a)` by the mean successor
   distribution of `lcl(a)` (the direct word-level analogue of the character
   successor model).

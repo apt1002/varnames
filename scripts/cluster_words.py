@@ -19,7 +19,9 @@ Two block models are reported:
 * **block** -- the plain block mean of ``M`` (constant on each cluster pair);
 * **assoc** -- the marginal-factored block model
   ``M_hat[a,b] = r[a] c[b]/T * D[lcl(a), rcl(b)]``, where ``D`` is the block mean
-  of the *ratio* ``M / (r c^T / T)`` (so each block's mass is preserved exactly).
+  of ``M`` over the block mean of ``r c^T / T`` (equivalently the ratio of their
+  block sums, the block sizes cancelling), so each block's mass is preserved
+  exactly.
 
 They are scored by the joint KL against the ``kappa`` reference and by the
 **held-out** code length, against the full table and the rank-``L`` Hellinger
@@ -70,6 +72,7 @@ def models(M, lcl, rcl, kL, kR):
     nL = np.bincount(lcl, minlength=kL).astype(float)
     nR = np.bincount(rcl, minlength=kR).astype(float)
     blk = block_sum(M, lcl, rcl, kL, kR, M) / np.maximum(np.outer(nL, nR), 1.0)
+    # D = (block mean of M) / (block mean of e) = ratio of their block sums.
     D = (block_sum(M, lcl, rcl, kL, kR, M)
          / np.maximum(block_sum(M, lcl, rcl, kL, kR, e), 1e-300))
     assoc = e * D[lcl][:, rcl]
