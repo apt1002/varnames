@@ -23,6 +23,26 @@ Two block models are reported:
   block sums, the block sizes cancelling), so each block's mass is preserved
   exactly.
 
+A third, un-factored model is reported for reference:
+
+* **1-sided** -- the pooled-row model ``p(b|a) = P1[lcl(a), b]``, where ``P1`` is
+  the occurrence-weighted **mean successor distribution** of each left cluster.
+
+The point of the 1-sided model is that it is the un-factored reference whose
+factorisation is exactly ``assoc``.  Two facts make that literal:
+
+* ``assoc``'s transition probability does **not** depend on ``r[a]`` -- it
+  cancels on normalising -- so both models are functions of
+  ``(left cluster, right word)`` only;
+* with ``C_rc = sum_{b in rc} c[b]``, ``assoc`` equals
+  ``P(rcl(b)|L) * P(b|rcl(b))``, where ``P(rcl(b)|L) ~ D[L, rcl(b)] C_rcl(b)``
+  and the within-right-cluster word distribution ``P(b|rc) = c[b]/C_rc`` is
+  shared across all left clusters.
+
+So the **1-sided vs assoc** gap is precisely the held-out cost of imposing the
+factorisation "pick a right cluster given the left cluster, then draw the word
+from that right cluster's own marginal".
+
 They are scored by the joint KL against the ``kappa`` reference and by the
 **held-out** code length, against the full table and the rank-``L`` Hellinger
 factorisation.  Also reported: the "removable" words ``(uv)`` whose left-cluster
@@ -62,6 +82,14 @@ def block_sum(M, lcl, rcl, kL, kR, W):
     idx = (lcl[:, None] * kR + rcl[None, :]).ravel()
     return np.bincount(idx, weights=W.ravel(),
                        minlength=kL * kR).reshape(kL, kR)
+
+
+def pooled_rows(M, labels, k):
+    """Occurrence-weighted mean row distribution of each cluster (the MLE for a
+    shared successor distribution) -- the un-factored 1-sided table."""
+    S = np.zeros((k, M.shape[1]))
+    np.add.at(S, labels, M)
+    return S / np.maximum(S.sum(1, keepdims=True), 1e-300)
 
 
 def models(M, lcl, rcl, kL, kR):
@@ -128,14 +156,14 @@ def main():
           "sqrtcnt-match: L store bits")
     for k in ks:
         rng = np.random.default_rng(args.seed)
-        lcl, CL = cluster_axis(M_ref, k, rng, 0)
+        lcl, _ = cluster_axis(M_ref, k, rng, 0)
         rng = np.random.default_rng(args.seed + 1)
-        rcl, CR = cluster_axis(M_ref, k, rng, 1)
+        rcl, _ = cluster_axis(M_ref, k, rng, 1)
         blk, assoc = models(M_ref, lcl, rcl, k, k)
         ba = heldout_bits(assoc, chars, rules, nchars, lines)
-        # one-sided: predict p(.|a) by the pooled row distribution of lcl(a)
-        P1 = np.maximum(CL.astype(np.float64), 0.0) ** 2
-        P1 = P1 / np.maximum(P1.sum(1, keepdims=True), 1e-300)
+        # one-sided: predict p(.|a) by the mean successor distribution of lcl(a)
+        # -- the un-factored reference whose factorisation is `assoc`.
+        P1 = pooled_rows(M_ref, lcl, k)
         b1 = bits_of(P1[lcl], chars, rules, nchars, lines)
         store = k * k + 2 * V
         drop = 0
