@@ -89,6 +89,11 @@ labels (see `README.md`).
       clustering.** *Succeeded* — the co-clustered block model beats the
       Hellinger factorisation at equal storage. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
+- [ ] **C14. Word list: how large an overshoot is worth it?** *Open* — sweep the
+      overshoot factor (e.g. 1.5× vs 2×, 3×) for the pruned build against the
+      plain greedy build at equal size; the kept-new words are front-loaded in
+      the overshoot (`docs/PRUNE_WORDS.md`), so measure how fast the gain
+      saturates and where the extra build cost stops paying. `scripts/prune_words.py`.
 
 ## Housekeeping / deferred regenerations
 
