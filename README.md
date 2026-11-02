@@ -108,6 +108,8 @@ varnames/
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
 │   ├── cluster_words.py                 # K-means co-clustering of the word matrix
+│   ├── matrix_compress.py               # direct compression of the word matrix (residual + top-N curve)
+│   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
 │   ├── dict_experiments.py              # dictionary rules: run words, Δ vs frequency
@@ -327,10 +329,12 @@ that change turns out to be **identically zero** for a merge of two distinct
 words — so a merge only ever pays off through trigram dependence, and in a
 perfectly bigram-Markov corpus no merge changes the size. Writing the trigram
 dependence as the factor `m − 1`, the whole change reduces to a sum of
-conditional entropies whose linear term in `m − 1` also cancels, leaving a
-manifestly non-positive quadratic form: every merge weakly *shrinks* the
-dictionary. The identities are regression-tested by
-`scripts/check_merge_delta.py`.
+conditional entropies whose linear term in `m − 1` also cancels. The sign is now
+proved **exactly**: a merge of two distinct words has `Δ ≤ 0` (Jensen on the two
+context sums plus subadditivity), and a run collapse never enlarges `CS` either
+(superadditivity on the boundary bigrams plus the geometric maximal-entropy
+bound) — so the run-aware dictionary weakly shrinks at every step. The
+identities are regression-tested by `scripts/check_merge_delta.py`.
 
 Two levers on the resulting model are measured. Building the word list 1.5× too
 large and pruning the least valuable words down to size beats the plain greedy

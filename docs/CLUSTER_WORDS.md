@@ -192,7 +192,8 @@ clusters: it falls smoothly and only reaches ~1 bit at `k ≈ V/2`, i.e. ~25 % o
 the matrix.  For a compact standard, the block model alone will not do.
 The direct alternative — storing the matrix itself with codewords over a
 low-rank/`M_mar` fit — fares no better: the residual is not sparse, and top-`N`
-cells over a flat floor stays within ~1 bit only at `N ≈ 300K` (~15× smaller than
+cells over the independence prior stays within ~1 bit only at `N ≈ 300K`
+(~15× smaller than
 `V²`).  Neither route alone gives a compact, near-lossless table.  See
 [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md).
 `scripts/cluster_words.py`.

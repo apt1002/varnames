@@ -27,12 +27,9 @@ labels (see `README.md`).
 
 ## A. Dictionary / pair-merge theory (`docs/TREE_WORDS.md`)
 
-- [x] **A1. Prove `Δ ≤ 0` exactly.** *Solved (distinct pairs)* — for `u ≠ v`,
-      `Δ ≤ R[H(p) − H(α) − H(β)] ≤ 0` by Jensen on the two context sums plus
-      subadditivity, and the equality condition is the §7.1 sufficient
-      condition.  The doubled word is the only case outside the proof (the
-      run-aware rule never performs it). `docs/TREE_WORDS.md` §9.0,
-      `scripts/check_merge_delta.py`.
+- [x] **A1. Prove `Δ < 0` exactly.** *Solved* for a distinct-pair merge; the
+      doubled word stays outside the proof (the run-aware rule never does it).
+      `docs/TREE_WORDS.md` §9.0, `scripts/check_merge_delta.py`.
 - [x] **A2. Relax "no threefold repetition"** (run-aware rule). *Succeeded* —
       sign-safe; `docs/TREE_WORDS.md` §9.1.
 - [x] **A3. Greedy alternative** (largest `Δ` vs most frequent pair).
@@ -42,10 +39,8 @@ labels (see `README.md`).
       wins whenever there is run mass; `docs/DICTIONARY_RULES.md`.
 - [x] **A5. Rewrite `TREE_WORDS.md` for pedagogy.** *Done.*
 - [x] **A6. Run-fusion theory** (mirror A1 for runs). *Solved* — a run collapse
-      never enlarges `CS`: `Δ ≤ m[H(k) − λ·H_b(1/λ)] ≤ 0` (superadditivity on
-      the boundary bigrams plus the geometric maximal-entropy bound), equality
-      only for context-independent, geometric run lengths.  `docs/TREE_WORDS.md`
-      §9.1, `scripts/check_merge_delta.py`.
+      never enlarges `CS`.  `docs/TREE_WORDS.md` §9.1,
+      `scripts/check_merge_delta.py`.
 - [x] **A7. Boundary words (`v\n`).** *Negative* — not worth it; not adopted.
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
 - [ ] **A8. Rescan-based dictionary builder** (deferred): drop the position
@@ -100,25 +95,18 @@ labels (see `README.md`).
       objective mismatch; recomputation cancelled. `docs/PRUNE_WORDS.md`.
 - [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned list.** *Cancelled.*
       `docs/WORD_COMPRESSIBILITY.md`.
-- [x] **C18. Cluster loss vs `k`.** *Closed* — the loss closes smoothly with no
-      knee; ~1 bit only at `k ≈ V/2` (~25 % of the matrix), so it is essentially
+- [x] **C18. Cluster loss vs `k`.** *Closed* — the loss is essentially
       unavoidable for the block model. `docs/CLUSTER_WORDS.md`,
       `scripts/cluster_words.py`.
-- [x] **C19. Compress the word × word matrix directly.** *Closed* — the residual
-      is not sparse (a rank-256 fit spreads 90% of its error over 19% of `V²`),
-      and top-`N` cells over a flat floor stays within ~1 bit only at `N ≈ 300K`
-      (`tw2040`, ~15× smaller than `V²`).  Neither clustering nor direct coding
-      gives a compact, near-lossless table.
-      `docs/HELLINGER_FACTORISATION.md`, `docs/CLUSTER_WORDS.md`,
-      `work/c19_matrix.py`, `work/c19_hybrid.py`, `work/c19_cluster_hybrid.py`.
+- [x] **C19. Compress the word × word matrix directly.** *Closed, negative* —
+      the residual is not sparse, and direct coding stays far from the block
+      model's size; no compact near-lossless table.
+      `docs/HELLINGER_FACTORISATION.md`, `scripts/matrix_compress.py`.
 
 ## D. Corpus preprocessing
 
-- [x] **D1. Case-normalisation ablation.** *Closed* — normalisation helps: a
-      paired test on the CamelCase subset (identical strings) is 5.4 bits
-      shorter when trained on the normalised corpus; it must be applied
-      consistently (raw input costs +14 bits).  Caveat: lossy (3.0% of ids
-      collapse), so exact raw recovery would need the case pattern.
+- [x] **D1. Case-normalisation ablation.** *Closed, positive* — normalisation
+      helps but is lossy and must be applied consistently.
       `docs/CASE_NORMALISATION.md`, `scripts/case_ablation.py`.
 
 ## E. Productisation (long-term horizon)

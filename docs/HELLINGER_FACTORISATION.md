@@ -178,7 +178,7 @@ by a low-rank / `M_mar` fit and encode codewords only for the entries where the
 fit is off, falling back to the fit for the rest.  That pays only if the
 **residual is sparse**.
 
-It is not.  On `tw2040` (`work/c19_matrix.py`):
+It is not.  On `tw2040` (`scripts/matrix_compress.py --residual`):
 
 * the raw observed matrix is very concentrated — 50% of the mass sits in 5,749
   cells (0.13% of `V²`), 90% in 178,384 cells (4.03%);
@@ -190,10 +190,12 @@ It is not.  On `tw2040` (`work/c19_matrix.py`):
   "probable entries" to code separately and correct.
 
 The scheme that *does* work is to store the `N` largest observed cells verbatim
-and give every other cell the prior.  For the **cyclic** matrix `M_mar` is
-uniform (rows = columns), so "the `M_mar` fallback" is just a flat floor: the
-scheme is *top-`N` cells + flat floor*, row-normalised.  Held-out bits vs `N`
-(`work/c19_hybrid.py`, stride-20 validation; full tables 45.77 / 54.16 bits):
+and give every other cell the prior.  For the cyclic matrix `M_mar` is the
+rank-1 **independence** prior `(r/T)(c/T)ᵀ` (`r = c =` the unigram counts), so
+"the `M_mar` fallback" models each uncoded cell by the product of its marginals:
+the scheme is *top-`N` cells + independence prior*, row-normalised.  Held-out
+bits vs `N` (`scripts/matrix_compress.py`, stride-20 validation; full tables
+45.77 / 54.16 bits):
 
 | `N` coded | `tw2040` bits (Δ) | `tw512` bits (Δ) |
 |---:|---:|---:|
@@ -213,19 +215,20 @@ support, ~97% of the mass), or ~100K cells on `tw512` (30% of `V²`).  That is a
 ~15× / ~3× reduction in stored cells — nowhere near the ~15K cells of the `k=105`
 block model, and far too many for a compact standard.
 
-Bolting exact cells onto the compact *block* model instead of a flat floor does
-not help either (`work/c19_cluster_hybrid.py`): code the `N` largest cells at
-their empirical value and model the rest with the `k = 105` `assoc` table.  The
+Bolting exact cells onto the compact *block* model instead of the independence
+prior does not help either (`scripts/matrix_compress.py --fallback cluster`):
+code the `N` largest cells at their empirical value and model the rest with the `k = 105` `assoc` table.  The
 block model alone is 55.35 bits (`tw2040`) / 62.42 bits (`tw512`); adding **all**
 802,606 / 149,932 support cells still leaves 47.14 / 55.39 bits, i.e. `+1.38` /
 `+1.23` above the full table.  The block model assigns non-trivial mass to the
 unsupported cells inside almost-full blocks, and verbatim cells cannot recover
-it; at equal `N` the flat floor is the better fallback.
+it; at equal `N` the independence prior is the better fallback.
 
 So direct compression trades a fixed ~1 bit for a table still ~14× the block
 model's size; the block model trades ~10 bits for ~15K cells.  Neither route
-alone yields a compact, near-lossless table — C13 wants a small `k`, C19 wants a
-large `N`, and the two curves cross well above the projected budget.
+alone yields a compact, near-lossless table — the block model wants a small `k`,
+direct coding wants a large `N`, and the two curves cross well above the
+projected budget.
 
 ## Conclusions
 
@@ -243,9 +246,8 @@ large `N`, and the two curves cross well above the projected budget.
    (rank-256 costs ~1.3 bits vs the full table), so the table is only worth
    factorising when model size is the binding constraint.
 4. **The residual is not sparse, so direct table compression is only mild.**
-   Storing the largest `N` cells verbatim over a flat floor stays within ~1 bit
-   only at `N ≈ 300K` (`tw2040`, 6.8% of `V²`) / `~100K` (`tw512`, 30% of `V²`);
+   Storing the largest `N` cells verbatim over the independence prior stays
+   within ~1 bit only at `N ≈ 300K` (`tw2040`, 6.8% of `V²`) / `~100K` (`tw512`, 30% of `V²`);
    a low-rank/M_mar fit leaves its error spread over 10–20% of `V²` at every
    rank.  Combined with C18, neither clustering nor direct coding gives a
-   compact, near-lossless table.  `work/c19_matrix.py`, `work/c19_hybrid.py`,
-   `work/c19_cluster_hybrid.py`.
+   compact, near-lossless table.  `scripts/matrix_compress.py`.
