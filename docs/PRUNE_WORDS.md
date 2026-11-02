@@ -98,13 +98,32 @@ tokenises to slightly *more*, more fragmented tokens (N 14.13 M vs 13.92 M over
 the same 2 065 806 identifiers), which apparently makes the matrix harder to
 approximate by a few hundred clusters.
 
-**Decision: not adopted.**  The 2040 prune is a win for the raw bigram score but
-not for the co-clustered production model, so the plain greedy `work/tw2040`
-stays the reference word list.  The apparent reason is a mismatch of
-objectives: `Delta_CS` optimises the *full* bigram model, and the word list that
-minimises it is not the one that best fits the *restricted* clustered model.
-Tuning the word list against the clustered objective directly is left open
-(plan C16).
+**Why (diagnosis).**  The regression is intrinsic to the matrix, not a tuning
+artefact — `k = 26, 52, 105` and two k-means seeds all agree.  Fitting the same
+co-clustering to each matrix, the *training* excess of the clustered model over
+the full model is
+
+| matrix | excess bits / transition | voiced as |
+|---|---:|---|
+| greedy `work/tw2040` | 1.708 | 24.9 M bits |
+| pruned `work/tw2040p` | 1.968 | 29.0 M bits |
+
+and the weighted Hellinger spectrum of the pruned matrix is less concentrated at
+low rank (top-64 captures 77.8 % of the energy vs 80.4 %).  So the pruned matrix
+is simply **harder to approximate by a few hundred clusters** — the extra error
+is spread across clusters, not concentrated in one bad row (though the `\n` row,
+i.e. the first-token distribution, roughly doubles its contribution).  It is
+*not* because the pruned list is rarer-word-heavy: it has fewer low-frequency
+words (82 vs 172 below `N = 1000`), but it tokenises to more, shorter tokens
+(≈5.84 vs 5.74 tokens/identifier over the same 2 065 806 identifiers).
+
+**Decision: not adopted.**  The plain greedy `work/tw2040` stays the reference
+word list.  The reason is a mismatch of objectives: `Delta_CS` optimises the
+*full* bigram model, and the word list that minimises it is not the one that
+best fits the *restricted* clustered model.  A word list tuned for the
+production (co-clustered) representation would have to be pruned against the
+**clustered** code length (or the block-model KL), not `Delta_CS`; that is left
+open (plan C16).
 
 ## Which pairs are removed
 
