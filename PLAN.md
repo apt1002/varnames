@@ -95,6 +95,22 @@ labels (see `README.md`).
       objective mismatch; recomputation cancelled. `docs/PRUNE_WORDS.md`.
 - [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned list.** *Cancelled.*
       `docs/WORD_COMPRESSIBILITY.md`.
+- [ ] **C18. Cluster loss vs `k`.** (Deferred.) Measure held-out bits against the
+      number of clusters `k` (well beyond `V/20`) to bound how much of the
+      full-table → co-clustered loss (~45 → 55 bits/identifier at `k = 105`) is
+      avoidable by clustering at all. `docs/CLUSTER_WORDS.md`,
+      `scripts/cluster_words.py`.
+- [ ] **C19. Compress the word × word matrix directly.** (Deferred.) Inspect the
+      residual `M − (low-rank / M_mar fit)` — is it sparse? If so, encode
+      codewords for the probable entries and fall back to an `M_mar`-based
+      encoding for the rare ones. `docs/HELLINGER_FACTORISATION.md`,
+      `docs/CLUSTER_WORDS.md`.
+
+## D. Corpus preprocessing
+
+- [ ] **D1. Case-normalisation ablation.** (Deferred.) Does the case
+      normalisation step help? Re-run a standard experiment with and without it.
+      `docs/CASE_NORMALISATION.md`.
 
 ## Housekeeping / deferred regenerations
 
