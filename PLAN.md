@@ -130,8 +130,9 @@ labels (see `README.md`).
 ## D. Corpus preprocessing
 
 - [x] **D1. Case-normalisation ablation.** *Closed, positive* — normalisation
-      helps but is lossy and must be applied consistently.
-      `docs/CASE_NORMALISATION.md`, `scripts/case_ablation.py`.
+      helps; it is injective within a class, so the class must be kept to invert
+      it (all 3.0 % "collapses" are cross-class).  `docs/CASE_NORMALISATION.md`,
+      `scripts/case_ablation.py`, `scripts/camelize_identifiers.py`.
 
 ## E. Productisation (long-term horizon)
 

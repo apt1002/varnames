@@ -111,11 +111,18 @@ consistently: a normalised-trained model scored on *raw* identifiers costs
 64.62 bits (a mismatch penalty of ~14 bits), so the encoder must normalise its
 input the same way the corpus was normalised.
 
-**Caveat — normalisation is lossy.**  On the current corpus it rewrites 69.7% of
-identifiers (1,284,233 lower-case + 365,316 upper-case; 715,730 are already
-CamelCase) and collapses 70,128 of them onto an existing canonical form, so the
-*exact* raw identifier is not recoverable from its canonical form without extra
-case/underscore information, which these numbers do not charge for.  If the
-target is the canonical form (the assumption throughout this repository),
-normalisation is a clear win and is kept; if exact raw recovery is required, the
-case pattern must be carried separately.
+**Caveat — reversibility costs only the class label.**  Normalisation is
+**injective within a case class**: `to_camel` has an exact inverse
+`from_camel(s, cls)`, and `camelize_identifiers.py --check` round-trips all
+1,649,738 non-CamelCase identifiers with **0 failures** — so the original
+identifier is recovered from its canonical form **plus its class**.  The two
+classes (`lower`, `upper`) are the ones `to_camel` rewrites; CamelCase is the
+identity.  All the "lossiness" is that the class is dropped: `merge_identifiers.py`
+de-duplicates *across* the three lists, collapsing 70,128 of 2,365,468
+identifiers (3.0 %).  **Every collapse is cross-class** — e.g. `_abc` (lower),
+`_ABC` (upper) and `Abc` (CamelCase) all normalise to `Abc`; `_a` (lower) and
+`_A` (upper) both give `A`; `_a_id` (lower) and `AId` (CamelCase) both give
+`AId` — and the class label disambiguates them.  So exact recovery needs only
+the class kept alongside the token stream (≈1.6 bits), not the original spelling.
+If the target is the canonical form alone (the assumption throughout this
+repository), even that is unnecessary.
