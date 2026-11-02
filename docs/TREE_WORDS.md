@@ -384,10 +384,49 @@ Two facts make the sign survive:
   never overlap (a shared token would have to be both `u` and `v`), even on the
   cycle, so "replace every occurrence" stays unambiguous and the `u ≠ v` result
   of §9 applies verbatim.
-* **A run collapse never enlarges `CS`.**  Replacing a maximal run `uᵏ` by one
-  token deletes `k − 1` tokens and replaces their bigrams by the `(uᵏ)`-edges;
-  the deleted `(u,u)` self-loops and the new boundary bigrams rebalance (the
-  degenerate all-`u` string has `CS = 0` before and after).
+* **A run collapse never enlarges `CS`.**  See the proof below.
+
+**Proof for a run collapse.**  Consider a cyclic corpus with at least one non-`u`
+token; the maximal runs of `u` have lengths `k_1, …, k_m` (`k_j ≥ 1`), run `j`
+having left neighbour `p_j` and right neighbour `q_j` (both `≠ u`).  A run of
+length `1` stays `u`; a run of length `k ≥ 2` becomes one fresh token `(uᵏ)`.
+Write `N(u) = Σ_j k_j`, `c_k = #{j : k_j = k}`, `n_p = #{j : p_j = p}`,
+`a_{p,k} = #{j : p_j = p, k_j = k}` and the right-side analogues `n^q, b_{q,k}`.
+
+Only counts local to the runs change.  The unigrams give
+
+    ΔS1 = Σ_{k≥1} L(c_k) − L(N(u)) ,
+
+and the `N(u) − m` internal `(u,u)` bigrams vanish while each boundary bigram
+`(p_j,u)` / `(u,q_j)` is relabelled by its run length:
+
+    ΔS2 = Σ_{p,k} L(a_{p,k}) − Σ_p L(n_p) + Σ_{q,k} L(b_{q,k}) − Σ_q L(n^q) − L(N(u) − m) .
+
+Each boundary double sum is a superadditivity gap: because `Σ_k a_{p,k} = n_p`,
+
+    Σ_{p,k} L(a_{p,k}) − Σ_p L(n_p) = −Σ_p n_p H(k | p) = −m H(k | P) ,
+
+with `P` the left-neighbour label — the *conditional entropy of the run length
+given the context*.  The right sum is `−m H(k | Q)`.  Conditioning cannot raise
+entropy, so `H(k|P), H(k|Q) ≤ H(k)`, where `H(k)` is the entropy of the
+run-length distribution `c_k/m`.  Therefore
+
+    ΔS2 ≥ −2m H(k) − L(N(u) − m)  =: ΔS2ᶠʳᵉᵉ ,
+
+and
+
+    Δ ≤ ΔS1 − ΔS2ᶠʳᵉᵉ = m [ H(k) − λ·H_b(1/λ) ] ,   λ = N(u)/m = E[K] .
+
+Finally `H(K) ≤ λ·H_b(1/λ)` for **every** positive-integer run length `K` of mean
+`λ`: the right-hand side is exactly the entropy of the geometric law of mean
+`λ`, which maximises the entropy of a positive-integer variable at fixed mean.
+Hence `Δ ≤ 0`.  ∎
+
+Equality (`Δ = 0`) needs both `H(k|P) = H(k|Q) = H(k)` (run length independent of
+its neighbours) **and** `K` geometric.  This is exactly what a first-order Markov
+(i.i.d.-run) corpus gives, so `Δ = 0` there, as expected; real corpora satisfy
+neither, so a run collapse is strictly improving.  (The degenerate corpus that is
+a single run of `u` has `CS = 0` before and after, hence `Δ = 0` too.)
 
 **Verified.**  Enumerating small cyclic corpora and applying up to four
 run-aware steps to each: `0` positive `Δ` out of `41 167` steps (run steps
@@ -399,7 +438,8 @@ positives, and confirms "no two adjacent `u` tokens after collapsing runs of
 — is measured in `docs/DICTIONARY_RULES.md`.
 
 All of §9 is checked in `scripts/check_merge_delta.py` (`--exhaustive`,
-`check_sufficient_condition`, `check_run_aware`).
+`check_sufficient_condition`, `check_run_aware`, the `check_delta_bound` Jensen
+bound of §9.0 and the `check_run_collapse_bound` bound of §9.1).
 
 ## 10. Why the cycle, and why `CS = S1 − S2`
 

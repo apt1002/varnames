@@ -41,9 +41,11 @@ labels (see `README.md`).
 - [x] **A4. `(uv)` vs `(u^n)` crossover.** *Succeeded* — the run-aware rule
       wins whenever there is run mass; `docs/DICTIONARY_RULES.md`.
 - [x] **A5. Rewrite `TREE_WORDS.md` for pedagogy.** *Done.*
-- [ ] **A6. Run-fusion theory** (mirror A1 for runs). *Empirical only* — a
-      symbolic proof and the `Δ = 0`-under-Markov question are open.
-      `docs/TREE_WORDS.md` §9.1.
+- [x] **A6. Run-fusion theory** (mirror A1 for runs). *Solved* — a run collapse
+      never enlarges `CS`: `Δ ≤ m[H(k) − λ·H_b(1/λ)] ≤ 0` (superadditivity on
+      the boundary bigrams plus the geometric maximal-entropy bound), equality
+      only for context-independent, geometric run lengths.  `docs/TREE_WORDS.md`
+      §9.1, `scripts/check_merge_delta.py`.
 - [x] **A7. Boundary words (`v\n`).** *Negative* — not worth it; not adopted.
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
 - [ ] **A8. Rescan-based dictionary builder** (deferred): drop the position

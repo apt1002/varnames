@@ -350,9 +350,75 @@ def delta_jensen_bound(seq, u, v):
     return R * (Hp - H_sh(a / R) - H_sh(b / R))
 
 
+def run_collapse_delta(seq, u):
+    """Collapse each maximal run `u^k` (k >= 2) to one flat token and return
+    `(delta, free_bound)`.
+
+    `delta` is the exact `CS` change; `free_bound = m[H(k) - lambda H_b(1/lambda)]`
+    is the §9.1 upper bound (m = number of runs of `u`, `lambda = N(u)/m` the
+    mean run length, `H(k)` the entropy of the run-length distribution over
+    runs).  The bound is `>= delta` and `<= 0` by construction."""
+    n = len(seq)
+    if u not in seq:
+        return 0.0, 0.0
+    if all(x == u for x in seq):
+        return 0.0, 0.0                      # one run round the cycle: CS = 0
+    j0 = next(i for i in range(n) if seq[i] != u)
+    order = [seq[(j0 + 1 + k) % n] for k in range(n)]
+    segs = []
+    runs = []                                # (length, left neighbour, right)
+    k = 0
+    while k < n:
+        if order[k] == u:
+            st = k
+            while k < n and order[k] == u:
+                k += 1
+            segs.append(('run', k - st))
+            runs.append((k - st, order[(st - 1) % n], order[k % n]))
+        else:
+            segs.append(('tok', order[k]))
+            k += 1
+    if not any(kl >= 2 for kl, _, _ in runs):
+        return 0.0, 0.0
+    base = max(seq) + 1
+    ids = {kl: base + i for i, kl in enumerate(sorted({r[0] for r in runs
+                                                       if r[0] >= 2}))}
+    new = [ids[t[1]] if (t[0] == 'run' and t[1] >= 2) else
+           (u if t[0] == 'run' else t[1]) for t in segs]
+    delta = score(new) - score(seq)
+    m = len(runs)
+    nu = sum(r[0] for r in runs)
+    lam = nu / m
+    c = Counter(r[0] for r in runs)
+    Hk = -sum((v / m) * math.log(v / m) for v in c.values())
+    return delta, m * (Hk - lam * H_sh(1.0 / lam))
+
+
+def check_run_collapse_bound(trials=20000, seed=3):
+    """`delta <= free_bound <= 0` on random corpora for the run collapse.
+
+    Returns `(failures, n_positive_bounds, n_checked)`; both counts must be
+    zero (`docs/TREE_WORDS.md` §9.1)."""
+    rng = random.Random(seed)
+    nchecked = fails = npos = 0
+    for _ in range(trials):
+        n = rng.randint(4, 40)
+        k = rng.randint(2, 4)
+        seq = [rng.randrange(k) for _ in range(n)]
+        for u in set(seq):
+            d, bnd = run_collapse_delta(seq, u)
+            nchecked += 1
+            npos += bnd > 1e-9
+            if d > bnd + 1e-9 * max(1.0, abs(bnd)):
+                fails += 1
+                if fails <= 5:
+                    print(f"RUN BOUND MISMATCH seq={seq} u={u} "
+                          f"delta={d!r} bound={bnd!r}")
+    return fails, npos, nchecked
+
+
 def check_delta_bound(trials=20000, seed=2):
     """`delta <= R[H(p) - H(alpha) - H(beta)] <= 0` on random corpora.
-
     Returns `(failures, n_positive_bounds, n_checked)`; both counts should be
     zero: the bound is never positive and never below the exact `delta`."""
     rng = random.Random(seed)
@@ -796,7 +862,7 @@ def main():
     cond_bad, cond_n = check_sufficient_condition(w=w)
     run_pos, run_steps, run_run, run_pair, run_worst = check_run_aware()
     bound_bad, bound_pos, bound_n = check_delta_bound()
-
+    runb_bad, runb_pos, runb_n = check_run_collapse_bound()
     ex_bad = 0
     if args.exhaustive:
         res = check_delta_sign_exhaustive()
@@ -819,9 +885,12 @@ def main():
           f"(run {run_run}, pair {run_pair}, worst {run_worst:.1e})")
     print(f"Jensen bound (delta <= R[H(p)-H(alpha)-H(beta)] <= 0): failures "
           f"{bound_bad}, positive bounds {bound_pos}, checked {bound_n}")
+    print(f"run-collapse bound (delta <= m[H(k)-lambda H_b(1/lambda)] <= 0): "
+          f"failures {runb_bad}, positive bounds {runb_pos}, checked {runb_n}")
     raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad
                            or trig_bad or cond_bad or run_pos
-                           or bound_bad or bound_pos) else 0)
+                           or bound_bad or bound_pos
+                           or runb_bad or runb_pos) else 0)
 
 
 if __name__ == '__main__':
