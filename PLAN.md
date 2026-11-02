@@ -94,6 +94,18 @@ labels (see `README.md`).
       plain greedy build at equal size; the kept-new words are front-loaded in
       the overshoot (`docs/PRUNE_WORDS.md`), so measure how fast the gain
       saturates and where the extra build cost stops paying. `scripts/prune_words.py`.
+- [ ] **C15. Adopt the pruned 2040 word list as the reference.** *Open* — build
+      the overshoot-1.5× prune at `NUM_PAIRS = 2040` (dictionary artifact
+      `work/tw2040p`, adjacency and derived tables rebuilt for it) and make it
+      the word list other results are recomputed against. The pruned list beats
+      the plain greedy build at equal size (small margin at this size; see
+      `docs/PRUNE_WORDS.md`). `scripts/prune_words.py`.
+- [ ] **C16. Recompute `CLUSTER_WORDS.md` on the pruned 2040 word list.**
+      *Open* — re-run the co-clustering tables on `work/tw2040p` instead of the
+      greedy `work/tw2040`. `docs/CLUSTER_WORDS.md`, `scripts/cluster_words.py`.
+- [ ] **C17. Recompute `WORD_COMPRESSIBILITY.md` on the pruned 2040 word
+      list.** *Open* — re-run the dictionary-size table and the 2040 row on
+      `work/tw2040p`. `docs/WORD_COMPRESSIBILITY.md`.
 
 ## Housekeeping / deferred regenerations
 

@@ -4,7 +4,9 @@ Status: **succeeded.**  Building the run-aware dictionary 1.5× too large and
 then deleting the least valuable words down to size gives a word list that codes
 held-out identifiers **0.86 bits better** than the plain greedy build of the
 same size (63.77 → 62.91 bits at `NUM_PAIRS = 512`), recovering most of the
-1.52-bit advantage of the 1.5× larger list (62.25 bits).
+1.52-bit advantage of the 1.5× larger list (62.25 bits).  At `NUM_PAIRS = 2040`
+the win is smaller but still positive (**+0.145 bits**, 59.22 → 59.08; the
+overshoot 3060 list is 58.22).
 
 ## Idea
 
@@ -55,6 +57,26 @@ bits on a stride-20 sample of `work/camel/merged_validation.txt`.
 Pruning beats the plain greedy build by **0.864 bits** and captures 0.66 of the
 1.52-bit gap to the larger list — i.e. it gets most of the rate of a 768-word
 model from a 512-word model.
+
+## Result (`NUM_PAIRS = 2040`, `kappa = 300`)
+
+Same build/validation harness, target 2040, overshoot 1.5× (3060 words).
+
+| word list | words | `V` | mean bits |
+|---|---:|---:|---:|
+| greedy to 2040 | 2040 | 2104 | 59.221 |
+| **overshoot 3060, prune to 2040** | 2040 | 2104 | **59.075** |
+| greedy to 3060 (the overshoot) | 3060 | 3124 | 58.219 |
+
+The pruned list still wins, but by only **0.145 bits** — it captures 0.14 of the
+1.00-bit gap to the 3060-word list, far less than the 0.66 captured at 512
+words.  So the overshoot pays off much less at the larger size: at 2040 words
+the greedy prefix already contains nearly all the valuable words, and the
+overshoot tail is mostly reached-and-discarded.  This is why the adopted 2040
+word list (plan C15) is only a marginal improvement over the greedy build, and
+motivates the overshoot-size sweep (plan C14).  Per-32 rank counts of the kept
+new words and the 80-of-256 / 232-of-1020 greedy-deletion figures appear in
+`work/prune_512_removed.txt` / `work/prune_2040_removed.txt`.
 
 ## Which pairs are removed
 

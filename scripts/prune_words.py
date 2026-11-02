@@ -297,7 +297,18 @@ def cmd_run(args):
     chars, rules_over, sym_over = tw.build_dictionary(
         lines_build, n_over, verbose=True)
     nchars = len(chars)
-    seqs, _ = build_plan_corpus(lines_build, rules_over, nchars)
+    if args.tokcache:
+        import token_cache as tc
+        cid = {c: i for i, c in enumerate(sorted(set(''.join(lines_build))))}
+        plan_over = tw.make_plan(rules_over, nchars)
+        path = tc.build_with(
+            f"over{n_over}", args.build_corpus, args.sample,
+            lambda s: tw.tokenize(s, cid, plan_over, nchars),
+            nchars, len(sym_over), args.cachedir)
+        ids, offs = tc.load(path)
+        seqs = [ids[offs[j]:offs[j + 1]].tolist() for j in range(len(offs) - 1)]
+    else:
+        seqs, _ = build_plan_corpus(lines_build, rules_over, nchars)
     print(f"tokenised oversize corpus: {sum(len(s) for s in seqs)} tokens, "
           f"vocab {len(sym_over)}", flush=True)
     alive, removed = prune(rules_over, nchars, seqs, args.target)
@@ -313,6 +324,19 @@ def cmd_run(args):
     show(removed[-20:])
 
     kept = remap_rules(rules_over, nchars, alive)
+    if args.outdir:                       # save the surviving word list
+        sym_kept = list(chars) + [tw.STOP]
+        for item in rules_over:
+            if item[0] == 'pair':
+                if item[2] in alive:
+                    sym_kept.append(sym_over[item[2]])
+            else:
+                for _k, nid in item[2]:
+                    sym_kept.append(sym_over[nid])
+        os.makedirs(args.outdir, exist_ok=True)
+        tw.save_dictionary(args.outdir, chars, kept, sym_kept)
+        print(f"wrote dictionary {args.outdir} "
+              f"({len(sym_kept) - nchars - 1} words)", flush=True)
     greedy = tw.build_dictionary(lines_build, args.target)[1]
     # overlap diagnostics: which kept/removed words the greedy build would keep.
     # NB use the *original* oversize ids for names (sym_over is indexed by those);
@@ -363,6 +387,11 @@ def main():
     rn.add_argument('--validation', default='work/camel/merged_validation.txt')
     rn.add_argument('--val-stride', type=int, default=20)
     rn.add_argument('--kappa', type=float, default=300.0)
+    rn.add_argument('--outdir', default='',
+                    help='save the surviving word list as a dictionary dir')
+    rn.add_argument('--tokcache', action='store_true',
+                    help='cache the oversize tokenisation (scripts/token_cache.py)')
+    rn.add_argument('--cachedir', default='work/tokcache')
     rn.set_defaults(func=cmd_run)
     ck = sub.add_parser('selfcheck')
     ck.set_defaults(func=lambda a: print(
