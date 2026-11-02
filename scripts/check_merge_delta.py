@@ -31,6 +31,9 @@ It also checks the `m = 1` part of the same document, `delta^(1)`:
     instead of merging two copies) restores `delta <= 0` on every step,
     including the run `uuu` corpora that break the plain rule
     (`check_run_aware`).
+  * the exact `delta <= 0` proof for a distinct-pair merge is checked through
+    its Jensen bound `delta <= R[H(p) - H(alpha) - H(beta)] <= 0`
+    (`delta_jensen_bound`, `check_delta_bound`); see `docs/TREE_WORDS.md` §9.0.
 and the `m != 1` part (`delta = delta^(m)`):
   * the exact conditional-entropy form (`delta_entropy`) matches the brute force;
   * the sum rule `sum_x N(x,u)(m(x,u,v)-1) = 0` holds exactly;
@@ -311,6 +314,70 @@ def delta_quadratic(seq, u, v):
             p0 = [(1 - lam) * (1 - mu), lam * (1 - mu), mu * (1 - lam), lam * mu]
             out -= 0.5 * R * sum(dp[i] ** 2 / p0[i] for i in range(4))
     return out
+
+
+def delta_jensen_bound(seq, u, v):
+    """The Jensen/subadditivity upper bound on `delta` (docs `TREE_WORDS.md` §9).
+
+    With `R = N(v,u)`, `alpha = N(v,u,v)/R`, `beta = N(u,v,u)/R`, and `p` the
+    four-way distribution over (predecessor of the `v` is `u`) x (successor of
+    the `u` is `v`) across the `R` occurrences of the bigram `(v,u)`,
+
+        delta <= R * [ H(p) - H(alpha) - H(beta) ] <= 0 .
+
+    The bound is proved from the exact entropy form by Jensen on the `u`- and
+    `v`-context sums (both have mean `lambda`, resp. `mu`, matching the entropy
+    term that is subtracted) and subadditivity `H(p) <= H(alpha) + H(beta)`.
+    Returns `None` when the bound is not defined (`u == v`) or `0.0` when the
+    two words are not mutually adjacent (`R = 0`, where the bound is the trivial
+    zero from Jensen alone)."""
+    if u == v:
+        return None
+    B2 = ngram_counts(seq, 2)
+    M = B2.get((u, v), 0)
+    R = B2.get((v, u), 0)
+    if M == 0:
+        return None
+    if R == 0:
+        return 0.0
+    T3 = ngram_counts(seq, 3); F4 = ngram_counts(seq, 4)
+    a = T3.get((v, u, v), 0); b = T3.get((u, v, u), 0)
+    q4 = F4.get((u, v, u, v), 0)
+    parts = [(R - a - b + q4) / R, (a - q4) / R, (b - q4) / R, q4 / R]
+    if min(parts) < -1e-9:
+        return None
+    Hp = -sum(p * math.log(p) for p in parts if p > 0)
+    return R * (Hp - H_sh(a / R) - H_sh(b / R))
+
+
+def check_delta_bound(trials=20000, seed=2):
+    """`delta <= R[H(p) - H(alpha) - H(beta)] <= 0` on random corpora.
+
+    Returns `(failures, n_positive_bounds, n_checked)`; both counts should be
+    zero: the bound is never positive and never below the exact `delta`."""
+    rng = random.Random(seed)
+    nchecked = fails = npos = 0
+    for _ in range(trials):
+        n = rng.randint(6, 40)
+        k = rng.randint(2, 5)
+        seq = [rng.randrange(k) for _ in range(n)]
+        B2 = ngram_counts(seq, 2)
+        for u in range(k):
+            for v in range(k):
+                if u == v or not usable(seq, u, v) or B2.get((u, v), 0) == 0:
+                    continue
+                bnd = delta_jensen_bound(seq, u, v)
+                if bnd is None:
+                    continue
+                d = delta_formula(seq, u, v)
+                nchecked += 1
+                npos += bnd > 1e-9
+                if d > bnd + 1e-9 * max(1.0, abs(bnd)):
+                    fails += 1
+                    if fails <= 5:
+                        print(f"BOUND MISMATCH seq={seq} u={u} v={v} "
+                              f"delta={d!r} bound={bnd!r}")
+    return fails, npos, nchecked
 
 
 def delta_scaled(seq, u, v, eps):
@@ -728,6 +795,7 @@ def main():
     trig_bad = check_trigram_markov_counterexample()
     cond_bad, cond_n = check_sufficient_condition(w=w)
     run_pos, run_steps, run_run, run_pair, run_worst = check_run_aware()
+    bound_bad, bound_pos, bound_n = check_delta_bound()
 
     ex_bad = 0
     if args.exhaustive:
@@ -749,8 +817,11 @@ def main():
           f"over {cond_n} corpora (every merge has delta=0)")
     print(f"run-aware step: positives {run_pos} over {run_steps} steps "
           f"(run {run_run}, pair {run_pair}, worst {run_worst:.1e})")
+    print(f"Jensen bound (delta <= R[H(p)-H(alpha)-H(beta)] <= 0): failures "
+          f"{bound_bad}, positive bounds {bound_pos}, checked {bound_n}")
     raise SystemExit(1 if (bad or d1bad or mexpbad or markov_bad or ex_bad
-                           or trig_bad or cond_bad or run_pos) else 0)
+                           or trig_bad or cond_bad or run_pos
+                           or bound_bad or bound_pos) else 0)
 
 
 if __name__ == '__main__':

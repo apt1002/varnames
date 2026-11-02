@@ -285,8 +285,9 @@ against its product baseline.  So:
 ## 9. Is `Δ` always negative?
 
 `Δ < 0` for every merge would say that adding a word never enlarges `CS`.  It
-holds to leading order (§8) and in every case we can enumerate, but the
-all-orders statement is only partially proved.
+holds to leading order (§8), for every distinct-pair merge **exactly**, and in
+every case we can enumerate.  Only the *doubled-word* merge (`u = v`) is not
+covered by the proof below; the run-aware rule of §9.1 never performs it.
 
 **Both sums fall.**  One merge removes `M = N(u,v)` copies of `u` and of `v` and
 creates `M` copies of `w`, so
@@ -303,8 +304,60 @@ numbers; the exact claim is `ΔS2 ≤ ΔS1`.  In the form `CS = N·H` with
 raises the per-token conditional entropy, and `Δ ≤ 0` says the deletion always
 wins.
 
-**What is proved, and what is tested.**  Enumerating every cyclic corpus over
-`≤ 4` symbols (all sizes up to `20 000` sequences) with every merge pair:
+### 9.0 A proof for the distinct-pair merge (`u ≠ v`)
+
+Take `u ≠ v` — the only kind of pair step the run-aware rule performs.  Write
+
+    R = N(v,u),   a = N(v,u,v),   b = N(u,v,u),   α = a/R,   β = b/R ,
+
+and let `p` be the four-way distribution of §7 over the `R` occurrences of the
+bigram `(v,u)`, split by *(the `v` is preceded by `u`)* and *(the `u` is followed
+by `v`)*.  Its two marginals are exactly `β` and `α`: the first event is the
+trigram `u v u`, counted `b` times, and the second is `v u v`, counted `a` times.
+
+Start from the exact entropy form of §7,
+
+    Δ = Σ_{x≠v} N(x,u)[H(q_x) − H(λ)] + Σ_{y≠u} N(v,y)[H(r_y) − H(μ)]
+        − R[H(λ) + H(μ) − H(p)] ,
+
+with `q_x = P(v|x,u)`, `r_y = P(u|v,y)`.
+
+*Jensen, `u`-side.*  The weights `N(x,u)` sum to `N(u)` and the `q_x` have
+weighted mean `Σ_x N(x,u) q_x / N(u) = N(u,v)/N(u) = λ`; since `H` is concave,
+
+    Σ_x N(x,u) H(q_x) ≤ N(u) H(λ) .
+
+The `x = v` term is `R·H(α)`, so isolating it bounds the first sum,
+
+    Σ_{x≠v} N(x,u)[H(q_x) − H(λ)] ≤ R[H(λ) − H(α)] .
+
+*Jensen, `v`-side.*  Symmetrically the weights `N(v,y)` sum to `N(v)`, the
+`r_y` have mean `μ`, and the `y = u` term is `R·H(β)`:
+
+    Σ_{y≠u} N(v,y)[H(r_y) − H(μ)] ≤ R[H(μ) − H(β)] .
+
+Substituting both bounds, `H(λ)` and `H(μ)` cancel and
+
+    Δ ≤ R[H(p) − H(α) − H(β)] .
+
+Finally `α` and `β` are the marginals of the joint `p`, so `H(p) ≤ H(α) + H(β)`
+(subadditivity).  Hence **`Δ ≤ 0`**.  ∎
+
+The proof *derives* the sufficient condition of §7.1 rather than assuming it:
+equality needs both Jensen steps tight (`q_x = λ` for every `x` with
+`N(x,u) > 0`, and `r_y = μ` for every `y` with `N(v,y) > 0` — the trigram
+conditions `m(x,u,v) = m(u,v,y) = 1`) **and** `H(p) = H(α) + H(β)`, i.e. the two
+events independent, which is the `(a,b,a,b)` 4-gram identity.  The key point is
+that the `α`/`β` that enter the Jensen corrections are exactly the marginals of
+`p`, so the three terms collapse to `H(p) − H(α) − H(β)`.
+
+**What is proved, and what is tested.**  The theorem of §9.0 covers every
+`u ≠ v` merge; the exhaustive and random checks below confirm it (and are the
+regression test for the algebra — the checkable Jensen bound of §9.0,
+`Δ ≤ R[H(p) − H(α) − H(β)] ≤ 0`, holds with no violation over 126 578 random
+merges).  Only the doubled word remains outside the proof.  Enumerating every
+cyclic corpus over `≤ 4` symbols (all sizes up to `20 000` sequences) with every
+merge pair:
 
 * `u ≠ v`: `0` positive `Δ` out of `447 384` merges;
 * `u = v`, under "no `uuu`": `0` positive out of `102 306` merges;

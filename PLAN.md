@@ -27,9 +27,12 @@ labels (see `README.md`).
 
 ## A. Dictionary / pair-merge theory (`docs/TREE_WORDS.md`)
 
-- [~] **A1. Prove `Δ < 0` exactly.** *In progress.* Leading-order proof,
-      exact entropy form and an exhaustive numerical sign check are done; the
-      exact `ΔS2 ≤ ΔS1` step is still open. `scripts/check_merge_delta.py`.
+- [x] **A1. Prove `Δ ≤ 0` exactly.** *Solved (distinct pairs)* — for `u ≠ v`,
+      `Δ ≤ R[H(p) − H(α) − H(β)] ≤ 0` by Jensen on the two context sums plus
+      subadditivity, and the equality condition is the §7.1 sufficient
+      condition.  The doubled word is the only case outside the proof (the
+      run-aware rule never performs it). `docs/TREE_WORDS.md` §9.0,
+      `scripts/check_merge_delta.py`.
 - [x] **A2. Relax "no threefold repetition"** (run-aware rule). *Succeeded* —
       sign-safe; `docs/TREE_WORDS.md` §9.1.
 - [x] **A3. Greedy alternative** (largest `Δ` vs most frequent pair).
