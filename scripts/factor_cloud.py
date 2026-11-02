@@ -149,14 +149,16 @@ def main():
 
     # a CSV so the clouds can be re-plotted elsewhere
     out = os.path.splitext(args.save)[0] + '.csv'
-    with open(out, 'w', encoding='utf-8') as f:
-        cols = ['id', 'word', 'mass'] + [f'U{d + 1}' for d in range(left.shape[1])] \
-            + [f'V{d + 1}' for d in range(right.shape[1])]
-        f.write(','.join(cols) + '\n')
+    import csv
+    with open(out, 'w', newline='', encoding='utf-8') as f:
+        wr = csv.writer(f)
+        wr.writerow(['id', 'word', 'mass']
+                    + [f'U{d + 1}' for d in range(left.shape[1])]
+                    + [f'V{d + 1}' for d in range(right.shape[1])])
         for w in range(len(sym)):
-            f.write(','.join([str(w), repr(sym[w]), f'{uni[w]:.0f}']
-                             + [f'{x:.6g}' for x in left[w]]
-                             + [f'{x:.6g}' for x in right[w]]) + '\n')
+            wr.writerow([w, sym[w], f'{uni[w]:.0f}']
+                        + [f'{x:.6g}' for x in left[w]]
+                        + [f'{x:.6g}' for x in right[w]])
     print(f"wrote {out}")
 
     if not args.no_show:
