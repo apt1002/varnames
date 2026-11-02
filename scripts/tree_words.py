@@ -712,6 +712,21 @@ def score_lines(lines, char_id, plan, nchars, big, uni, T, alpha):
     return out
 
 
+def cmd_adj(args):
+    """Build ``adj.npz`` for an existing dictionary directory."""
+    chars, rules, sym = load_dictionary(args.dir)
+    char_id = {c: i for i, c in enumerate(chars)}
+    plan = make_plan(rules, len(chars))
+    full = read_lines(args.corpus, stride=args.stride)
+    print(f"tokenising {len(full)} lines (stride {args.stride or 1})", flush=True)
+    big, uni = count_adjacency_parallel(full, char_id, plan, len(chars),
+                                        jobs=args.jobs)
+    write_adj(args.dir, big, uni, sym)
+    print(f"adjacency: {len(big)} distinct bigrams, "
+          f"N={sum(uni.values())}, N(stop)={uni[len(chars)]}", flush=True)
+    print(f"wrote {args.dir}/adj.npz", flush=True)
+
+
 def cmd_stats(args):
     chars, rules, sym = load_dictionary(args.dir)
     big, uni, V = load_adj(args.dir)
@@ -751,6 +766,12 @@ def main():
     tr.add_argument('--outdir', default=None)
     tr.add_argument('--jobs', type=int, default=1)
     tr.set_defaults(func=cmd_train)
+    ad = sub.add_parser('adj')
+    ad.add_argument('--dir', required=True)
+    ad.add_argument('--corpus', default='work/camel/merged_training.txt')
+    ad.add_argument('--stride', type=int, default=0)
+    ad.add_argument('--jobs', type=int, default=1)
+    ad.set_defaults(func=cmd_adj)
     st = sub.add_parser('stats')
     st.add_argument('--dir', required=True)
     st.set_defaults(func=cmd_stats)
