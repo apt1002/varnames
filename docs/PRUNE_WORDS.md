@@ -77,8 +77,8 @@ The pruned list still wins, but by only **0.145 bits** — it captures 0.14 of t
 words.  So the overshoot pays off much less at the larger size: at 2040 words
 the greedy prefix already contains nearly all the valuable words, and the
 overshoot tail is mostly reached-and-discarded.  This is why the adopted 2040
-word list (plan C15) is only a marginal improvement over the greedy build, and
-motivates the overshoot-size sweep (plan C14).  Per-32 rank counts of the kept
+word list is only a marginal improvement over the greedy build, and motivates
+the overshoot-size sweep.  Per-32 rank counts of the kept
 new words and the 80-of-256 / 232-of-1020 greedy-deletion figures appear in
 `work/prune_512_removed.txt` / `work/prune_2040_removed.txt`.
 
@@ -127,7 +127,7 @@ word list.  The reason is a mismatch of objectives: `Delta_CS` optimises the
 best fits the *restricted* clustered model.  A word list tuned for the
 production (co-clustered) representation would have to be pruned against the
 **clustered** code length (or the block-model KL), not `Delta_CS`; that is left
-open (plan C16).
+open.
 
 ## Which pairs are removed
 

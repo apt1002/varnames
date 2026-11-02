@@ -477,7 +477,7 @@ removing the offending zeros does not help, and the prior remains retired.
 ### 9.1 Are the extra zeros even structural? (no)
 
 It is tempting to read the retraction as *discovering* structural zeros of the
-word matrix and to feed them back into the **independence** prior (`C10`): take
+word matrix and to feed them back into the **independence** prior: take
 the 849 744 absorbed cells the retraction zeroes, zero `P_mar` there and
 renormalise.  It fails the same way, and more sharply:
 

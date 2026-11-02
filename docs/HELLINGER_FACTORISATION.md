@@ -171,7 +171,7 @@ Hellinger factorisation remains the best *low-rank* reconstruction of the table
 
 ## Compressing the table directly: is the residual sparse?
 
-[`CLUSTER_WORDS.md`](CLUSTER_WORDS.md) (C18) concluded that the block (cluster)
+[`CLUSTER_WORDS.md`](CLUSTER_WORDS.md) concluded that the block (cluster)
 model cannot be both small and accurate, so the fallback is to store the word ×
 word matrix itself, compressed directly.  The natural scheme is to approximate it
 by a low-rank / `M_mar` fit and encode codewords only for the entries where the
@@ -249,5 +249,5 @@ projected budget.
    Storing the largest `N` cells verbatim over the independence prior stays
    within ~1 bit only at `N ≈ 300K` (`tw2040`, 6.8% of `V²`) / `~100K` (`tw512`, 30% of `V²`);
    a low-rank/M_mar fit leaves its error spread over 10–20% of `V²` at every
-   rank.  Combined with C18, neither clustering nor direct coding gives a
+   rank.  Combined with the clustering study, neither route gives a
    compact, near-lossless table.  `scripts/matrix_compress.py`.
