@@ -41,9 +41,7 @@ labels (see `README.md`).
 - [ ] **A6. Run-fusion theory** (mirror A1 for runs). *Empirical only* — a
       symbolic proof and the `Δ = 0`-under-Markov question are open.
       `docs/TREE_WORDS.md` §9.1.
-- [x] **A7. Boundary words (`v\n`): is the boundary trigram worth it?**
-      *Negative* — the trigram `(u,v,\n)` is worth ≈0.5 bits/string (≈1 %,
-      held out), an upper bound on any such word; not adopted.
+- [x] **A7. Boundary words (`v\n`).** *Negative* — not worth it; not adopted.
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
 
 ## B. Adjacency matrix construction
@@ -70,43 +68,27 @@ labels (see `README.md`).
       *Done* — `docs/WORD_COMPRESSIBILITY.md`.
 - [x] **C7. Smooth the break-open shape, or drop it.** *DROPPED (not needed).*
 
-- [x] **C8. Tokeniser speed: precedence parser vs buckets.** *Negative for the
-      precedence parser (faster but inequivalent); the correct ascending-rank
-      bucket parser is equivalent and faster, and is now production.*
-      `docs/TOKENISATION.md`.
-- [x] **C9. Re-target the adjacency experiments to tree words.** *Done* — the
-      Hellinger factorisation of the word matrix is the best low-rank model but
-      loses held-out compression vs the full table.
+- [x] **C8. Tokeniser speed: precedence parser vs buckets.** *Succeeded* — the
+      bucket parser is production. `docs/TOKENISATION.md`.
+- [x] **C9. Re-target the adjacency experiments to tree words.** *Negative* —
+      the Hellinger factorisation loses to the full table.
       `docs/HELLINGER_FACTORISATION.md`, `scripts/hfactor_words.py`.
 - [x] **C10. Structural zeros of the tree-word matrix in `M_mar`/`P_mar`.**
       *Done — NEGLIGIBLE.* `docs/STRUCTURAL_ZEROS.md`.
 - [x] **C11. Retract the break-open prior on absorbed row/column mass.**
       *Tested (`--shrink prop|hard`): REJECTED.* `docs/BREAK_OPEN_PRIOR.md` §9.
-- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Unsuccessful* — the
-      pruned list beats the plain greedy build on the raw bigram score, but is
-      *worse* once the word matrix is co-clustered (the prune optimises the full
-      bigram model, not the clustered/restricted one). Not adopted.
+- [x] **C12. Word list: overshoot then prune by `Δ_CS`.** *Unsuccessful* —
+      worse once the matrix is co-clustered; not adopted.
       `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
-- [x] **C13. Compress the word adjacency matrix by left/right K-means
-      clustering.** *Succeeded* — the co-clustered block model beats the
-      Hellinger factorisation at equal storage. `docs/CLUSTER_WORDS.md`,
-      `scripts/cluster_words.py`.
-- [x] **C14. Word list: how large an overshoot is worth it?** *Closed* — the
-      gain shrinks with size (512: +0.86 bits, 2040: +0.15 bits); the two sizes
-      already tell us what we need, so no further overshoot sweep.
-      `docs/PRUNE_WORDS.md`.
-- [x] **C15. Adopt the pruned 2040 word list as the reference?** *No* — built
-      (`work/tw2040p`) and it beats greedy by +0.145 bits un-clustered, but it
-      is *worse* through the co-clustering pipeline; decided **not to adopt**.
+- [x] **C13. Compress the word adjacency matrix by K-means co-clustering.**
+      *Succeeded.* `docs/CLUSTER_WORDS.md`, `scripts/cluster_words.py`.
+- [x] **C14. How large an overshoot is worth it?** *Closed* — 512 and 2040
+      suffice; no further sweep. `docs/PRUNE_WORDS.md`.
+- [x] **C15. Adopt the pruned 2040 word list?** *No.*
       `docs/PRUNE_WORDS.md`, `scripts/prune_words.py`.
-- [x] **C16. Why does the pruned list regress under co-clustering?** *Closed* —
-      diagnosed: the pruned matrix is intrinsically harder to approximate by a
-      few hundred clusters (clustered excess over full rises 1.71 → 1.97
-      bits/transition; less low-rank Hellinger energy), i.e. an objective
-      mismatch with `Delta_CS`. No further work; the recomputation tasks
-      (re-cluster / adopt) are **cancelled**. `docs/PRUNE_WORDS.md`.
-- [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned 2040 word list.**
-      *Cancelled* — the pruned list is not adopted, so no recomputation.
+- [x] **C16. Why the pruned list regresses under co-clustering.** *Closed* —
+      objective mismatch; recomputation cancelled. `docs/PRUNE_WORDS.md`.
+- [x] **C17. `WORD_COMPRESSIBILITY.md` on the pruned list.** *Cancelled.*
       `docs/WORD_COMPRESSIBILITY.md`.
 
 ## Housekeeping / deferred regenerations
@@ -116,10 +98,6 @@ labels (see `README.md`).
       `PAIR_THRESHOLDS`; log `work/afk_pairmatrix.log`.
 - [ ] **H2. Corpus hardening** (deferred, optional): Ruby heredoc markers /
       UUID fixtures.
-- [ ] **H3. Broaden the corpus** (deferred, not started): add identifier
-      harvests from more namespace-rich ecosystems — Java (Maven Central), Lua
-      (LuaRocks), OCaml (OPAM), Haskell (Hackage) — and rebuild the union. Keep
-      the harvest reproducible and the corpus **stable** (a frozen, versioned
-      snapshot) so every downstream experiment can be regenerated on it later;
-      the plan is a future full rebuild of all results on the larger, broader
-      corpus. `docs/CORPUS.md`.
+- [ ] **H3. Broaden the corpus** (deferred): add Java/Lua/OCaml/Haskell
+      harvests; keep a stable versioned snapshot for a later full rebuild.
+      `docs/CORPUS.md`.
