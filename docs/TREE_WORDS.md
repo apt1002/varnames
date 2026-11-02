@@ -343,6 +343,10 @@ Substituting both bounds, `H(λ)` and `H(μ)` cancel and
 Finally `α` and `β` are the marginals of the joint `p`, so `H(p) ≤ H(α) + H(β)`
 (subadditivity).  Hence **`Δ ≤ 0`**.  ∎
 
+(If `R = 0` — the two words are never adjacent in the order `v u` — the four-way
+term is absent and the same two Jensen inequalities give `Δ ≤ 0` directly: the
+weights `N(x,u)` then already sum to `N(u)`, so each context sum is `≤ 0`.)
+
 The proof *derives* the sufficient condition of §7.1 rather than assuming it:
 equality needs both Jensen steps tight (`q_x = λ` for every `x` with
 `N(x,u) > 0`, and `r_y = μ` for every `y` with `N(v,y) > 0` — the trigram
