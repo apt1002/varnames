@@ -111,8 +111,10 @@ labels (see `README.md`).
       `docs/HELLINGER_FACTORISATION.md`, `scripts/matrix_compress.py`.
 - [~] **C20. Rank-4 factor clouds (visualisation).** *Tool ready* — plot the
       left/right `√M_ref` factorisation as 3D point clouds to look for structure
-      worth compressing.  `scripts/factor_cloud.py`,
-      `docs/HELLINGER_FACTORISATION.md`.
+      worth compressing.  First shape/gain test built (`scripts/shape_gain_test.py`):
+      the apparent "gain × shape" factorisation does **not** survive a
+      pipeline-matched null — it is largely a low-rank reconstruction artefact.
+      `scripts/factor_cloud.py`, `docs/HELLINGER_FACTORISATION.md`.
 - [ ] **C21. Where the co-clustering loss lives** (deferred): attribute the
       `assoc`-vs-word×word loss to each (left cluster, right cluster) pair — is
       it concentrated in the high-mass pairs, the tail, or the junk clusters?

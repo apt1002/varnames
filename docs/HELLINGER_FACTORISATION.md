@@ -173,7 +173,10 @@ Hellinger factorisation remains the best *low-rank* reconstruction of the table
 `V√Σ` as two 3D point clouds from just `work/tw2040/adj.npz` and `sym.npy`.  At
 rank 4 on `tw2040` the leading singular values are 2749 / 1129 / 603 / 508
 (65 % of the Frobenius energy); the right cloud shows a marked two-lobed / cross
-structure while the left cloud is closer to isotropic.)*
+structure while the left cloud is closer to isotropic.  The apparent
+"gain × shape" factorisation of these clouds is tested — and found to be largely
+a reconstruction artefact — in `scripts/shape_gain_test.py`; see the section
+"Is the factor-cloud 'gain × shape' structure real?" below.)*
 
 ## Compressing the table directly: is the residual sparse?
 
@@ -270,6 +273,53 @@ block model is ~136 kbit total, matched by `N ≈ 5 400` → ≈59 bits).  So it
 genuine tie in the counting convention this project uses, not a clean compression
 win; the block model keeps a small edge once storage is counted honestly, and
 neither is near the full table.
+
+## Is the factor-cloud "gain × shape" structure real?
+
+The rank-`L` cloud (`scripts/factor_cloud.py`) looks as if its density factorises
+as a radial "gain" (peaked near the origin) times an angular "shape" independent
+of the radius — suggesting a scalar gain could be split off from a
+low-dimensional shape.  `scripts/shape_gain_test.py` tests whether that survives
+scrutiny, because two things make the visual unreliable:
+
+* **full rank the radius is just the mass.** `‖√M_ref[a,:]‖² = row mass_a`, so
+  the "radial function" *is* the word-frequency distribution.
+* **the cloud is a σ-weighted point set.** In `X = U√σ`, `r_w = √(Σ_k σ_k U[w,k]²)`,
+  so direction and radius are coupled by the scaling whenever the `σ` differ —
+  and, independently, the orthonormal-column constraint of the SVD couples them
+  even with equal `σ`.
+
+The test statistic is the energy distance between the directions in the
+low- and high-radius halves, permutation-tested and normalised by the mean
+pairwise distance (`E/MPD`; `p > 0.05` ⇒ independent).  The nulls are matrices
+that pass through the *same* pipeline but carry no gain/shape structure by
+construction — `indep` (`M[a,b] = g_a·p_a[b]`, gain and shape independent),
+`coupled` (`g_a` drives the concentration of `p_a`), and `iid` random.
+
+| clouds | real `tw2040` | indep null | coupled null | iid null |
+|---|---:|---:|---:|---:|
+| rank-4 `U√σ` / `V√σ` | 0.086 / 0.144 | 0.004 / 0.170 | 0.012 / 0.093 | 0.111 / 0.106 |
+| rank-4 `U` / `V` (unweighted) | 0.071 / 0.102 | 0.011 / 0.135 | 0.031 / 0.084 | 0.090 / 0.090 |
+| full rank (no SVD) | 0.005 / 0.009 | 0.000 / 0.003 | 0.010 / 0.000 | 0.000 / 0.000 |
+
+What the numbers say:
+
+* **At full rank the gain/shape split is nearly exact** (all `E/MPD ≤ 0.01`) —
+  but that is close to a tautology: gain = `√mass` and shape = the normalised
+  successor distribution, two coordinate functions of the same row.
+* **The strong rank-4 structure is an artefact.**  A structureless i.i.d. matrix
+  reproduces it (`E/MPD ≈ 0.09–0.11`), the real cloud sits inside the null range,
+  and the rank-4 statistic does **not** separate the by-construction independent
+  from the coupled control (`indep` right `0.170` > `coupled` right `0.093`).
+  The dependence also *shrinks* as rank grows (0.18 → 0.02 from rank 2 to 256),
+  so the most visually striking rank (L = 4) is the most artefact-laden.
+* So the "gain × shape" impression is largely SVD geometry, not evidence of
+  separable data structure.  A gain/shape split would not by itself reduce the
+  shape's dimension anyway — that needs the *angular* cloud to be low-dimensional,
+  which the co-clustering study ([`CLUSTER_WORDS.md`](CLUSTER_WORDS.md)) already
+  says it is not.
+
+`scripts/shape_gain_test.py`.
 
 ## Conclusions
 
