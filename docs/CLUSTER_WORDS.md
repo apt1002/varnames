@@ -214,7 +214,12 @@ So the budget sweep confirms the direction the other two results pointed to:
 **buy words first, clusters last.**  The residual table loss is the part still
 worth attacking (the loss-attribution and block-structure experiments) or
 accepting.
-`scripts/wordlist_budget.py`, `work/c23_budget.csv`.
+
+Repeating the sweep on dictionaries built on the **full corpus** (`--sample 0`
+instead of the 5 % stride sample, `work/c23_budget_s0.csv`) changes every cell by
+under 0.35 bits with no systematic sign — the largest vocabulary is still the
+frontier winner at every budget — so the conclusion is robust to how the
+dictionary is sampled.`scripts/wordlist_budget.py`, `work/c23_budget.csv`.
 
 ## The removable-word refinement
 

@@ -84,10 +84,12 @@ Word-level model (held-out validation, `kappa = 1000`):
 | 4,414 | 4,478 | 1,318,843 | 42.48 | 89.5% | 99.6% |
 | 11,694 | 11,758 | 1,785,079 | 40.20 | 92.8% | 99.8% |
 
-Building the two largest dictionaries on the **full corpus** (`--sample 0`)
-rather than the 5 % sample barely moves the score — `V = 4,478`: 42.51 bits,
-89.5 % / 99.6 %; `V = 11,758`: 40.14 bits, 92.8 % / 99.8 % — so the 5 % sample
-is an adequate proxy for ranking merges, and the numbers above are robust to it.
+Building **all three** dictionaries on the full corpus (`--sample 0`) rather
+than the 5 % sample barely moves the score and has no systematic sign —
+`V = 2,104`: 45.95 bits, 84.8 % / 99.1 % (vs 45.79 / 85.0 % / 99.2 %);
+`V = 4,478`: 42.51, 89.5 % / 99.6 %; `V = 11,758`: 40.14, 92.8 % / 99.8 % — so
+the 5 % sample is an adequate proxy for ranking merges, and the table above is
+robust to it.
 
 Character-level model (`CODE_LENGTHS.md`, same corpus), at the nearest
 vocabulary sizes:
