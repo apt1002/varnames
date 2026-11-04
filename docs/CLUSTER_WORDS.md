@@ -200,5 +200,5 @@ tie in the "count stored numbers" convention, but one that reverses once the
 top-`N` scheme is charged for *which* cells it codes (subset entropy
 `≈ N·log₂V²`, ~10× the cluster labels), after which co-clustering wins by
 ~1.3–4 bits.  Neither route alone gives a compact, near-lossless table.  See
-[`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md).
+[`MATRIX_COMPRESSION.md`](MATRIX_COMPRESSION.md).
 `scripts/cluster_words.py`.

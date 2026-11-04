@@ -19,6 +19,10 @@ Design (change with the flags):
   * point colour  -- log10 observed unigram mass (so rare junk words are visible);
   * the `--label N` most massive points per cloud are annotated with the word.
 
+`--divide-unigram` divides each of the three plotted coordinates by the word's
+1-gram probability, stripping the mass/gain trend so the remaining (angular)
+structure is visible.
+
 It is self-contained: it needs `numpy`, `matplotlib`, and only the files
 `<dir>/adj.npz` and `<dir>/sym.npy` (e.g. copy `work/tw2040/`; ~3.4 MB).
 
@@ -26,6 +30,7 @@ Usage:
     factor_cloud.py --dir work/tw2040                 # show and save PNG
     factor_cloud.py --dir work/tw2040 --size mass --save cloud.png
     factor_cloud.py --dir work/tw2040 --axes 1,2,3 --size 4 --no-show
+    factor_cloud.py --dir work/tw2040 --divide-unigram --no-show
 """
 import argparse
 import os
@@ -61,8 +66,11 @@ def factorise(M_ref, rank):
     return left, right, s
 
 
-def axes_and_size(coords, dims, size_spec, uni):
-    xyz = coords[:, [d - 1 for d in dims]]
+def axes_and_size(coords, dims, size_spec, uni, divide_unigram=False):
+    xyz = coords[:, [d - 1 for d in dims]].copy()
+    if divide_unigram:
+        p = uni / max(uni.sum(), 1.0)
+        xyz = xyz / np.maximum(p, 1e-300)[:, None]
     if size_spec == 'mass':
         s = uni
     else:
@@ -90,8 +98,11 @@ def main():
                     help='three latent dims (1-based) for x,y,z')
     ap.add_argument('--size', default='1',
                     help="latent dim (1-based) for point size, or 'mass'")
-    ap.add_argument('--label', type=int, default=8,
+    ap.add_argument('--label', type=int, default=100,
                     help='annotate this many most-massive words per cloud')
+    ap.add_argument('--divide-unigram', action='store_true',
+                    help='divide the three plotted coordinates by the word '
+                         "1-gram probability (to strip the mass/gain trend)")
     ap.add_argument('--clip', type=float, default=99.0,
                     help='set axis limits to this percentile range so the bulk '
                          'is visible (100 = show full range)')
@@ -119,7 +130,8 @@ def main():
     fig = plt.figure(figsize=(13, 6.5))
     for i, (name, coords) in enumerate((('left (row) cloud  U*sqrt(sigma)', left),
                                         ('right (col) cloud  V*sqrt(sigma)', right))):
-        xyz, size_raw = axes_and_size(coords, dims, args.size, uni)
+        xyz, size_raw = axes_and_size(coords, dims, args.size, uni,
+                                       args.divide_unigram)
         ax = fig.add_subplot(1, 2, i + 1, projection='3d')
         col = scale('log', uni, 0.0, 1.0)
         siz = scale('log' if args.size == 'mass' else 'lin', size_raw, 3.0, 90.0)

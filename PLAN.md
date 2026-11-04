@@ -108,7 +108,7 @@ labels (see `README.md`).
       the residual is not sparse; at matched store a top-`N` table only ties the
       block model, and that tie reverses once the cost of naming the coded cells
       is counted; no compact near-lossless table.
-      `docs/HELLINGER_FACTORISATION.md`, `scripts/matrix_compress.py`.
+      `docs/MATRIX_COMPRESSION.md`, `scripts/matrix_compress.py`.
 - [~] **C20. Rank-4 factor clouds (visualisation).** *Tool ready* — plot the
       left/right `√M_ref` factorisation as 3D point clouds to look for structure
       worth compressing.  First shape/gain test built (`scripts/shape_gain_test.py`):

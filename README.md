@@ -66,6 +66,7 @@ varnames/
 │   ├── CODE_LENGTHS.md                  # fixed-budget compressibility
 │   ├── ADJACENCY_MATRIX.md              # how to build the adjacency matrix + the κ prior
 │   ├── HELLINGER_FACTORISATION.md       # square-root factorisation of the word matrix
+│   ├── MATRIX_COMPRESSION.md            # direct coding of the word matrix (residual + top-N)
 │   ├── STRUCTURAL_ZEROS.md              # structural zeros of the word prior (negligible)
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
 │   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
