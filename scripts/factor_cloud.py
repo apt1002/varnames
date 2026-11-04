@@ -19,9 +19,9 @@ Design (change with the flags):
   * point colour  -- log10 observed unigram mass (so rare junk words are visible);
   * the `--label N` most massive points per cloud are annotated with the word.
 
-`--divide-unigram` divides each of the three plotted coordinates by the word's
-1-gram probability, stripping the mass/gain trend so the remaining (angular)
-structure is visible.
+`--divide-unigram` divides each of the three plotted coordinates by the **square
+root** of the word's 1-gram probability, stripping the mass/gain trend so the
+remaining (angular) structure is visible.
 
 It is self-contained: it needs `numpy`, `matplotlib`, and only the files
 `<dir>/adj.npz` and `<dir>/sym.npy` (e.g. copy `work/tw2040/`; ~3.4 MB).
@@ -70,7 +70,7 @@ def axes_and_size(coords, dims, size_spec, uni, divide_unigram=False):
     xyz = coords[:, [d - 1 for d in dims]].copy()
     if divide_unigram:
         p = uni / max(uni.sum(), 1.0)
-        xyz = xyz / np.maximum(p, 1e-300)[:, None]
+        xyz = xyz / np.sqrt(np.maximum(p, 1e-300))[:, None]
     if size_spec == 'mass':
         s = uni
     else:
@@ -101,8 +101,9 @@ def main():
     ap.add_argument('--label', type=int, default=100,
                     help='annotate this many most-massive words per cloud')
     ap.add_argument('--divide-unigram', action='store_true',
-                    help='divide the three plotted coordinates by the word '
-                         "1-gram probability (to strip the mass/gain trend)")
+                    help='divide the three plotted coordinates by the square '
+                         "root of the word's 1-gram probability (to strip the "
+                         'mass/gain trend)')
     ap.add_argument('--clip', type=float, default=99.0,
                     help='set axis limits to this percentile range so the bulk '
                          'is visible (100 = show full range)')
