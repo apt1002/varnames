@@ -348,6 +348,9 @@ optimises a different objective — so this lever is judged **unsuccessful**
 ([`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md)). The word × word matrix — the
 largest table — does compress better by two-sided K-means co-clustering than by
 the Hellinger factorisation of equal storage
+([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)). The budget knob that matters
+most, though, is the word list itself: at matched model size the largest word
+list that fits beats a finer `k × k` table by ~3–5 bits
 ([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)).
 
 A third design question — whether to let a word span the identifier's end, so a

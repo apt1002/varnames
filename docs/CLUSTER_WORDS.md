@@ -174,6 +174,47 @@ What the curves say:
   `k = 1052`: 47.05 vs 47.78).  Neither reaches the full table: at ~25 % storage
   both sit 1–2 bits above it.
 
+## Word-list size vs cluster-matrix budget
+
+Everything above holds the word list fixed (`V = 2104`) and varies the table.  The
+other budget knob is the word list itself: a larger `V` gives longer words, hence
+fewer tokens per identifier, at the cost of a bigger matrix.  `store = k² + 2V`
+is the same either way, so the question is where to put the budget.
+
+`scripts/wordlist_budget.py` sweeps three word lists (built with `tree_words.py
+train`, `num_pairs = V − 64`): `V = 2 104 / 4 478 / 11 758`, `k ∈
+{52,105,210,420,840}`, `kappa = 300`, stride-40 validation.  Held-out bits are
+**per identifier**, so they compare across `V`:
+
+| `V` | full table | `k=52` | `k=105` | `k=210` | `k=420` | `k=840` |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2 104 | 45.86 | 56.72 | 55.48 | 53.56 | 51.09 | 48.70 |
+| 4 478 | 42.32 | 51.75 | 51.10 | 50.44 | 49.00 | 47.19 |
+| 11 758 | 39.31 | 47.21 | 46.90 | 46.60 | 46.12 | 45.39 |
+
+* **The word list is the dominant lever.**  Merely moving from `V = 2 104` to
+  `V = 11 758` drops the *full* table from 45.86 to 39.31 bits/identifier
+  (−6.6), and the clustered model at fixed `k = 52` from 56.72 to 47.21 (−9.5).
+  This dwarfs anything `k` buys.
+* **At matched store, pick the largest word list that fits.**  With
+  `store = k² + 2V` the per-list floor is `2V`, so the frontier is "biggest `V`
+  whose floor fits, then spend the rest on `k`": e.g. at store ≈ 26 k the best
+  point is `V = 11 758, k = 52` (47.21), beating `V = 4 478, k = 105` (51.10) and
+  `V = 2 104, k = 210` (53.56).
+* **The clustering penalty shrinks with `V`** — at `k = 52` the `assoc − full`
+  gap falls from 10.85 (`V = 2 104`) to 7.91 (`V = 11 758`) — but it is still
+  ≥ 6 bits everywhere, so the block model remains the weak part even with a big
+  word list.
+* **Charging for the dictionary does not change the ordering.**  `store = k²+2V`
+  ignores the tree dictionary (~`2(V−64)` integers); adding it
+  (`k² + 4V`) moves every point right but the frontier still picks the largest
+  `V` at every budget (e.g. at ~50 k, `V = 11 758, k = 52` still wins by ~3 bits).
+
+So C23 confirms the direction the other two results pointed to: **buy words
+first, clusters last.**  The residual table loss is the part still worth
+attacking (C21/C22) or accepting.
+`scripts/wordlist_budget.py`, `work/c23_budget.csv`.
+
 ## The removable-word refinement
 
 The plan suggested also dropping pair words `(uv)` whose left cluster equals
@@ -202,3 +243,8 @@ top-`N` scheme is charged for *which* cells it codes (subset entropy
 ~1.3–4 bits.  Neither route alone gives a compact, near-lossless table.  See
 [`MATRIX_COMPRESSION.md`](MATRIX_COMPRESSION.md).
 `scripts/cluster_words.py`.
+
+The dominant budget knob is not the table at all but the **word list**: at
+matched model size, the largest `V` that fits beats a finer `k`, by ~3–5 bits in
+the size range tested (`V = 2 104 → 11 758`).  Buy words first, clusters last;
+the table's residual 6–8 bit loss is what remains to attack.

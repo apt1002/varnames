@@ -123,13 +123,11 @@ labels (see `README.md`).
       chosen `(a, b)`, study `P(u, v | a, b)` — is the block low-rank, or a
       sparse deviation from its marginal?  Feasibility of a per-cluster-pair
       "splat" model for the whole matrix.  `docs/CLUSTER_WORDS.md`.
-- [~] **C23. Word-list size vs cluster-matrix budget.** *Tool ready* — spend more
-      on the word list (e.g. 4478 or 11758 words) and less on the `k × k` matrix;
-      test whether compression improves with the word list even at constant `k`.
-      Driver: `scripts/wordlist_budget.py` (build word lists with
-      `tree_words.py train`, then sweep `V` and `k`).  Memory obstacle:
-      `V = 11758` makes a dense `V²` matrix ~1.1 GB (build/run on a large-RAM
-      machine).  `docs/CLUSTER_WORDS.md`, `docs/WORD_COMPRESSIBILITY.md`.
+- [x] **C23. Word-list size vs cluster-matrix budget.** *Closed, positive* —
+      at matched model size the largest word list that fits beats a finer `k`
+      (~3–5 bits from `V = 2104` to `11 758`); the word list, not the table, is
+      the dominant lever. `docs/CLUSTER_WORDS.md`, `scripts/wordlist_budget.py`.
+      Memory: `V = 11758` needs a large-RAM machine (`V²` ~1.1 GB dense).
 
 ## D. Corpus preprocessing
 
