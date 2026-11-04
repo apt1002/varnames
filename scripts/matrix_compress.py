@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Direct compression of the word x word matrix (PLAN C19).
+"""Direct compression of the word x word matrix.
 
 Two questions, both about the largest table of the word model:
 

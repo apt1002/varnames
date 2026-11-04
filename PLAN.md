@@ -45,14 +45,13 @@ labels (see `README.md`).
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
 - [ ] **A8. Rescan-based dictionary builder** (deferred): drop the position
       index for a global per-merge rescan. Prototype `scripts/word_build_rescan.py`
-      gives an identical word list and is ~2× faster / ~30 % lighter on the
-      stride-20 sample; adopt only after a stride-0 timing.
-      `docs/TREE_WORDS.md`.
+      gives an identical word list and is faster / lighter on the stride-20
+      sample; adopt only after a stride-0 timing.  `docs/TREE_WORDS.md`.
 - [ ] **A9. No run words** (deferred): never build a run word, not even `(uu)`,
       so a doubled character is absorbed only through a neighbouring pair word.
       Measure the held-out cost, especially the 64/128-bit *fit rates* rather
       than the mean.  Middle ground (allow `(uu)` only for isolated length-2
-      runs, never longer) is nearly the current rule, since 99 % of runs are
+      runs, never longer) is nearly the current rule, since almost all runs are
       length 2.  `docs/RUN_LENGTHS.md`, `docs/WORD_COMPRESSIBILITY.md`.
 
 ## B. Adjacency matrix construction
@@ -124,16 +123,16 @@ labels (see `README.md`).
       sparse deviation from its marginal?  Feasibility of a per-cluster-pair
       "splat" model for the whole matrix.  `docs/CLUSTER_WORDS.md`.
 - [x] **C23. Word-list size vs cluster-matrix budget.** *Closed, positive* —
-      at matched model size the largest word list that fits beats a finer `k`
-      (~3–5 bits from `V = 2104` to `11 758`); the word list, not the table, is
-      the dominant lever. `docs/CLUSTER_WORDS.md`, `scripts/wordlist_budget.py`.
-      Memory: `V = 11758` needs a large-RAM machine (`V²` ~1.1 GB dense).
+      at matched model size the largest word list that fits beats a finer `k`;
+      the word list, not the table, is the dominant budget lever.
+      `docs/WORD_COMPRESSIBILITY.md`, `docs/CLUSTER_WORDS.md`,
+      `scripts/wordlist_budget.py`.
 
 ## D. Corpus preprocessing
 
 - [x] **D1. Case-normalisation ablation.** *Closed, positive* — normalisation
       helps; it is injective within a class, so the class must be kept to invert
-      it (all 3.0 % "collapses" are cross-class).  `docs/CASE_NORMALISATION.md`,
+      it (all collapses are cross-class).  `docs/CASE_NORMALISATION.md`,
       `scripts/case_ablation.py`, `scripts/camelize_identifiers.py`.
 
 ## E. Productisation (long-term horizon)

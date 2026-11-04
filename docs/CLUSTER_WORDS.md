@@ -210,9 +210,10 @@ train`, `num_pairs = V − 64`): `V = 2 104 / 4 478 / 11 758`, `k ∈
   (`k² + 4V`) moves every point right but the frontier still picks the largest
   `V` at every budget (e.g. at ~50 k, `V = 11 758, k = 52` still wins by ~3 bits).
 
-So C23 confirms the direction the other two results pointed to: **buy words
-first, clusters last.**  The residual table loss is the part still worth
-attacking (C21/C22) or accepting.
+So the budget sweep confirms the direction the other two results pointed to:
+**buy words first, clusters last.**  The residual table loss is the part still
+worth attacking (the loss-attribution and block-structure experiments) or
+accepting.
 `scripts/wordlist_budget.py`, `work/c23_budget.csv`.
 
 ## The removable-word refinement

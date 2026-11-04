@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C23: word-list size vs cluster-matrix budget.
+"""Word-list size vs cluster-matrix budget.
 
 The word x word adjacency matrix `M` is compressed as a `k x k` co-clustered
 block table plus per-word linear tables (see `cluster_words.py`).  Its model

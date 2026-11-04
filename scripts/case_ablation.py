@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paired case-normalisation ablation (PLAN D1): score the CamelCase subset.
+"""Paired case-normalisation ablation: score the CamelCase subset.
 
 Normalisation leaves CamelCase identifiers unchanged, so they are *the same
 strings* in both corpora.  Scoring just those gives a paired comparison of a

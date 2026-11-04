@@ -740,6 +740,14 @@ def cmd_score(args):
     big, uni, V = load_adj(args.dir)
     char_id = {c: i for i, c in enumerate(chars)}
     plan = make_plan(rules, len(chars))
+    # Dead words -- created on the (sampled) build corpus but never selected on
+    # the full corpus -- have zero count and would divide by zero.  Give them a
+    # Laplace floor so their row (and the prior) is defined; this changes
+    # nothing for words that do occur.
+    dead = int(np.sum(np.asarray(uni) == 0))
+    if dead:
+        print(f"flooring {dead} zero-count words", flush=True)
+        uni = np.maximum(np.asarray(uni, dtype=np.float64), 0.5)
     _, den, T, alpha = reference_probabilities(big, uni, kappa=args.kappa)
     lines = read_lines(args.corpus, stride=args.stride)
     print(f"scoring {len(lines)} held-out identifiers "

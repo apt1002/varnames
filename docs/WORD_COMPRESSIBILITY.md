@@ -81,6 +81,8 @@ Word-level model (held-out validation, `kappa = 1000`):
 | 96 | 160 | 20,499 | 64.86 | 60.7% | 95.2% |
 | 512 | 576 | 149,932 | 54.05 | 74.1% | 97.9% |
 | 2,040 | 2,104 | 802,606 | 45.79 | 85.0% | 99.2% |
+| 4,414 | 4,478 | 1,318,843 | 42.48 | 89.5% | 99.6% |
+| 11,694 | 11,758 | 1,785,079 | 40.20 | 92.8% | 99.8% |
 
 Character-level model (`CODE_LENGTHS.md`, same corpus), at the nearest
 vocabulary sizes:
@@ -90,16 +92,27 @@ vocabulary sizes:
 | 100000 | 159 | 71.45 | 52.3% | 92.8% |
 | 20000 | 911 | 60.17 | 66.4% | 96.5% |
 | 10000 | 2,102 | 55.19 | 72.6% | 97.6% |
+| 5000 | 4,478 | 51.35 | 77.4% | 98.3% |
+| 2000 | 11,758 | 49.21 | 79.8% | 98.6% |
 
 ## What it shows
 
 * **At a small dictionary the two models are close** (vocab ≈ 160: 64.9 vs
   71.5 mean bits, 60.7% vs 52.3% in 64 bits) — the word model is already ahead.
-* **At equal dictionary size the word model now wins, and the gap grows with
-  the dictionary.**  At vocab ≈ 576 the word model needs 54.1 bits against an
-  interpolated ≈ 63 for the character model (between its 159-context 71.5 and
+* **At equal dictionary size the word model wins throughout, by roughly a
+  constant ~6–9 bits.**  At vocab ≈ 576 the word model needs 54.1 bits against
+  an interpolated ≈ 63 for the character model (between its 159-context 71.5 and
   911-context 60.2 points) and fits 74.1% against ≈ 63% in 64 bits; at
-  vocab ≈ 2,100 it needs 45.8 bits against 55.2 and fits 85.0% against 72.6%.
+  vocab ≈ 2,100, 45.8 against 55.2 and 85.0% against 72.6%; at vocab ≈ 4,500,
+  42.5 against 51.4 and 89.5% against 77.4%; at vocab ≈ 11,800, 40.2 against
+  49.2 and 92.8% against 79.8%.
+* **The word list keeps paying, with diminishing returns, and the gains are
+  concentrated at the 64-bit budget.**  From `V = 2,104` to `4,478` the word
+  model drops 3.3 bits and the 64-bit fit rises 4.5 points; the next 7,280 words
+  buy another 2.3 bits and 3.3 points.  Meanwhile the 128-bit fit is nearly
+  saturated (99.2% → 99.8%), so a larger word list mostly rescues identifiers
+  that were just over the 64-bit line.  This is the "buy words first" result of
+  [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md), seen from the fit-rate side.
 * Plausibly the reason is that an identifier is a *sequence of morphemes*
   (`get`, `User`, `Count`, `ion`, …): a word bigram table spends one bigram per
   morpheme boundary where the character model spends a variable-order suffix
@@ -137,14 +150,26 @@ uses 1000); the difference is only ~0.2 bit, so the main table uses `kappa =
 
 ```sh
 python3 scripts/split_corpus.py                     # train / validation split
-python3 scripts/tree_words.py train \
-    --corpus work/camel/merged_training.txt \
-    --num-pairs 2040 --sample 20 --jobs 4 --outdir work/tw2040
-python3 scripts/tree_words.py score \
-    --dir work/tw2040 --corpus work/camel/merged_validation.txt --kappa 1000
+for P in 96 512 2040 4414 11694; do
+    python3 scripts/tree_words.py train \
+        --corpus work/camel/merged_training.txt \
+        --num-pairs $P --sample 20 --jobs 4 --outdir work/tw$P
+    python3 scripts/tree_words.py score \
+        --dir work/tw$P --corpus work/camel/merged_validation.txt --kappa 1000
+done
 ```
 
-`work/tw96`, `work/tw512`, `work/tw2040` hold the three dictionaries and their
+Two caveats on the two largest lists:
+
+* **Dead words.**  A dictionary built on the 5 % sample can contain words that
+  are never selected on the full corpus (2 at `V = 4,478`, 63 at `V = 11,758`);
+  their unigram count is zero, which would divide by zero in the scoring.  The
+  scorer floors them at 0.5 (Laplace) so their row and prior mass are defined;
+  this changes no word that actually occurs.
+* **Memory.**  `V = 11,758` needs a large-RAM machine; tokenising the
+  validation set takes ~7 minutes per model.
+
+`work/tw96`, `work/tw512`, `work/tw2040`, `work/tw4414`, `work/tw11694` hold the
 adjacency matrices (`adj.npz`: `rows`, `cols`, `data`, `uni`, `nvoc`;
 `dict.txt` / `sym.npy`: the word list).  `dict.txt` starts with the character
 set on its first line, then records each rule on its own line — `P a b` for a

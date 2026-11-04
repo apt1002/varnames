@@ -2,7 +2,7 @@
 """Overshoot the word list, then prune it by removal cost (the ``Delta_CS`` of
 un-merging a word).
 
-Idea (plan thread C12).  The greedy most-frequent-pair build commits to its
+Idea.  The greedy most-frequent-pair build commits to its
 first ``NUM_PAIRS`` words.  Build ``overshoot * NUM_PAIRS`` instead, then
 repeatedly delete the *removable* word (one that is not a child of any kept
 word) whose removal costs the least, until the list is back to ``NUM_PAIRS``.
