@@ -84,6 +84,11 @@ Word-level model (held-out validation, `kappa = 1000`):
 | 4,414 | 4,478 | 1,318,843 | 42.48 | 89.5% | 99.6% |
 | 11,694 | 11,758 | 1,785,079 | 40.20 | 92.8% | 99.8% |
 
+Building the two largest dictionaries on the **full corpus** (`--sample 0`)
+rather than the 5 % sample barely moves the score — `V = 4,478`: 42.51 bits,
+89.5 % / 99.6 %; `V = 11,758`: 40.14 bits, 92.8 % / 99.8 % — so the 5 % sample
+is an adequate proxy for ranking merges, and the numbers above are robust to it.
+
 Character-level model (`CODE_LENGTHS.md`, same corpus), at the nearest
 vocabulary sizes:
 
@@ -150,6 +155,8 @@ uses 1000); the difference is only ~0.2 bit, so the main table uses `kappa =
 
 ```sh
 python3 scripts/split_corpus.py                     # train / validation split
+# --sample 20 builds the dictionary on a 5 % stride; use --sample 0 (slower)
+# for the full-corpus build (work/tw4414s0, work/tw11694s0)
 for P in 96 512 2040 4414 11694; do
     python3 scripts/tree_words.py train \
         --corpus work/camel/merged_training.txt \
@@ -161,11 +168,15 @@ done
 
 Two caveats on the two largest lists:
 
-* **Dead words.**  A dictionary built on the 5 % sample can contain words that
-  are never selected on the full corpus (2 at `V = 4,478`, 63 at `V = 11,758`);
-  their unigram count is zero, which would divide by zero in the scoring.  The
-  scorer floors them at 0.5 (Laplace) so their row and prior mass are defined;
-  this changes no word that actually occurs.
+* **Dead words.**  Some dictionary entries never appear in the final
+  tokenisation (2 at `V = 4,478`, 63 at `V = 11,758`): they are merge steps that
+  are *always absorbed* into a longer word, so they exist only as intermediate
+  nodes (e.g. `olean`, which only ever occurs inside `Boolean`/`boolean`), or
+  their boundary is pre-empted by a lower-ranked merge.  Their unigram count is
+  zero, which would divide by zero in the scoring; the scorer floors them at 0.5
+  (Laplace) so their row and prior mass are defined.  They are intrinsic to the
+  greedy merge, not a sampling artifact: rebuilding on the full corpus
+  (`--sample 0`) reduces but does not remove them (2 and 41).
 * **Memory.**  `V = 11,758` needs a large-RAM machine; tokenising the
   validation set takes ~7 minutes per model.
 
@@ -174,7 +185,8 @@ adjacency matrices (`adj.npz`: `rows`, `cols`, `data`, `uni`, `nvoc`;
 `dict.txt` / `sym.npy`: the word list).  `dict.txt` starts with the character
 set on its first line, then records each rule on its own line — `P a b` for a
 pair merge, `R a k1 k2 …` for a run rule that created the words
-`(a^k1), (a^k2), …`.
+`(a^k1), (a^k2), …`.  `work/tw4414s0` and `work/tw11694s0` are the same two
+lists built with `--sample 0`.
 
 `scripts/check_tree_words.py` is the regression test for the dictionary and
 tokeniser (builder against a from-scratch recount, fast plan replay against an
