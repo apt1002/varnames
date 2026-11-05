@@ -139,6 +139,13 @@ labels (see `README.md`).
       size, that costs the 64-bit fit.  `docs/MODEL_BUDGET.md`,
       `scripts/model_budget.py`, `scripts/model_fit_rates.py`.
 
+- [x] **C25. Words per identifier; Huffman vs arithmetic.** *Closed* — a mean of
+      5.7 words per identifier (6.7 coded tokens with the stop), but the Huffman
+      penalty is only ~0.2 bits/identifier (0.35 %), and Huffman is *shorter* on
+      40 % of identifiers, so the 64-bit fit rises slightly.  The coding choice
+      is not a size argument.  `docs/CODING_OVERHEAD.md`,
+      `scripts/words_per_identifier.py`.
+
 ## D. Corpus preprocessing
 
 - [x] **D1. Case-normalisation ablation.** *Closed, positive* — normalisation
