@@ -1,32 +1,25 @@
 #!/usr/bin/env python3
-"""Word-level (run-aware pair-merge) model for `docs/TREE_WORDS.md`.
+"""Word-level pair-merge model for `docs/TREE_WORDS.md`.
 
-The dictionary is the **run-aware** rule of `docs/TREE_WORDS.md` §9.1.  Create
-`NUM_PAIRS` *words* in total: find the most common length-2 substring `uv` of
-*words*; if `u != v` merge it (ordinary BPE, one word); if `u == v` **collapse
-every maximal run `u^k` (`k >= 2`) to a flat word `(u^k)`, one word per observed
-run length** (so a run step can spend several words of the budget at once).
+The dictionary is plain **pair-merge with self-merges forbidden**: create
+`NUM_PAIRS` *words* in total by repeatedly merging the most common length-2
+substring `uv` of *words* (`u != v`).  A doubled character can therefore never
+collapse into a run word of its own; it is absorbed only by a pair word that
+also contains a neighbour.  This is the rule described in `TREE_WORDS.md` §9.1
+with the run-collapse option switched off — empirically the run words cost
+nothing to remove, so the k-ary run node, the run-length table and the run
+replay are gone (`docs/DICTIONARY_RULES.md`).
 
-A run word `(u^k)` is a single **`k`-ary** node with `lc((u^k)) = rc((u^k)) = u`
-(it is *not* `k-1` nested binary merges).  This replaces the earlier plain
-pair-merge rule, which is obsolete.
-
-Effects of a run collapse are exact: a maximal run of length `L` becomes the
-word `(u^L)` if that word was created, else a greedy longest-match decomposition
-into the run words that do exist (so `L = 4` with only `(u^2)` present becomes
-`(u^2)(u^2)`); a leftover single character stays a character.
-
-Tokenising replays the rules in creation order.  Consecutive *pair* rules are
-merged with a linked-list "lowest-ranked adjacent pair" pass; a *run* rule is a
-leftmost maximal-run replacement with greedy longest match (so unseen run
-lengths decompose, e.g. `L = 4` with only `(u^2)` present becomes `(u^2)(u^2)`).
+Tokenising replays the rules in creation order: within each block of pair rules
+the lowest-ranked applicable adjacent pair is merged repeatedly, so a later
+rule never makes an earlier one applicable again.
 
 Counts.  Each identifier is the cycle `tokens + [\n]`; the adjacency matrix
 counts its cyclic word bigrams, so `N(\n) =` number of strings and
 `sum_v N(u,v) = N(u)` for every word `u`.
 
 Symbol ids: `0..len(chars)-1` are the characters, `len(chars)` is `\n`, and
-`len(chars)+1+r` is the word (pair or run) created at rank `r`.
+`len(chars)+1+r` is the word created at rank `r`.
 
 Usage:
     tree_words.py train --corpus work/camel/merged_training.txt \\
@@ -83,25 +76,21 @@ def _cyclic_arrays(seqs, nstop):
     return rows, cols, vals
 
 
-def build_dictionary(lines, num_pairs, verbose=False, trace=None,
-                     self_merge=True):
-    """Run-aware greedy dictionary.  Returns `(chars, rules, sym)`.
+def build_dictionary(lines, num_pairs, verbose=False, trace=None):
+    """Greedy pair-merge dictionary with self-merges forbidden.
 
-    `self_merge=False` forbids *every* merge of a pair with itself — the
-    "no run words" rule: a doubled character (or a doubled word) is never
-    collapsed, not even to `(uu)`, so a double can only be absorbed through a
-    pair word that also contains a neighbour.  The build is then plain
-    pair-merge: no `('run', ...)` rules are ever produced.
+    Every merge is between two *different* words, so a doubled character (or a
+    doubled word) is never collapsed on its own — it can only be absorbed by a
+    pair word that also contains a neighbour.
 
-    `rules[r]` is `('pair', (a, b), new_id)` or `('run', a, [(k, new_id), ...])`
-    in creation order; ids are `len(chars)+1+r` in order.
+    `rules[r]` is `('pair', (a, b), new_id)` in creation order; ids are
+    `len(chars)+1+r`.
 
     If `trace` is a dict, it is filled with the information needed to replay the
     *cyclic* word-bigram count matrix level by level (for the break-open prior):
     `trace['level0']` = the level-0 counts, and `trace['entries']` = one entry
     per rule, `('pair', u, v, w, Ls, Rs)` (the left/right neighbours, `stop` at a
-    line boundary, of each merged occurrence) or `('run', a, created, snapshot)`
-    (the counts after the run)."""
+    line boundary, of each merged occurrence)."""
     chars = sorted(set(''.join(lines)))
     cid = {c: i for i, c in enumerate(chars)}
     sym = list(chars) + [STOP]
@@ -114,9 +103,6 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
         trace['level0'] = _cyclic_arrays(seqs, len(chars))
         trace['entries'] = []
 
-    def eligible(p):
-        return self_merge or p[0] != p[1]
-
     cnt = Counter()
     pos = {}
     heap = []
@@ -125,7 +111,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
             p = (seq[j], seq[j + 1])
             pos.setdefault(p, set()).add((si, j))
             cnt[p] += 1
-    heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and eligible(p)]
+    heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and p[0] != p[1]]
     heapq.heapify(heap)
 
     def rebuild():
@@ -138,7 +124,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
                 p = (seq[j], seq[j + 1])
                 pos.setdefault(p, set()).add((si, j))
                 cnt[p] += 1
-        heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and eligible(p)]
+        heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and p[0] != p[1]]
         heapq.heapify(heap)
 
     def decr(si, p, j):
@@ -146,7 +132,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
         if s is not None and (si, j) in s:
             s.discard((si, j))
             cnt[p] -= 1
-            if cnt[p] > 1 and eligible(p):   # keep a valid heap key for `p`
+            if cnt[p] > 1 and p[0] != p[1]:  # keep a valid heap key for `p`
                 heapq.heappush(heap, (-cnt[p], p))
 
     def incr(si, p, j):
@@ -154,7 +140,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
         if (si, j) not in s:
             s.add((si, j))
             cnt[p] += 1
-            if eligible(p):
+            if p[0] != p[1]:
                 heapq.heappush(heap, (-cnt[p], p))
 
     step = 0
@@ -162,89 +148,11 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
         p = None
         while heap:
             neg, pp = heapq.heappop(heap)
-            if cnt.get(pp, 0) == -neg and -neg > 1 and eligible(pp):
+            if cnt.get(pp, 0) == -neg and -neg > 1 and pp[0] != pp[1]:
                 p = pp
                 break
         if p is None:
             break
-
-        if p[0] == p[1]:                                   # doubled -> run step
-            a = p[0]
-            # drop the `None` holes left by earlier pair merges so run
-            # detection and `rebuild` see clean, indexable arrays
-            for idx in range(len(seqs)):
-                if None in seqs[idx]:
-                    seqs[idx] = [x for x in seqs[idx] if x is not None]
-            lengths = Counter()
-            for seq in seqs:
-                i = 0
-                n = len(seq)
-                while i < n:
-                    if seq[i] == a:
-                        j = i
-                        while j < n and seq[j] == a:
-                            j += 1
-                        if j - i >= 2:
-                            lengths[j - i] += 1
-                        i = j
-                    else:
-                        i += 1
-            if not lengths:                                # no actual run: skip
-                continue
-            else:
-                order = sorted(lengths, key=lambda k: (-lengths[k], k))
-                created = []
-                for k in order:
-                    if budget <= 0:
-                        break
-                    nid = next_id
-                    next_id += 1
-                    sym.append(sym[a] * k)
-                    created.append((k, nid))
-                    budget -= 1
-                cmap = dict(created)
-                for idx in range(len(seqs)):
-                    seq = seqs[idx]
-                    out = []
-                    i = 0
-                    n = len(seq)
-                    while i < n:
-                        if seq[i] == a:
-                            j = i
-                            while j < n and seq[j] == a:
-                                j += 1
-                            Lr = j - i
-                            if Lr >= 2:
-                                kmax = max(cmap)
-                                rem = Lr
-                                while rem > 0:
-                                    k = min(rem, kmax)
-                                    while k > 1 and k not in cmap:
-                                        k -= 1
-                                    if k in cmap:
-                                        out.append(cmap[k])
-                                        rem -= k
-                                    else:
-                                        out.extend([a] * rem)
-                                        rem = 0
-                            else:
-                                out.extend([a] * Lr)
-                            i = j
-                        else:
-                            out.append(seq[i])
-                            i += 1
-                    seqs[idx] = out
-                rules.append(('run', a, created))
-                if trace is not None:
-                    trace['entries'].append(
-                        ('run', a, list(created),
-                         _cyclic_arrays(seqs, len(chars))))
-                step += 1
-                rebuild()
-                if verbose and step % 500 == 0:
-                    print(f"  step {step} run {sym[a]}* "
-                          f"({len(created)} words) vocab {len(sym)}", flush=True)
-                continue
 
         a, b = p                                            # ordinary pair merge
         positions = list(pos.pop(p, ()))
@@ -294,7 +202,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
         step += 1
         if len(heap) > 4 * len(cnt) + 4096:
             heap[:] = [(-c, pp) for pp, c in cnt.items()
-                       if c > 1 and eligible(pp)]
+                       if c > 1 and pp[0] != pp[1]]
             heapq.heapify(heap)
         if verbose and step % 500 == 0:
             print(f"  step {step} pair {sym[new]!r} vocab {len(sym)}", flush=True)
@@ -304,14 +212,8 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None,
 def save_dictionary(outdir, chars, rules, sym):
     with open(os.path.join(outdir, 'dict.txt'), 'w', encoding='ascii') as f:
         f.write('\t'.join(c if c != STOP else STOP_LABEL for c in chars) + '\n')
-        for item in rules:
-            if item[0] == 'pair':
-                _, (a, b), _nid = item
-                f.write(f"P\t{a}\t{b}\n")
-            else:
-                _, a, created = item
-                f.write("R\t" + str(a) + "\t"
-                        + "\t".join(str(k) for k, _ in created) + "\n")
+        for _, (a, b), _nid in rules:
+            f.write(f"P\t{a}\t{b}\n")
     np.save(os.path.join(outdir, 'sym.npy'), np.array(
         [w if w != STOP else STOP_LABEL for w in sym]))
 
@@ -326,41 +228,24 @@ def load_dictionary(outdir):
         next(f)                                          # the charset line
         for line in f:
             parts = line.rstrip('\n').split('\t')
-            if parts[0] == 'P':
-                a, b = int(parts[1]), int(parts[2])
-                rules.append(('pair', (a, b), next_id))
-                next_id += 1
-            else:
-                a = int(parts[1])
-                created = [(int(k), next_id + i)
-                           for i, k in enumerate(parts[2:])]
-                rules.append(('run', a, created))
-                next_id += len(created)
+            if parts[0] != 'P':
+                raise ValueError(
+                    f"{outdir}: 'R' (run) rules are no longer supported -- this "
+                    "dictionary predates the no-run rule, rebuild it")
+            a, b = int(parts[1]), int(parts[2])
+            rules.append(('pair', (a, b), next_id))
+            next_id += 1
     return chars, rules, sym
 
 
 def make_plan(rules, nchars):
-    """Compile the rule list into a tokenisation plan: alternating
-    `('pairs', {(a,b): (rank, new_id)})` blocks and `('run', a, {k: new_id})`
-    rules, in creation order.  Rank `r` has word id `nchars+1+r`."""
-    plan = []
+    """Compile the rule list into a tokenisation plan: one
+    `('pairs', {(a,b): (rank, new_id)})` block, in creation order.  Rank `r` has
+    word id `nchars+1+r`."""
     block = {}
-    rank = 0
-    for item in rules:
-        if item[0] == 'pair':
-            _, (a, b), _nid = item
-            block[(a, b)] = (rank, nchars + 1 + rank)
-            rank += 1
-        else:
-            _, a, created = item
-            if block:
-                plan.append(('pairs', block))
-                block = {}
-            plan.append(('run', a, {k: nid for k, nid in created}))
-            rank += len(created)
-    if block:
-        plan.append(('pairs', block))
-    return plan
+    for rank, (_, (a, b), _nid) in enumerate(rules):
+        block[(a, b)] = (rank, nchars + 1 + rank)
+    return [('pairs', block)]
 
 
 def _apply_pair_block(tokens, rank_map):
@@ -525,46 +410,11 @@ def _apply_pair_block_buckets(tokens, rank_map):
     return out
 
 
-def _apply_run(tokens, a, lenmap):
-    """Replace each maximal run of `a`: the exact-length word if present, else
-    a greedy longest-match decomposition (leftover `a`'s kept as `a`)."""
-    if not lenmap:
-        return tokens
-    kmax = max(lenmap)
-    out = []
-    i = 0
-    n = len(tokens)
-    while i < n:
-        if tokens[i] == a:
-            j = i
-            while j < n and tokens[j] == a:
-                j += 1
-            rem = j - i
-            while rem > 0:
-                k = min(rem, kmax)
-                while k not in lenmap and k > 1:
-                    k -= 1
-                if k in lenmap:
-                    out.append(lenmap[k])
-                    rem -= k
-                else:
-                    out.extend([a] * rem)
-                    rem = 0
-            i = j
-        else:
-            out.append(tokens[i])
-            i += 1
-    return out
-
-
 def tokenize(s, char_id, plan, nchars):
     """Tokenise with the ascending-rank bucket parser (production path)."""
     toks = [char_id[c] for c in s]
-    for item in plan:
-        if item[0] == 'pairs':
-            toks = _apply_pair_block_buckets(toks, item[1])
-        else:
-            toks = _apply_run(toks, item[1], item[2])
+    for _, rank_map in plan:
+        toks = _apply_pair_block_buckets(toks, rank_map)
     return toks
 
 
@@ -572,33 +422,24 @@ def tokenize_heap(s, char_id, plan, nchars):
     """Reference tokeniser: the heap + linked-list pair blocks (see
     `check_tree_words.py` / `tokenizer_bench.py`)."""
     toks = [char_id[c] for c in s]
-    for item in plan:
-        if item[0] == 'pairs':
-            toks = _apply_pair_block(toks, item[1])
-        else:
-            toks = _apply_run(toks, item[1], item[2])
+    for _, rank_map in plan:
+        toks = _apply_pair_block(toks, rank_map)
     return toks
 
 
 def tokenize_stack(s, char_id, plan, nchars):
     """Same as `tokenize` but with the precedence-parser pair blocks."""
     toks = [char_id[c] for c in s]
-    for item in plan:
-        if item[0] == 'pairs':
-            toks = _apply_pair_block_stack(toks, item[1])
-        else:
-            toks = _apply_run(toks, item[1], item[2])
+    for _, rank_map in plan:
+        toks = _apply_pair_block_stack(toks, rank_map)
     return toks
 
 
 def tokenize_buckets(s, char_id, plan, nchars):
     """Same as `tokenize` but with the ascending-rank bucket-queue pair blocks."""
     toks = [char_id[c] for c in s]
-    for item in plan:
-        if item[0] == 'pairs':
-            toks = _apply_pair_block_buckets(toks, item[1])
-        else:
-            toks = _apply_run(toks, item[1], item[2])
+    for _, rank_map in plan:
+        toks = _apply_pair_block_buckets(toks, rank_map)
     return toks
 
 
@@ -659,23 +500,17 @@ def write_adj(outdir, big, uni, sym, name='adj'):
 
 
 def cmd_train(args):
-    outdir = args.outdir or (f'work/tw{args.num_pairs}'
-                             + ('' if args.self_merge == 'allow' else 'ns'))
+    outdir = args.outdir or f'work/tw{args.num_pairs}'
     os.makedirs(outdir, exist_ok=True)
     build = read_lines(args.corpus, stride=args.sample)
     print(f"dictionary corpus {args.corpus}: {len(build)} lines "
-          f"(stride {args.sample or 1}, self-merge {args.self_merge})",
-          flush=True)
-    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True,
-                                         self_merge=args.self_merge == 'allow')
-    nruns = sum(1 for r in rules if r[0] == 'run')
-    print(f"dictionary: {len(rules)} rules ({nruns} run), vocab {len(sym)}",
-          flush=True)
+          f"(stride {args.sample or 1})", flush=True)
+    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True)
+    print(f"dictionary: {len(rules)} rules, vocab {len(sym)}", flush=True)
     save_dictionary(outdir, chars, rules, sym)
     with open(os.path.join(outdir, 'meta.json'), 'w') as f:
         json.dump(dict(corpus=args.corpus, num_pairs=args.num_pairs,
-                       sample=args.sample, nlines=len(build), runs=True,
-                       self_merge=args.self_merge == 'allow'), f)
+                       sample=args.sample, nlines=len(build)), f)
 
     char_id = {c: i for i, c in enumerate(chars)}
     plan = make_plan(rules, len(chars))
@@ -748,8 +583,7 @@ def cmd_adj(args):
 def cmd_stats(args):
     chars, rules, sym = load_dictionary(args.dir)
     big, uni, V = load_adj(args.dir)
-    nruns = sum(1 for r in rules if r[0] == 'run')
-    print(f"vocab {V}, rules {len(rules)} ({nruns} run), distinct bigrams "
+    print(f"vocab {V}, rules {len(rules)}, distinct bigrams "
           f"{len(big)}, N={int(uni.sum())}, N(stop)={int(uni[len(chars)])}")
 
 
@@ -792,9 +626,6 @@ def main():
     tr.add_argument('--sample', type=int, default=0,
                     help='stride for dictionary building (0 = all)')
     tr.add_argument('--outdir', default=None)
-    tr.add_argument('--self-merge', choices=['allow', 'forbid'], default='allow',
-                    help="'forbid' = the no-run-words rule (appends 'ns' to the "
-                         "default outdir name)")
     tr.add_argument('--jobs', type=int, default=1)
     tr.set_defaults(func=cmd_train)
     ad = sub.add_parser('adj')

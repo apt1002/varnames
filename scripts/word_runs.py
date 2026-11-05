@@ -5,11 +5,11 @@ A character run (`run_lengths.py`) is a maximal block of one repeated
 character.  Once the corpus is tokenised into dictionary words, a **word-level
 run** is a maximal block of one repeated *word* -- e.g. `Dot Dot Dot` inside
 `BadDotDotDotSyntax`, or `Bucket Bucket` inside a generated SDK name.  This
-reports how often they occur and what the repeated word is: a single character,
-a pair word (`P` rule) or a run word (`R` rule).
+reports how often they occur and what the repeated word is: a single character
+or a multi-character pair word.
 
 Usage:
-    word_runs.py work/tw2040 work/camel/merged_validation.txt
+    word_runs.py work/tw2040ns work/camel/merged_validation.txt
 """
 
 import argparse
@@ -23,17 +23,10 @@ import tree_words as tw                                   # noqa: E402
 
 
 def kinds(rules, nchars):
-    """word id -> 'char' | 'pair' | 'run'."""
+    """word id -> 'char' | 'pair'."""
     kind = {i: "char" for i in range(nchars)}
-    nid = nchars + 1
-    for r in rules:
-        if r[0] == "pair":
-            kind[nid] = "pair"
-            nid += 1
-        else:
-            for _k, nn in r[2]:
-                kind[nn] = "run"
-                nid += 1
+    for nid in range(nchars + 1, nchars + 1 + len(rules)):
+        kind[nid] = "pair"
     return kind
 
 
@@ -56,8 +49,8 @@ def main():
     char_runs = 0                       # raw character runs in the same corpus
     by_kind = Counter()                 # kind -> number of word-level runs
     mass_kind = Counter()               # kind -> sum (k-1)
-    by_kind_len = {k: Counter() for k in ("pair", "run")}
-    examples = {k: [] for k in ("pair", "run")}
+    by_kind_len = {k: Counter() for k in ("pair",)}
+    examples = {k: [] for k in ("pair",)}
     n_word_runs = 0
 
     for s in lines:
@@ -83,8 +76,6 @@ def main():
 
     print(f"dictionary: {args.dictionary}")
     print(f"corpus: {args.corpus}  ({len(lines):,} identifiers)")
-    print(f"run rules in the dictionary: "
-          f"{[(sym[r[1]]) for r in rules if r[0] == 'run']}")
     print()
     print(f"raw character runs (k>=2): {char_runs:,}")
     print(f"word-level runs (repeated multi-character word): {n_word_runs:,} "
@@ -92,11 +83,11 @@ def main():
     print()
     print("| repeated word kind | #runs | mass (k-1) | run-length histogram |")
     print("|---|---:|---:|---|")
-    for k in ("pair", "run"):
+    for k in ("pair",):
         hist = ", ".join(f"{kk}:{c}" for kk, c in sorted(by_kind_len[k].items()))
         print(f"| {k} word | {by_kind[k]:,} | {mass_kind[k]:,} | {hist or '-'} |")
     print()
-    for k in ("pair", "run"):
+    for k in ("pair",):
         if not examples[k]:
             continue
         print(f"examples ({k} word):")

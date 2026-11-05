@@ -55,8 +55,7 @@ def dictionary_bits(chars, rules, code='var'):
     ``zipf``   a static arithmetic code whose prior is ``p(j) ~ (j+1)^-a``,
                truncated to ``[0, s)`` -- two parameters for the whole list.
     """
-    V = len(chars) + 1 + sum(
-        1 if it[0] == 'pair' else len(it[2]) for it in rules)
+    V = len(chars) + 1 + len(rules)
     zipf = _zipf_bits(V, 0.7)
     s = len(chars) + 1                       # the stop symbol is id len(chars)
     bits = 0
@@ -71,16 +70,6 @@ def dictionary_bits(chars, rules, code='var'):
             else:
                 bits += 2 * _bits(s)
             s += 1
-        else:
-            _, a, created = item
-            if code == 'fixed':
-                bits += _bits(V)
-            elif code == 'zipf':
-                bits += -np.log2(zipf[a] / zipf[:s].sum())
-            else:
-                bits += _bits(s)
-            bits += 8 * len(created)         # one byte per run length (>=2)
-            s += len(created)
     return bits, s
 
 

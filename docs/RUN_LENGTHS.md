@@ -144,6 +144,11 @@ the same text: 85 987):
 | `tw512` | 973 | 969 | 4 | 1.13 % |
 | `tw2040` | 409 | 404 | 5 | 0.48 % |
 
+*(These are the run-aware dictionaries, since replaced by the no-run rule: the
+tables record what the run rule was actually buying.  Those `work/tw*`
+directories predate the switch and the current loader rejects them, so the
+numbers stand as the historical record; the rebuild re-measures them.)*
+
 So a repeated multi-character word occurs about **once per 500–2 000
 identifiers** — one or two orders of magnitude rarer than a character run —
 and almost always as a repeated *pair* word.  Almost all come from generated

@@ -169,12 +169,11 @@ def main():
         drop = 0
         npair = 0
         for r, item in enumerate(rules):
-            if item[0] == 'pair':
-                npair += 1
-                _, (a, b), _ = item
-                wid = nchars + 1 + r
-                if lcl[wid] == lcl[b] and rcl[wid] == rcl[a]:
-                    drop += 1
+            npair += 1
+            _, (a, b), _ = item
+            wid = nchars + 1 + r
+            if lcl[wid] == lcl[b] and rcl[wid] == rcl[a]:
+                drop += 1
         L = max(1, int(round(store / (2.0 * V))))
         Ms = hf.sqrtcnt(M_ref, min(L, V))
         bs = heldout_bits(Ms, chars, rules, nchars, lines)

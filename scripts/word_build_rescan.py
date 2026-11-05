@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prototype: build the run-aware word list by *rescanning* the whole corpus
+"""Prototype: build the word list by *rescanning* the whole corpus
 sample each merge, instead of maintaining a position index.
 
 Idea: keep the corpus as one compact ``int64`` array with a separator ``-1``
@@ -12,13 +12,13 @@ between identifiers (no holes, no positions).  Each step:
 * fix up the counts for the pairs touching a merged slot, vectorised.
 
 This is the same algorithm as ``tree_words.build_dictionary`` (most-frequent
-pair, run-aware), with the position index and all the hole logic removed.
+pair, self-merges forbidden), with the position index and all the hole logic
+removed.
 
 Status: *prototype, not wired into the pipeline.*  It produces a byte-identical
 word list (``chars``, ``sym``, ``rules``) and on the stride-20 sample is ~2x
 faster and ~30% lighter (see the plan).  The rescan is O(N) per merge, so time
-it at ``--sample 0`` before switching the default.  Run steps still recount all
-pairs from scratch.
+it at ``--sample 0`` before switching the default.
 """
 import sys
 import time
@@ -59,7 +59,7 @@ def build_fast(chars, seqs, num_pairs, verbose=False):
         return starts, sep
 
     cnt = dict(_counts_all(arr))
-    heap = [(-c, p) for p, c in cnt.items() if c > 1]
+    heap = [(-c, p) for p, c in cnt.items() if c > 1 and p[0] != p[1]]
     heapq.heapify(heap)
 
     step = 0
@@ -67,68 +67,12 @@ def build_fast(chars, seqs, num_pairs, verbose=False):
         p = None
         while heap:
             neg, pp = heapq.heappop(heap)
-            if cnt.get(pp, 0) == -neg and -neg > 1:
+            if cnt.get(pp, 0) == -neg and -neg > 1 and pp[0] != pp[1]:
                 p = pp
                 break
         if p is None:
             break
         a, b = p
-
-        if a == b:                                          # run step
-            pos = np.flatnonzero(arr == a)
-            if pos.size == 0:
-                cnt[p] = 0
-                continue
-            brk = np.flatnonzero(np.diff(pos) != 1)
-            rs = np.concatenate(([0], brk + 1))
-            re = np.concatenate((brk + 1, [pos.size]))
-            rlen = pos[re - 1] - pos[rs] + 1
-            lens = Counter(rlen[rlen >= 2].tolist())
-            if not lens:
-                cnt[p] = 0
-                continue
-            order = sorted(lens, key=lambda k: (-lens[k], k))
-            created = []
-            for k in order:
-                if budget <= 0:
-                    break
-                sym.append(sym[a] * k)
-                created.append((k, next_id))
-                next_id += 1
-                budget -= 1
-            if not created:
-                cnt[p] = 0
-                continue
-            cmap = dict(created)
-            kmax = max(cmap)
-            segs = []
-            prev = 0
-            for si, ei in zip(pos[rs], pos[re - 1]):
-                Lr = ei - si + 1
-                if Lr < 2:
-                    continue
-                segs.append(arr[prev:si])
-                rem, out = Lr, []
-                while rem > 0:
-                    k = min(rem, kmax)
-                    while k > 1 and k not in cmap:
-                        k -= 1
-                    if k in cmap:
-                        out.append(cmap[k])
-                        rem -= k
-                    else:
-                        out.extend([a] * rem)
-                        rem = 0
-                segs.append(np.array(out, dtype=np.int64))
-                prev = ei + 1
-            segs.append(arr[prev:])
-            arr = np.concatenate(segs)
-            rules.append(('run', a, created))
-            cnt = dict(_counts_all(arr))                     # runs are rare
-            heap = [(-c, q) for q, c in cnt.items() if c > 1]
-            heapq.heapify(heap)
-            step += 1
-            continue
 
         # ---- pair merge ----
         idx = np.flatnonzero((arr[:-1] == a) & (arr[1:] == b))
@@ -177,7 +121,7 @@ def build_fast(chars, seqs, num_pairs, verbose=False):
         for q, dc in d.items():
             if dc:
                 cnt[q] = cnt.get(q, 0) + dc
-                if cnt[q] > 1:
+                if cnt[q] > 1 and q[0] != q[1]:
                     heapq.heappush(heap, (-cnt[q], q))
         cnt[p] = 0
 

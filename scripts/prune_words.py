@@ -143,14 +143,9 @@ def word_ids(rules, nchars):
     """For each rule, the list of word ids it creates."""
     out = []
     nxt = nchars + 1
-    for item in rules:
-        if item[0] == 'pair':
-            out.append([nxt])
-            nxt += 1
-        else:
-            m = len(item[2])
-            out.append(list(range(nxt, nxt + m)))
-            nxt += m
+    for _item in rules:
+        out.append([nxt])
+        nxt += 1
     return out
 
 
@@ -180,14 +175,9 @@ def prune(rules, nchars, seqs, target, verbose=True):
     """
     ids = word_ids(rules, nchars)
     pair_rule = {}                        # word id -> rule index
-    for r, item in enumerate(rules):
-        if item[0] == 'pair':
-            pair_rule[ids[r][0]] = r
-    run_words = set()
-    for r, item in enumerate(rules):
-        if item[0] == 'run':
-            run_words.update(ids[r])
-    alive = set(pair_rule) | run_words
+    for r, _item in enumerate(rules):
+        pair_rule[ids[r][0]] = r
+    alive = set(pair_rule)
 
     refcount = Counter()
     for r, item in enumerate(rules):
@@ -237,20 +227,12 @@ def remap_rules(rules, nchars, alive):
     nxt = nchars + 1
     out = []
     for r, item in enumerate(rules):
-        if item[0] == 'pair':
-            if ids[r][0] not in alive:
-                continue
-            _, (a, b), _ = item
-            out.append(('pair', (newid.get(a, a), newid.get(b, b)), nxt))
-            newid[ids[r][0]] = nxt
-            nxt += 1
-        else:
-            _, a, created = item
-            newc = []
-            for k, _nid in created:
-                newc.append((k, nxt))
-                nxt += 1
-            out.append(('run', newid.get(a, a), newc))
+        if ids[r][0] not in alive:
+            continue
+        _, (a, b), _ = item
+        out.append(('pair', (newid.get(a, a), newid.get(b, b)), nxt))
+        newid[ids[r][0]] = nxt
+        nxt += 1
     return out
 
 
@@ -327,12 +309,8 @@ def cmd_run(args):
     if args.outdir:                       # save the surviving word list
         sym_kept = list(chars) + [tw.STOP]
         for item in rules_over:
-            if item[0] == 'pair':
-                if item[2] in alive:
-                    sym_kept.append(sym_over[item[2]])
-            else:
-                for _k, nid in item[2]:
-                    sym_kept.append(sym_over[nid])
+            if item[2] in alive:
+                sym_kept.append(sym_over[item[2]])
         os.makedirs(args.outdir, exist_ok=True)
         tw.save_dictionary(args.outdir, chars, kept, sym_kept)
         print(f"wrote dictionary {args.outdir} "
@@ -342,14 +320,9 @@ def cmd_run(args):
     # NB use the *original* oversize ids for names (sym_over is indexed by those);
     # `kept` has been renumbered, so read names off `rules_over`/`alive` instead.
     g_chars, g_rules, g_sym = tw.build_dictionary(lines_build, args.target)
-    greedy_words = set()
-    for item in g_rules:
-        if item[0] == 'pair':
-            greedy_words.add(g_sym[item[2]])
-    kept_words = set()
-    for r, item in enumerate(rules_over):
-        if item[0] == 'pair' and item[2] in alive:
-            kept_words.add(sym_over[item[2]])
+    greedy_words = {g_sym[item[2]] for item in g_rules}
+    kept_words = {sym_over[item[2]] for item in rules_over
+                  if item[2] in alive}
     removed_names = [sym_over[wid] for _, wid, _ in removed]
     n_rm_greedy = sum(1 for nm in removed_names if nm in greedy_words)
     n_new = sum(1 for nm in kept_words if nm not in greedy_words)

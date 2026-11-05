@@ -237,7 +237,7 @@ def load_setup(outdir):
 
 
 def word_budget(rules):
-    return sum(1 if r[0] == 'pair' else len(r[2]) for r in rules)
+    return len(rules)
 
 
 def build_trace(outdir, rules_saved, corpus, stride, verbose=True):
@@ -305,11 +305,7 @@ def cmd_feasibility(args):
     rng = np.random.default_rng(1)
     child = {}
     for r in rules:
-        if r[0] == 'pair':
-            child[r[2]] = r[1]
-        else:
-            for k, nid in r[2]:
-                child[nid] = (r[1], r[1])
+        child[r[2]] = r[1]
     for src, name in ((Ncur, 'raw count rows'), (Mm, 'smoothed M rows')):
         Nw = Ncur.sum(1)
         acc = {'right child': [], 'left child': [], 'independence': [],
@@ -447,11 +443,10 @@ def cmd_selfcheck(args):
         assert np.isfinite(M).all(), f"non-finite M ({mode})"
         assert (M.sum(1) > 0).all(), f"zero row sum ({mode})"
         for r in rules:
-            if r[0] == 'pair':
-                u, v = r[1]
-                assert Ncur[u, v] == 0.0, f"dead cell count ({mode})"
-                if mode == 'break':
-                    assert M[u, v] == 0.0, f"dead cell M ({mode})"
+            u, v = r[1]
+            assert Ncur[u, v] == 0.0, f"dead cell count ({mode})"
+            if mode == 'break':
+                assert M[u, v] == 0.0, f"dead cell M ({mode})"
     print(f"selfcheck OK: {len(lines)} lines, {len(rules)} rules, vocab {V}; "
           f"replayed counts match the direct cyclic count in all modes")
 

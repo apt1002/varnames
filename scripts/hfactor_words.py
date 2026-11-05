@@ -67,18 +67,10 @@ def structural_mask(rules, nchars, V):
     lc, rc = {}, {}
     merge_rank = {}        # (x, y) -> rank of the word created by merging x,y
     for r, item in enumerate(rules):
-        if item[0] == 'pair':
-            _, (a, b), nid = item
-            R[nid] = r
-            lc[nid], rc[nid] = a, b
-            merge_rank[(a, b)] = r
-        else:
-            _, a, created = item
-            for k, nid in created:
-                R[nid] = r
-                lc[nid] = rc[nid] = a
-                if k == 2:                     # (u^2): removes the u,u bigram
-                    merge_rank[(a, a)] = r
+        _, (a, b), nid = item
+        R[nid] = r
+        lc[nid], rc[nid] = a, b
+        merge_rank[(a, b)] = r
 
     def spine(w, child):
         out = []

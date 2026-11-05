@@ -123,7 +123,7 @@ def info(path):
 def _selfcheck():
     """Round-trip a small cache through build/load and compare to direct tokenise."""
     import tempfile
-    chars, rules, sym = tw.load_dictionary('work/tw96')
+    chars, rules, sym = tw.load_dictionary('work/tw512ns')
     nchars = len(chars)
     cid = {c: i for i, c in enumerate(chars)}
     plan = tw.make_plan(rules, nchars)
@@ -137,7 +137,7 @@ def _selfcheck():
         ids = np.concatenate(parts) if parts else np.empty(0, np.int32)
         p = os.path.join(d, 'x.npz')
         np.savez(p, ids=ids, offsets=offs, nchars=nchars, vocab=len(sym),
-                 stride=997, dict_dir='work/tw96', corpus='x')
+                 stride=997, dict_dir='work/tw512ns', corpus='x')
         ids2, offs2 = load(p)
         got = list(iter_seqs(ids2, offs2))
         ok = (len(got) == len(direct)

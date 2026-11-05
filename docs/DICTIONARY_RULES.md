@@ -148,7 +148,7 @@ run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.
   `N(u,u)` vs `N(u,v)` alone — the length-`k` cases above are the synthetic
   stress tests.
 
-## Removing run words altogether (`--self-merge forbid`)
+## Removing run words altogether
 
 Everything above assumes the run rule is *in use*.  The obvious question is
 whether it is needed at all: forbid **every** merge of a pair with itself, so a
@@ -159,7 +159,9 @@ then plain most-frequent-pair merge, with no k-ary nodes, no run-length table an
 no run path in the tokeniser.
 
 Both rules were built on the same stride-20 training sample (`work/tw*` vs
-`work/tw*ns`), counted on the full training corpus and scored on the full
+`work/tw*ns`; the temporary `--self-merge` flag that selected between them has
+since been removed, the no-run rule being the only one), counted on the full
+training corpus and scored on the full
 held-out validation set (229,534 identifiers, `kappa = 1000`):
 
 | vocab `V` | run rules | rules | mean bits | fit ≤64 | fit ≤128 |
@@ -193,7 +195,9 @@ the same `V` and each rule is marginally dearer, so the run machinery saves
   model's statistics or its storage depended on it.
 
 So the run-aware rule is retired: the dictionary is plain pair-merge with
-self-merges forbidden.  The held-out numbers in
+self-merges forbidden, and the run machinery (the run rule, the run-length
+table, the k-ary node and the replay path) has been deleted from
+`scripts/tree_words.py` rather than left as a dead branch.  The held-out numbers in
 [`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) were measured on the
 run-aware rule and are unchanged by the switch (same `V`, same counts to within
 3 identifiers), so they stand.

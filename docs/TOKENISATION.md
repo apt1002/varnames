@@ -11,10 +11,11 @@ exactly equivalent, ~1.4× faster, and is now the production path.**
 
 ## What the tokeniser does
 
-A dictionary is a list of rules in creation order: pair merges `(a,b) -> c` and
-run collapses. A *pair block* is a run of consecutive pair rules; tokenising
-applies a block by repeatedly merging the **lowest-ranked** applicable adjacent
-pair (ties leftmost), then the next block, and so on. The production code
+A dictionary is a list of rules in creation order: pair merges `(a,b) -> c`. A
+*pair block* is a run of consecutive pair rules (with run collapses no longer
+built, one block covers the whole list); tokenising applies a block by
+repeatedly merging the **lowest-ranked** applicable adjacent pair (ties
+leftmost), then the next block, and so on. The production code
 (`_apply_pair_block`) does this with a doubly linked list of positions plus a
 binary heap of candidate pairs — `O(n log n)`.
 

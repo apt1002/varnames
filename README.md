@@ -108,7 +108,7 @@ varnames/
 │   ├── check_merge_delta.py             # regression test for the tree-words merge delta
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
 │   ├── tree_words.py                    # dictionary (pair merge, no self-merges) + word x word adjacency model
-│   ├── check_tree_words.py              # regression test for the dictionary + tokeniser (both merge rules)
+│   ├── check_tree_words.py              # regression test for the dictionary + tokeniser
 │   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
@@ -306,7 +306,7 @@ thresholds 500–100000 (and 93%–99% at 128 bits).
 
 ## Factorising the word adjacency matrix (Hellinger)
 
-The word × word adjacency matrix of the run-aware dictionary (§ above) is the
+The word × word adjacency matrix of the dictionary (§ above) is the
 largest table in the model, so it is the natural thing to factorise. The
 **Hellinger (square-root) factorisation** roots the counts, truncates the SVD of
 `√M` to rank `L`, and squares the reconstruction back:

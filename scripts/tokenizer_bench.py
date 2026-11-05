@@ -39,8 +39,7 @@ def main():
     if args.n and args.n < len(lines):
         random.Random(args.seed).shuffle(lines)
         lines = lines[:args.n]
-    print(f"dictionary {args.dictionary}: {len(rules)} rules, "
-          f"{sum(1 for r in rules if r[0] == 'run')} run; "
+    print(f"dictionary {args.dictionary}: {len(rules)} rules; "
           f"{len(lines):,} identifiers")
 
     t0 = time.time()

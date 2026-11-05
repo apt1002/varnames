@@ -48,13 +48,13 @@ labels (see `README.md`).
       gives an identical word list and is faster / lighter on the stride-20
       sample; adopt only after a stride-0 timing.  `docs/TREE_WORDS.md`.
 - [x] **A9. No run words.** *Succeeded — a simplification at no cost.*
-      Self-merge is forbidden outright (`--self-merge {allow,forbid}`): no
-      `('run', …)` rule can be produced, so a doubled character is absorbed only
-      through a pair word that also contains a neighbour.  At the vocabularies
-      in use the held-out score and the co-clustered fit rates are unchanged;
+      Self-merge is forbidden outright: no `('run', …)` rule can be produced, so
+      a doubled character is absorbed only through a pair word that also
+      contains a neighbour.  At the vocabularies in use the held-out score and
+      the co-clustered fit rates are unchanged;
       at the smallest vocabulary the no-run list is slightly *better*.  The run
       machinery (run rule, run-length table, run replay in the tokeniser) is
-      therefore dead code and is being removed.  `docs/DICTIONARY_RULES.md`,
+      therefore deleted.  `docs/DICTIONARY_RULES.md`,
       `docs/TREE_WORDS.md`, `scripts/tree_words.py`,
       `scripts/check_tree_words.py`.
 
