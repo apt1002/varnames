@@ -231,6 +231,49 @@ def _looks_like_regex(content):
     return bool(_REGEX_SPECIAL.search(content) or _REGEX_LONGRUN.search(content))
 
 
+_REGEX_CTX = frozenset(b"(,=[{;!&|?<>+-*%~^")
+
+
+def _regex_context_ok(data, start, body, window=48):
+    """Gate the multi-line regex matcher on *code* context.
+
+    A regex literal can only open where the tokeniser would start an
+    expression: after an operator, an opening bracket, a comma, or the start
+    of a line.  Without this gate the matcher fires on slashes inside
+    ordinary strings (`'test/test-data/valid/'`) and on URL paths, blanks the
+    string's quotes, and thereby un-strings the text that follows -- which is
+    the very leak the gate is meant to prevent.
+    """
+    k = start - 1
+    stop = max(-1, start - window)
+    while k > stop and data[k] in b" \t":
+        k -= 1
+    if k <= stop:
+        return False
+    c = data[k]
+    if c == 0x0a or c in _REGEX_CTX:
+        return True
+    if c in b"'\"":                     # `'/awesome'` -- inside a string
+        return False
+    # `assert_match /can't/` -- a space-preceded slash is only rescued when
+    # the body carries a quote, i.e. when ignoring it would flip quote parity.
+    return b"'" in body or b'"' in body
+
+
+_REGEX_END = frozenset(b"),.;:\n=&|?} \t")
+
+
+def _regex_end_ok(data, end):
+    """A closing `/` of a regex literal is followed by code punctuation.
+
+    Path fragments close on an alphabetic byte (`.../valid/'`) or on another
+    word, never on `)`, `,`, `;` or end-of-line, so this cheap test rejects
+    most path-like false positives.
+    """
+    nxt = data[end:end + 1]
+    return (not nxt) or nxt[0] in _REGEX_END
+
+
 def blank_regex_literals(data, ext):
     """Blank single-line regex literals for languages that have them."""
     spans = []
@@ -243,6 +286,15 @@ def blank_regex_literals(data, ext):
             spans.append(m.span())
     for m in _REGEX_ML.finditer(data):
         body = m.group(1)
+        if b'://' in body:
+            continue                    # protocol prefix: `http://host/path`
+        if not _regex_context_ok(data, m.start(), body):
+            continue                    # slash sits inside an ordinary string
+        if not _regex_end_ok(data, m.end()):
+            continue                    # `/` closes a path, not a regex
+        if b'\n' in body and len(_REGEX_SPECIAL.findall(body)) < 3 \
+                and b'\\' not in body:
+            continue                    # prose across lines, not an /x regex
         if (b'\n' in body or b"'" in body or b'"' in body) and (
                 _looks_like_regex(body) or b"'" in body or b'"' in body):
             spans.append(m.span())

@@ -209,9 +209,46 @@ OCaml (`(* *)`, `"…"`, `'c'` chars but **not** `'a` type variables) and Lua
 four new ecosystems (below) need them: without OCaml's `(* *)` and Haskell's
 `--`, comments would have flooded those lists with English prose.
 
-**What it costs and what it bought** *(to be filled from the re-extraction —
-the point of the audit is that every leak class found is now fixed by rule, not
-by a per-token exception list, so the fix remains valid on a different corpus.)*
+One second-order bug came out of *validating* the fixes rather than writing
+them.  The matcher that blanks multi-line `/x` regexes was itself a new leak: it
+fired on slashes *inside ordinary strings* (`:template => '/awesome'`,
+`'test/test-data/valid/'`, URL paths), blanked the string's quotes, and thereby
+un-stringed the text that followed — the same parity failure the pass exists to
+prevent, from the opposite direction.  It is now gated three ways: the opening
+slash must sit in code context (after an operator or a bracket, never after a
+quote or a word), the closing slash must be followed by code punctuation rather
+than a letter or a quote, and a multi-line body must look like a regex rather
+than prose.  Both directions are pinned in the regression suite.
+
+**What it costs and what it bought.**  The audit is cheap to run and the fix
+is a net subtraction, but not a pure one: repairing a quote-parity error both
+hides the text that used to leak *and* reveals the code that the same error had
+swallowed, so tokens move in both directions.  Re-extracting the six ecosystems
+with the hardened scrubber:
+
+| language | files | tokens before | after | move |
+|---|---:|---:|---:|---|
+| Ruby | 226,878 | 710,477 | 710,173 | −304 (839 out, 535 in) |
+| Rust | 64,650 | 1,290,194 | 1,290,194 | — |
+| Python | 13,718 | 363,927 | 364,165 | +238 (drift in the apt tree, not the scrubber) |
+| Go | 7,115 | 154,229 | 154,229 | — |
+| Perl | 752 | 17,304 | 17,196 | −108 (182 prose out, 74 code in) |
+| JavaScript | 2,786 | 10,049 | 10,049 | — |
+| **union** | | **2,365,468** | **2,365,354** | **−114** |
+
+Perl is the clearest illustration: the tokens it loses are English (`Adding`,
+`Briefly`, `It`, `For`) and the tokens it gains are identifiers the parity error
+had been eating (`CancelCmd`, `ListBrowse`).  On Ruby the leak tokens themselves
+are gone — the audit's hex-blob class drops from 15 distinct tokens to 8, and
+every one of the constructs in the table above now scrubs clean; the eight that
+remain are code (`B3360DC80C50` and friends are constants that the old scrubber
+was *hiding*), not literal payloads.
+
+The cost is one extra full pass over the trees (~40 minutes for the six
+ecosystems on this host) and a ~0.005 % shift in the corpus, so the numbers in
+the reports that depend on it move in the third decimal; the rebuild re-measures
+them.
+
 
 ## What is — and is not — in here
 

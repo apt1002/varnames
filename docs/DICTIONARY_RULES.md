@@ -198,6 +198,36 @@ self-merges forbidden.  The held-out numbers in
 run-aware rule and are unchanged by the switch (same `V`, same counts to within
 3 identifiers), so they stand.
 
-*Caveat: measured on one corpus, one `kappa`, one stride; the 576 row is the
+### Robustness of the conclusion
+
+Before dropping the machinery, the same comparison was repeated on the two
+other axes that could have hidden the run rule's value.
+
+**At the `kappa` the model-fit sweep actually prefers** (`kappa = 300` instead of
+the `1000` used above), the same story, with the smallest vocabulary again
+favouring the no-run list:
+
+| vocab `V` | mean bits | fit ≤64 | fit ≤128 |
+|---:|---|---:|---:|
+| 576 | 53.99 → **53.76** | 170,137 → **170,856** | 224,796 → **224,850** |
+| 2,104 | 45.59 → 45.59 | 195,621 → 195,615 | 227,684 → 227,676 |
+| 4,478 | 42.02 → 42.03 | 206,737 → 206,692 | 228,603 → 228,590 |
+
+**Under the co-clustered `assoc` model** (`scripts/model_fit_rates.py`, stride
+40, `k = 52` and `k = 105`), the clustering residual swamps the difference and
+the no-run dictionary is if anything the better one:
+
+| vocab `V` = 2,104 | `k` | mean bits | fit ≤64 |
+|---|---:|---|---:|
+| run-aware | 52 | 56.715 | 70.4 % |
+| no-run | 52 | 56.732 | 70.3 % |
+| run-aware | 105 | 55.477 | 71.8 % |
+| no-run | 105 | **55.441** | **72.0 %** |
+
+Differences of 0.02–0.04 bits and ≤0.2 pt, in both directions — noise, against
+a saving of two model-budget items (the run-length table and the k-ary node
+type).
+
+*Caveat: measured on one corpus and one stride; the 576 row is the
 only place the two rules differ appreciably, and the corpus rebuild recorded in
 `PLAN.md` will re-measure all of it.*

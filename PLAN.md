@@ -47,16 +47,16 @@ labels (see `README.md`).
       index for a global per-merge rescan. Prototype `scripts/word_build_rescan.py`
       gives an identical word list and is faster / lighter on the stride-20
       sample; adopt only after a stride-0 timing.  `docs/TREE_WORDS.md`.
-- [~] **A9. No run words.** *Running* — self-merge forbidden outright (no
-      `('run', …)` rule can ever be produced, so a double is absorbed only
-      through a pair word that also contains a neighbour).  Builder flag
-      `--self-merge {allow,forbid}`; the no-run dictionaries are built as
-      `work/tw{512,2040,4414}ns` against the existing run-aware
-      `work/tw{512,2040,4414}` on the same stride-20 build, with held-out mean
-      bits and the 64/128-bit fit rates as the decision criteria.  Middle ground
-      (allow `(uu)` only for isolated length-2 runs) only if the cost is
-      unacceptable.  `scripts/tree_words.py`, `scripts/check_tree_words.py`,
-      `docs/RUN_LENGTHS.md`, `docs/WORD_COMPRESSIBILITY.md`.
+- [x] **A9. No run words.** *Succeeded — a simplification at no cost.*
+      Self-merge is forbidden outright (`--self-merge {allow,forbid}`): no
+      `('run', …)` rule can be produced, so a doubled character is absorbed only
+      through a pair word that also contains a neighbour.  At the vocabularies
+      in use the held-out score and the co-clustered fit rates are unchanged;
+      at the smallest vocabulary the no-run list is slightly *better*.  The run
+      machinery (run rule, run-length table, run replay in the tokeniser) is
+      therefore dead code and is being removed.  `docs/DICTIONARY_RULES.md`,
+      `docs/TREE_WORDS.md`, `scripts/tree_words.py`,
+      `scripts/check_tree_words.py`.
 
 ## B. Adjacency matrix construction
 
@@ -200,21 +200,26 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
 - [x] **H1. Rebuild `work/*/pair_stats.txt` and `pair_factors_L*.npy`** with the
       raised `randomized_svd` `n_iter=8` default. *Done* — all 5
       `PAIR_THRESHOLDS`; log `work/afk_pairmatrix.log`.
-- [~] **H2. Corpus hardening.** *Running* — audit the production scrubber
-      against the retained trees (`scripts/audit_extract.py`, which scans with
-      `extract.scrub` and reports files whose *output* still contains
-      hex-blob/digit-blob tokens, with source context), fix the missed literal
-      constructs in `scripts/extract.py`, add a regression suite for them, then
-      re-extract (`work/clean_ids/*.shards` → `corpus/by_language/*.txt` →
-      union).  `scripts/extract.py`, `scripts/audit_extract.py`,
-      `docs/CORPUS.md`.
-- [~] **H3. Broaden the corpus.** *Running* — add four network harvests, each
-      capped at the **top 2,000 packages by download count**, one fetcher per
-      ecosystem modelled on `scripts/fetch_gems.py`: Java (Maven Central
-      `-sources.jar`, i.e. source not bytecode), Haskell (Hackage tarballs),
-      OCaml (opam release tarballs), Lua (LuaRocks tarballs).  Archives are
-      deleted after extraction; per-language roots and extensions recorded in
-      `docs/CORPUS.md`; no toolchain needed on the host (we harvest source).
+- [x] **H2. Corpus hardening.** *Done — re-extracted into `work/newcorpus/`.*
+      Audited the production scrubber against the retained trees
+      (`scripts/audit_extract.py` scans with `extract.scrub` and reports files
+      whose *output* still carries hex-blob / digit-blob tokens), fixed the
+      missed literal constructs in `scripts/extract.py` by rule, added
+      `scripts/check_extract.py` as a regression suite, then found and fixed a
+      second-order bug the fix itself introduced (the multi-line regex matcher
+      opening inside ordinary strings) — also pinned by a test.  All six
+      existing ecosystems are re-extracted; the live `corpus/` is still
+      untouched, so swapping it in is part of the rebuild below.
+      `docs/CORPUS.md`, `scripts/extract.py`, `scripts/audit_extract.py`,
+      `scripts/check_extract.py`.
+- [~] **H3. Broaden the corpus.** *Harvests done, extraction not started.*
+      Download counts are not published by any of the four registries, so the
+      top-2,000 cap is applied through the best available popularity proxy per
+      ecosystem — reverse dependencies for Haskell (Hackage) and OCaml (opam),
+      version count for Lua (LuaRocks), `org/apache` `-sources.jar` for Java
+      (Maven Central).  Harvesting is a resumable `plan`/`fetch` pair
+      (`scripts/harvest_packages.py`); archives are deleted after extraction;
+      no host toolchain is needed because source is harvested, not built.
       `docs/CORPUS.md`.
 
 ### Rebuilds the corpus change (H2/H3) will force

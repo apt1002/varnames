@@ -43,6 +43,25 @@ value = 1
 """, ['ffffffff', 'ffffffffffff'], ['ID', 'value'], 'multi-line /x regex')
 
 case('.rb', r"""
+DATA_PATH = 'test/test-data/valid/'
+# see http://bugs.example.org/browser/mmd-schema/trunk for the schemas
+# License[file:../LICENSE.html] for permissions.
+require 'test/unit'
+assert_equal '69ee3720-a7cb-4402-b48d-a02c366f2bcf', rg.artist.id.uuid
+""", ['69ee3720', 'a02c366f2bcf', 'schemas', 'LICENSE'],
+     ['DATA_PATH', 'assert_equal', 'require'],
+     'slash-bearing strings and comments must not un-string later code')
+
+case('.rb', r"""
+Repo.expects(:fork_bare).with({:bare => true, :template => '/awesome'},
+      "#{path}/.git",
+      "/foo/bar.git").returns(nil)
+assert_equal 'ab25fd8483882c3bda8a458ad2965d2248654335', log.last.id
+""", ['ab25fd8483882c3bda8a458ad2965d2248654335', 'awesome'],
+     ['assert_equal', 'fork_bare'],
+     'regex matcher must not open inside a quoted path')
+
+case('.rb', r"""
 rval = YAML.load <<-'5032c8a5-9c5e-ba7a-3804-832a03e16381'
 ---
 uuid: 42329da7-e8ab-29ec-1892-d6a4a964912a
