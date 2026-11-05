@@ -52,6 +52,18 @@ lose it (a bit or two per identifier).  An arithmetic coder cannot do the same
 (§2.2), so the fair comparison for the fixed-budget question is "what fits in
 64 bits", where Huffman keeps the advantage.
 
+There is a price in *accounting*, not in correctness.  Because the terminator
+is never written, the code is not prefix-free over identifiers: the code for `ab`
+is a prefix of the code for `abc`.  Kraft's inequality therefore does not hold,
+and "mean bits" is no longer an entropy — it is a *capacity* statement ("how many
+identifiers fit in 64 bits").  That is legal — encode is still injective, and
+decode is still total — but it means the arithmetic bound in
+`CODING_OVERHEAD.md` is not the right yardstick for the finished product: the
+flat Huffman code can legitimately beat it by the stop's code length (1–3 bits
+per identifier, since the stop is roughly one token in seven).  The yardstick
+that matters is the 64/128-bit **fit rate**, and the factorisation comparison
+(flat vs two trees) is unaffected, because both sides of it omit the stop.
+
 One small inefficiency remains: the trees are built on the full distribution
 (including the stop), but the stop's mass is never converted into bits.  The
 alternative — build over the renormalised non-stop distribution and graft the
