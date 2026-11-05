@@ -50,13 +50,32 @@ triangular saving.
 
 ### Unigram probabilities
 
-**The word list is in *creation* order, not unigram order.**  Adjacent pairs
-invert on ~50 % of steps (`V = 11 758`: 5,785 inversions in 11,694) and the mean
-rank displacement is 19 % of `V`, so the unigrams are *not* a monotone sequence
-and cannot be delta-coded for free.  The order is semantic — the tokeniser
-merges the lowest-ranked adjacent pair first — so it cannot be renumbered
-without changing the tokenisation, and storing the permutation would cost
-`V log₂V` bits, four times the unigram itself.
+**The word list is in *creation* order, and that is not unigram order.**  The
+greedy rule selects the most frequent *pair* of adjacent symbols, so the sequence
+of **selection counts** is monotone non-increasing — but the stored unigram is
+the word's count in the **final** segmentation, and a word created early keeps
+being absorbed into longer words later, by an amount that is not monotone in the
+creation index.  So the guarantee does not hold, even when the dictionary and
+the counts come from the same corpus:
+
+| build | adjacent rises | mean rank displacement |
+|---|---:|---:|
+| `tw2040s0` (`V = 2 104`, full corpus) | 548 / 2 039 (26.9 %) | 20.9 % of `V` |
+| `tw11694s0` (`V = 11 758`, full corpus) | 3 039 / 11 693 (26.0 %) | 16.9 % of `V` |
+| `tw11694` (5 % stride build) | 5 785 / 11 693 (49.5 %) | 19.3 % of `V` |
+
+The counterexample is stark.  In `tw2040s0` the first created words are
+`er` 73 989, `es` 57 952, **`on` 28 624, `at` 34 669**, `in` 42 286, …,
+`al` 52 119, **`ed` 117 676**.  `on` was merged *before* `at`, so at that moment
+`on` was the more frequent pair — yet in the final segmentation `at` outnumbers
+it, because `on` is absorbed into longer words (`only`, `once`, `control`, …)
+far more heavily.  (The sampling mismatch does add disorder — a stride build
+doubles the rise rate — but it is not the cause.)
+
+The order is semantic — the tokeniser merges the lowest-ranked adjacent pair
+first — so it cannot be renumbered without changing the tokenisation, and
+storing the permutation would cost `V log₂V` bits, four times the unigram
+itself.
 
 Costed honestly it is `V` bytes (11.5 kB at `V = 11 758`); entropy-coding the
 byte grid (5.4–5.8 bits/value) brings it to **8.3 kB**.  Not negligible, but the
