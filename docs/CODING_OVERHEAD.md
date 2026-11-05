@@ -40,6 +40,49 @@ The per-identifier penalty is min −3.60, median +0.17, p90 +1.09, max +5.56 bi
 (`k = 52`) — and Huffman comes out **shorter on 40 % of identifiers**, which is
 why the 64-bit fit rate *rises* rather than falls.
 
+## Two trees instead of one (the factored code)
+
+The `assoc` transition factors *exactly* into a cluster step and a word step:
+
+```
+P(b | a) = P(j | i) · P(b | j),    i = lcl(a),  j = rcl(b),
+P(j | i) = Cc[j]·D[i,j] / den[i],  P(b | j) = c[b] / Cc[j]
+```
+
+so a small model can code each token in two stages and pay the whole-bit rounding
+**twice**: one Huffman tree per left cluster over the `k` clusters, plus one tree
+per right cluster over its own member words.  Measured on the same held-out set:
+
+| `k` | arithmetic | flat (1 tree per left cluster) | factored (2 trees) | cluster step | word step | fit ≤64 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 52 | 56.368 | +0.190 (0.34 %) | **+1.402** (2.49 %) | 0.036 | 0.173 | 71.3 % → **70.2 %** |
+| 105 | 55.135 | +0.225 (0.41 %) | **+1.590** (2.88 %) | 0.041 | 0.195 | 72.6 % → **71.4 %** |
+
+Penalties in bits per identifier; the per-token split is in bits/token and adds
+up exactly (0.036 + 0.173 = 0.209 ≈ 0.208 total at `k = 52`).
+
+So yes — **two penalties, and they are additive**, but the factored code costs
+**~7×** the flat one (1.4–1.6 vs 0.19–0.23 bits/identifier).  This is expected,
+not a defect: the flat code is the Huffman code of the *joint* `P(b|a)`, which is
+optimal among prefix codes; a product of two prefix codes is a valid but
+generally *sub*optimal code for the same source, so it can only lose.  Each stage
+is individually near its own entropy (0.036 and 0.173 bits/token), and their sum
+is still ~0.24 bits/token against ~0.03 for the joint.  Both steps pay one
+rounding per token, but the word step dominates (0.173 vs 0.036).  The two steps
+differ in shape: the cluster step averages 3.94 bits of entropy over ~44 reachable
+clusters (top cluster carries 0.25 of the row mass), while the word step averages
+~4.4 bits over the member words of a cluster — long-tailed, with a much larger
+leaf set (`V` leaves in total), so many medium-probability words have to take
+integer lengths above their ideal bits.
+
+Neither codebook costs model bytes: both are derivable at load time from the
+stored `(c, D, lcl, rcl)`.  The only difference is startup work — `k` trees of
+`V` leaves, versus `k` trees of `k` leaves plus `k` trees totalling `V` leaves.
+
+Consequence for the 64-bit set: the factored code *lowers* the fit rate by
+~1.1 points, whereas the flat code raised it slightly.  If a Huffman coder is
+wanted, use **one tree per left cluster over the joint**, not two trees.
+
 ## What it shows
 
 * **Huffman is nearly free here** — ~0.2 bits per identifier, 0.35 % of the total
@@ -56,6 +99,11 @@ why the 64-bit fit rate *rises* rather than falls.
   slightly *up*.  This is the ordinary behaviour of Huffman lengths inside the
   entropy bound, and it means a 64-bit set built on Huffman would be marginally
   *larger*, not smaller.
+* **Factor first, code second — or don't factor at all.**  Coding the model's
+  two stored factors in two Huffman steps multiplies the rounding by ~7.  The
+  rounding is the price of the *code*, not of the model, so the cheap answer is a
+  single tree per left cluster over the joint transition, which the stored
+  `(c, D)` already define.
 * Practical read: the choice between Huffman and arithmetic is **not** a size
   argument.  Arithmetic remains preferable for its simplicity of framing (the
   stop token as zeros beyond the target length, per

@@ -66,8 +66,11 @@ def _greedy_run(seq, a, cmap):
     return out
 
 
-def reference_build(lines, num_pairs):
-    """Slow builder: recount all bigrams from scratch at every step."""
+def reference_build(lines, num_pairs, self_merge=True):
+    """Slow builder: recount all bigrams from scratch at every step.
+
+    `self_merge=False` is the "no run words" rule: pairs with two identical
+    sides are never merged, so no run step is ever taken."""
     chars = sorted(set(''.join(lines)))
     cid = {c: i for i, c in enumerate(chars)}
     seqs = [[cid[c] for c in s] for s in lines]
@@ -81,10 +84,14 @@ def reference_build(lines, num_pairs):
                 cnt[(seq[j], seq[j + 1])] += 1
         if not cnt:
             break
-        best = max(cnt.values())
+        cands = [(c, p) for p, c in cnt.items()
+                 if self_merge or p[0] != p[1]]
+        if not cands:                   # no eligible pair left
+            break
+        best = max(c for c, _ in cands)
         if best <= 1:                   # nothing left that occurs twice
             break
-        cand = sorted(p for p, c in cnt.items() if c == best)[0]
+        cand = min(p for c, p in cands if c == best)
         if cand[0] == cand[1]:          # doubled pair -> run step
             a = cand[0]
             lengths = Counter()
@@ -175,14 +182,17 @@ def check_builder(trials, verbose):
         if not lines:
             continue
         npairs = rng.randint(1, 25)
-        _, r1, _ = tw.build_dictionary(lines, npairs)
-        _, r2 = reference_build(lines, npairs)
-        if _norm(r1) != _norm(r2):
-            bad += 1
-            if verbose and bad <= 3:
-                print(f"  builder mismatch trial {t} npairs {npairs}")
-                print(f"    fast {_norm(r1)}")
-                print(f"    ref  {_norm(r2)}")
+        for self_merge in (True, False):
+            _, r1, _ = tw.build_dictionary(lines, npairs,
+                                           self_merge=self_merge)
+            _, r2 = reference_build(lines, npairs, self_merge=self_merge)
+            if _norm(r1) != _norm(r2):
+                bad += 1
+                if verbose and bad <= 3:
+                    print(f"  builder mismatch trial {t} npairs {npairs} "
+                          f"self_merge {self_merge}")
+                    print(f"    fast {_norm(r1)}")
+                    print(f"    ref  {_norm(r2)}")
     return bad
 
 
@@ -197,7 +207,9 @@ def check_tokenize_and_adjacency(trials, verbose):
         if not lines:
             continue
         npairs = rng.randint(1, 25)
-        chars, rules, _ = tw.build_dictionary(lines, npairs)
+        self_merge = rng.random() < 0.5
+        chars, rules, _ = tw.build_dictionary(lines, npairs,
+                                              self_merge=self_merge)
         cid = {c: i for i, c in enumerate(chars)}
         nchars = len(chars)
         plan = tw.make_plan(rules, nchars)

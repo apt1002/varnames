@@ -83,6 +83,9 @@ C_COMMENT_EXTS = {
 RUST_EXTS = {".rs"}
 PY_EXTS = {".py", ".pyi", ".pyx", ".pxd"}
 SHELL_PERL_EXTS = {".sh", ".bash", ".zsh", ".fish", ".pl", ".pm"}
+HS_EXTS = {".hs", ".lhs"}
+ML_EXTS = {".ml", ".mli", ".mll", ".mly"}
+LUA_EXTS = {".lua"}
 
 DEFAULT_EXTS = {
     # namespace-rich, source-bearing languages we care about.
@@ -93,7 +96,8 @@ DEFAULT_EXTS = {
     ".java", ".kt", ".kts", ".scala", ".groovy", ".cs",
     ".go", ".rs", ".swift", ".dart",
     ".pl", ".pm", ".php", ".php3", ".php4", ".php5", ".phtml",
-    ".lua", ".ex", ".exs", ".clj", ".cljs", ".hs", ".ml", ".lisp", ".scm", ".r",
+    ".lua", ".ex", ".exs", ".clj", ".cljs", ".hs", ".lhs", ".ml", ".mli",
+    ".mll", ".mly", ".lisp", ".scm", ".r",
     ".sh", ".bash", ".zsh", ".fish",
 }
 
@@ -128,6 +132,21 @@ _RUST_LIFETIME = rb"'[A-Za-z_][A-Za-z0-9_]*"
 _QUOTED_RUST = _RUST_STR + rb"|" + _RUST_CHAR + rb"|" + _RUST_LIFETIME
 _BACKTICK = rb'`(?:\\[\s\S]|[^`\\])*`'
 _RUST_RAW = rb'(?<![A-Za-z0-9_])(?:br|r)(?P<rh>#{0,255})"[\s\S]*?"(?P=rh)'
+# Haskell: `--` line and `{- ... -}` block comments, "..." strings, 'c' chars.
+# OCaml: `(* ... *)` block comments, "..." strings, 'c' chars -- note that `'a`
+# is a *type variable*, not a literal, so only single-character literals match.
+# Lua: `--` and `--[[ ... ]]` comments, `[[ ... ]]` long strings, quotes.
+_HS_STR = rb'"(?:\\[\s\S]|[^"\\])*"'
+_HS_CHAR = rb"'(?:\\[\s\S]|[^'\\])'"
+_HS_BLOCK = rb'\{-[\s\S]*?-\}'
+_HS_LINE = rb'(?m:--[^\n]*)'
+_ML_STR = rb'"(?:\\[\s\S]|[^"\\])*"'
+_ML_CHAR = rb"'(?:\\[\s\S]|[^'\\])'"
+_ML_BLOCK = rb'\(\*[\s\S]*?\*\)'
+_LUA_BLOCK = rb'--\[(?P<lb1>=*)\[[\s\S]*?\]' + rb'(?P=lb1)\]'
+_LUA_LONG = rb'\[(?P<lb2>=*)\[[\s\S]*?\]' + rb'(?P=lb2)\]'
+_LUA_STR = rb'"(?:\\[\s\S]|[^"\\])*"' + rb"|'(?:\\[\s\S]|[^'\\])*'"
+_LUA_LINE = rb'(?m:--[^\n]*)'
 _RUBY_PCT = (
     rb'%[qQwWiIrsx]?\((?:\\[\s\S]|[^)\\])*\)'
     rb'|%[qQwWiIrsx]?\[(?:\\[\s\S]|[^\]\\])*\]'
@@ -187,6 +206,14 @@ _PERL_SUBST_CAND = re.compile(
 )
 _REGEX_SPECIAL = re.compile(rb'[\\\[\]{}|^$*+?]')
 _REGEX_LONGRUN = re.compile(rb'[A-Za-z0-9]{12,}')
+# Multi-line / quote-bearing regex literals: `/.../flags` where the body may
+# span lines (Ruby `/x` regexes) or contain an apostrophe or double quote
+# (`/can't modify frozen/i`).  Both defeat the single-line scanner above, and a
+# missed apostrophe is costly: it flips the quote parity for the *rest of the
+# file*, so later strings are no longer blanked and their contents leak into the
+# corpus.
+_REGEX_ML = re.compile(rb'(?<![\w)\]])/((?:\\.|[^/\\]){1,400}?)/[imxounse]*', re.S)
+_CONFLICT = re.compile(rb'(?m)^(?:<{7}|={7}|>{7})[^\n]*')
 _REGEX_EXTS = RUBY_EXTS | {".pl", ".pm"}
 
 
@@ -213,6 +240,11 @@ def blank_regex_literals(data, ext):
                 spans.append(m.span())
     for m in _REGEX_CAND.finditer(data):
         if _looks_like_regex(m.group(1)):
+            spans.append(m.span())
+    for m in _REGEX_ML.finditer(data):
+        body = m.group(1)
+        if (b'\n' in body or b"'" in body or b'"' in body) and (
+                _looks_like_regex(body) or b"'" in body or b'"' in body):
             spans.append(m.span())
     if not spans:
         return data
@@ -249,8 +281,12 @@ _SKIPPERS = {}
 # heredoc marker: <<TAG, <<-TAG, <<~TAG, <<'TAG', <<"TAG"  (no space after <<).
 # Trailing code may follow the marker on the same line, e.g. Perl's
 # ``return <<'END_BUILTIN_DATA' }`` or shell's ``cat <<EOF > file``.
+# A *quoted* tag may be arbitrary text -- Ruby fixtures use UUIDs as heredoc
+# delimiters (``<<-'5032c8a5-…'``), which the identifier-only tag pattern missed.
 _HEREDOC_START = re.compile(
-    rb'(?<![A-Za-z0-9_])<<[-~]?(["\']?)([A-Za-z_][A-Za-z0-9_]*)\1(?=[^\n]*\r?\n)'
+    rb'(?<![A-Za-z0-9_])<<[-~]?'
+    rb'(?:(["\'])([^"\'\n]+)\1|([A-Za-z_][A-Za-z0-9_]*))'
+    rb'(?=[^\n]*\r?\n)'
 )
 _BLANK = re.compile(rb'[^\n]')
 _RUBY_BLOCK_RX = re.compile(_RUBY_BLOCK)
@@ -287,12 +323,27 @@ def build_skipper(ext, strip_strings=True, strip_comments=True):
             skip.append(_QUOTED_RUST)
         elif ext in SHELL_PERL_EXTS:
             skip.append(_QUOTED_ML)
+        elif ext in HS_EXTS:
+            skip.append(_HS_STR)
+            skip.append(_HS_CHAR)
+        elif ext in ML_EXTS:
+            skip.append(_ML_STR)
+            skip.append(_ML_CHAR)
+        elif ext in LUA_EXTS:
+            skip.append(_LUA_LONG)
+            skip.append(_LUA_STR)
         else:
             skip.append(_QUOTED_SL)
         skip.append(_BACKTICK)
     if strip_comments:
         if ext in HASH_COMMENT_EXTS:
             skip.append(_HASH)
+        if ext in HS_EXTS:
+            skip += [_HS_BLOCK, _HS_LINE]
+        if ext in ML_EXTS:
+            skip.append(_ML_BLOCK)
+        if ext in LUA_EXTS:
+            skip += [_LUA_BLOCK, _LUA_LINE]
         if ext in C_COMMENT_EXTS:
             skip += [_C_BLOCK, _C_LINE]
 
@@ -308,6 +359,34 @@ def keep_only(data, rx):
         a, b = m.span()
         out[a:b] = data[a:b]
     return bytes(out)
+
+
+_INTERP = re.compile(rb'#\{[^{}]*\}')
+_QUOTED_INNER = re.compile(rb"'[^'\n]*'|\"[^\"\n]*\"")
+
+
+def blank_interpolated_strings(data):
+    """Blank quoted strings nested inside `#{...}` interpolation.
+
+    Ruby writes ``"... #{x + "y"} ..."``; the outer string scan would stop at the
+    inner quote and expose the remainder of the line (and, worse, leave the
+    quote parity flipped for the rest of the file).  Blanking the inner literal
+    keeps the outer string a single well-formed span.  Code inside the
+    interpolation (method calls, identifiers) is left alone.
+    """
+    if b'#{' not in data:
+        return data
+    buf = None
+    for m in _INTERP.finditer(data):
+        inner = m.group(0)
+        if b"'" not in inner and b'"' not in inner:
+            continue
+        for q in _QUOTED_INNER.finditer(inner):
+            a, b = m.start() + q.start(), m.start() + q.end()
+            if buf is None:
+                buf = bytearray(data)
+            buf[a:b] = _BLANK.sub(b" ", data[a:b])
+    return bytes(buf) if buf is not None else data
 
 
 def _line_start(data, i):
@@ -329,7 +408,7 @@ def find_heredoc_intervals(data):
         m = _HEREDOC_START.search(data, pos)
         if not m:
             break
-        tag = m.group(2)
+        tag = m.group(2) or m.group(3)
         start = m.start()
         # terminator: a line that is optional whitespace + tag + optional ws
         search = m.end()
@@ -347,7 +426,13 @@ def find_heredoc_intervals(data):
                 break
             search = hit + len(tag)
         if term_end is not None:
-            spans.append((start, term_end))
+            # the marker token itself is literal (a tag, not an identifier), and
+            # the body starts on the next line: keep the rest of the marker line
+            # so that code sharing it (``cat <<EOF > out.txt``) survives.
+            spans.append((start, m.end()))
+            body_start = _line_end(data, m.start()) + 1
+            if body_start < term_end:
+                spans.append((body_start, term_end))
             pos = term_end
         else:
             pos = m.end()
@@ -366,9 +451,13 @@ def find_heredoc_intervals(data):
 
 def scrub(data, ext, strip_strings, strip_comments):
     """Return a same-length copy with non-code regions replaced by spaces."""
+    if b"<<<<<<<" in data or b">>>>>>>" in data:
+        data = blank_matches(data, _CONFLICT)   # leftover merge-conflict lines
     keep = KEEP_REGION.get(ext)
     if keep is not None:
         data = keep_only(data, keep)
+    if strip_strings and ext in RUBY_EXTS:
+        data = blank_interpolated_strings(data)
     if strip_comments and ext in RUBY_EXTS and (b"=begin" in data or b"__END__" in data):
         data = blank_matches(data, _RUBY_BLOCK_RX)
     if strip_comments and ext in {".pl", ".pm"} and (

@@ -107,8 +107,8 @@ varnames/
 │   ├── symmetry_check.py                # left/right reversal-symmetry sanity check
 │   ├── check_merge_delta.py             # regression test for the tree-words merge delta
 │   ├── split_corpus.py                  # deterministic 9:1 train/validation split
-│   ├── tree_words.py                    # run-aware dictionary + word x word adjacency model
-│   ├── check_tree_words.py              # regression test for the run-aware dictionary + tokeniser
+│   ├── tree_words.py                    # dictionary (pair merge, no self-merges) + word x word adjacency model
+│   ├── check_tree_words.py              # regression test for the dictionary + tokeniser (both merge rules)
 │   ├── tokenizer_bench.py               # tokeniser speed / equivalence benchmark
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost

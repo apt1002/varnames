@@ -145,6 +145,40 @@ def main():
             id_huff[j] = b_huff[off:off + m].sum()
             off += m
 
+        # --- factored: cluster step + word step, two Huffman trees ----------
+        Pc = (D * Cc[None, :]) / np.maximum(den[:, None], 1e-300)   # P(j|i)
+        Lc = np.empty((k, k), dtype=np.int64)
+        for i in range(k):
+            Lc[i] = huffman_lengths(Pc[i], k)
+        Lw = np.empty((k, V), dtype=np.int64)
+        for j in range(k):
+            pj = np.zeros(V)
+            m = rcl == j
+            pj[m] = c[m] / max(Cc[j], 1e-300)
+            Lw[j] = huffman_lengths(pj, V)
+        Rb = rcl[b_all]
+        b_huff2 = Lc[A, Rb] + Lw[Rb, b_all]
+        id_huff2 = np.zeros(n_id)
+        off = 0
+        for jj, ss in enumerate(seqs):
+            m = len(ss)
+            id_huff2[jj] = b_huff2[off:off + m].sum()
+            off += m
+        redc = float((Lc[A, Rb] + np.log2(np.maximum(Pc[A, Rb], 1e-300))).sum()) / len(a_all)
+        redw = float((Lw[Rb, b_all] + np.log2(np.maximum(c[b_all] / Cc[Rb], 1e-300))).sum()) / len(a_all)
+        red2 = float((b_huff2 - (-b_ideal)).sum()) / len(a_all)
+        print(f"\n  factored, k={k} (tree per left cluster over k, tree per "
+              f"right cluster over its words):")
+        print(f"    Huffman {id_huff2.sum() / n_id:8.3f} bits/id, penalty "
+              f"{(id_huff2 - id_ideal).sum() / n_id:8.3f} bits/id "
+              f"({100 * (id_huff2 - id_ideal).sum() / id_ideal.sum():.2f}%), "
+              f"{red2:.3f} bits/token")
+        print(f"    split: cluster step {redc:.3f} bits/token, word step "
+              f"{redw:.3f} bits/token")
+        for name, val in (('fit<=64', 64.0), ('fit<=128', 128.0)):
+            print(f"    {name}: arithmetic {100 * (id_ideal <= val).mean():.1f}%"
+                  f" -> factored Huffman {100 * (id_huff2 <= val).mean():.1f}%")
+
         red = float((b_huff - (-b_ideal)).sum()) / len(a_all)
         print(f"\nHuffman vs arithmetic (k={k}, one tree per left cluster, "
               f"{len(a_all)} tokens):")

@@ -47,12 +47,16 @@ labels (see `README.md`).
       index for a global per-merge rescan. Prototype `scripts/word_build_rescan.py`
       gives an identical word list and is faster / lighter on the stride-20
       sample; adopt only after a stride-0 timing.  `docs/TREE_WORDS.md`.
-- [ ] **A9. No run words** (deferred): never build a run word, not even `(uu)`,
-      so a doubled character is absorbed only through a neighbouring pair word.
-      Measure the held-out cost, especially the 64/128-bit *fit rates* rather
-      than the mean.  Middle ground (allow `(uu)` only for isolated length-2
-      runs, never longer) is nearly the current rule, since almost all runs are
-      length 2.  `docs/RUN_LENGTHS.md`, `docs/WORD_COMPRESSIBILITY.md`.
+- [~] **A9. No run words.** *Running* — self-merge forbidden outright (no
+      `('run', …)` rule can ever be produced, so a double is absorbed only
+      through a pair word that also contains a neighbour).  Builder flag
+      `--self-merge {allow,forbid}`; the no-run dictionaries are built as
+      `work/tw{512,2040,4414}ns` against the existing run-aware
+      `work/tw{512,2040,4414}` on the same stride-20 build, with held-out mean
+      bits and the 64/128-bit fit rates as the decision criteria.  Middle ground
+      (allow `(uu)` only for isolated length-2 runs) only if the cost is
+      unacceptable.  `scripts/tree_words.py`, `scripts/check_tree_words.py`,
+      `docs/RUN_LENGTHS.md`, `docs/WORD_COMPRESSIBILITY.md`.
 
 ## B. Adjacency matrix construction
 
@@ -143,7 +147,10 @@ labels (see `README.md`).
       5.7 words per identifier (6.7 coded tokens with the stop), but the Huffman
       penalty is only ~0.2 bits/identifier (0.35 %), and Huffman is *shorter* on
       40 % of identifiers, so the 64-bit fit rises slightly.  The coding choice
-      is not a size argument.  `docs/CODING_OVERHEAD.md`,
+      is not a size argument.  Also checked the factored reading (separate
+      cluster-step and word-step trees): its two roundings add up and cost ~7×
+      the flat code, so a small-model Huffman coder should use one tree per left
+      cluster over the joint, not two.  `docs/CODING_OVERHEAD.md`,
       `scripts/words_per_identifier.py`.
 
 ## D. Corpus preprocessing
@@ -193,8 +200,45 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
 - [x] **H1. Rebuild `work/*/pair_stats.txt` and `pair_factors_L*.npy`** with the
       raised `randomized_svd` `n_iter=8` default. *Done* — all 5
       `PAIR_THRESHOLDS`; log `work/afk_pairmatrix.log`.
-- [ ] **H2. Corpus hardening** (deferred, optional): Ruby heredoc markers /
-      UUID fixtures.
-- [ ] **H3. Broaden the corpus** (deferred): add Java/Lua/OCaml/Haskell
-      harvests; keep a stable versioned snapshot for a later full rebuild.
+- [~] **H2. Corpus hardening.** *Running* — audit the production scrubber
+      against the retained trees (`scripts/audit_extract.py`, which scans with
+      `extract.scrub` and reports files whose *output* still contains
+      hex-blob/digit-blob tokens, with source context), fix the missed literal
+      constructs in `scripts/extract.py`, add a regression suite for them, then
+      re-extract (`work/clean_ids/*.shards` → `corpus/by_language/*.txt` →
+      union).  `scripts/extract.py`, `scripts/audit_extract.py`,
       `docs/CORPUS.md`.
+- [~] **H3. Broaden the corpus.** *Running* — add four network harvests, each
+      capped at the **top 2,000 packages by download count**, one fetcher per
+      ecosystem modelled on `scripts/fetch_gems.py`: Java (Maven Central
+      `-sources.jar`, i.e. source not bytecode), Haskell (Hackage tarballs),
+      OCaml (opam release tarballs), Lua (LuaRocks tarballs).  Archives are
+      deleted after extraction; per-language roots and extensions recorded in
+      `docs/CORPUS.md`; no toolchain needed on the host (we harvest source).
+      `docs/CORPUS.md`.
+
+### Rebuilds the corpus change (H2/H3) will force
+
+The pre-change corpus is archived in git (`corpus/` at commit `7228753`), so
+these can be rebuilt in any order, later, without losing the old numbers.
+
+- [ ] **H4. Rebuild the corpus inputs** (deferred, blocked on H2/H3):
+      `work/clean_ids/*.shards`, `corpus/by_language/*.txt`,
+      `corpus/identifiers.multilang.txt`, then `work/raw/` and `work/camel/`
+      (case-normalised variants + `merged_training.txt` /
+      `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
+- [ ] **H5. Rebuild the model artefacts** (deferred, blocked on H4): the
+      dictionaries `work/tw{96,512,2040,4414,11694}/` and their `s0` twins
+      (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), `work/tw2040raw/`,
+      `work/tw2040p/`, `_ttw*` scratch dirs, the pair matrix
+      (`work/*/pair_stats.txt`, `pair_factors_L*.npy` via
+      `scripts/pair_matrix.py`), and `work/occ/`.
+- [ ] **H6. Re-measure the corpus-dependent reports** (deferred, blocked on H5):
+      the numbers (not the arguments) in `docs/CORPUS.md`, `CODE_LENGTHS.md`,
+      `CASE_NORMALISATION.md`, `ADJACENCY_MATRIX.md` (κ choice),
+      `TREE_WORDS.md`, `DICTIONARY_RULES.md`, `RUN_LENGTHS.md`,
+      `WORD_COMPRESSIBILITY.md`, `BOUNDARY_TRIGRAM.md`,
+      `CLUSTER_SIZE_STUDY.md`, `CLUSTER_WORDS.md`, `CLUSTER_LOSS.md`,
+      `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`, `BREAK_OPEN_PRIOR.md`,
+      `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`, `MODEL_BUDGET.md`,
+      `BUDGET64_STUDY.md`, and the headline figures in `README.md`/`PLAN.md`.

@@ -21,6 +21,9 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
    nested merges), so a run step may spend several words of the budget at once.
    The stop character `\n` is a **separator**, never merged across (a word
    spanning two identifiers is meaningless).
+   *(Superseded: the dictionary now forbids self-merges outright, so no run word
+   is built at all — see the note above.  The measured cost of the change is
+   nil at the vocabularies below.)*
 
 2. **Tokenise.**  An identifier is tokenised by replaying the word list in
    creation order: consecutive pair rules are applied by repeatedly merging the
@@ -61,6 +64,14 @@ a hash + global-dictionary scheme and are counted as failures, exactly as in
 > the flat `(u^k)` rule is preferable (it beats plain BPE whenever there is run
 > mass and is the sign-safe rule), so all numbers here were regenerated on it.
 > Those plain-pair artifacts are obsolete and live only in git history.
+
+> **Later simplification (no-run rule).**  Self-merges are now forbidden
+> outright, so no `(u^k)` run word is ever built.  At matched vocabulary the
+> held-out numbers above are unchanged (`V = 2,104`: mean 45.79 both ways,
+> 64-bit fit differing by 3 identifiers of 229,534; `V = 4,478`: identical), and
+> at `V = 576` the no-run list is 0.22 bits *better*.  The table above therefore
+> holds for either rule; the measurement is in
+> [`DICTIONARY_RULES.md`](DICTIONARY_RULES.md).
 
 ## Setup
 

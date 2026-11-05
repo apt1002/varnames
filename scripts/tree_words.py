@@ -83,8 +83,15 @@ def _cyclic_arrays(seqs, nstop):
     return rows, cols, vals
 
 
-def build_dictionary(lines, num_pairs, verbose=False, trace=None):
+def build_dictionary(lines, num_pairs, verbose=False, trace=None,
+                     self_merge=True):
     """Run-aware greedy dictionary.  Returns `(chars, rules, sym)`.
+
+    `self_merge=False` forbids *every* merge of a pair with itself — the
+    "no run words" rule: a doubled character (or a doubled word) is never
+    collapsed, not even to `(uu)`, so a double can only be absorbed through a
+    pair word that also contains a neighbour.  The build is then plain
+    pair-merge: no `('run', ...)` rules are ever produced.
 
     `rules[r]` is `('pair', (a, b), new_id)` or `('run', a, [(k, new_id), ...])`
     in creation order; ids are `len(chars)+1+r` in order.
@@ -107,6 +114,9 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
         trace['level0'] = _cyclic_arrays(seqs, len(chars))
         trace['entries'] = []
 
+    def eligible(p):
+        return self_merge or p[0] != p[1]
+
     cnt = Counter()
     pos = {}
     heap = []
@@ -115,7 +125,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
             p = (seq[j], seq[j + 1])
             pos.setdefault(p, set()).add((si, j))
             cnt[p] += 1
-    heap[:] = [(-c, p) for p, c in cnt.items() if c > 1]
+    heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and eligible(p)]
     heapq.heapify(heap)
 
     def rebuild():
@@ -128,7 +138,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
                 p = (seq[j], seq[j + 1])
                 pos.setdefault(p, set()).add((si, j))
                 cnt[p] += 1
-        heap[:] = [(-c, p) for p, c in cnt.items() if c > 1]
+        heap[:] = [(-c, p) for p, c in cnt.items() if c > 1 and eligible(p)]
         heapq.heapify(heap)
 
     def decr(si, p, j):
@@ -136,7 +146,7 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
         if s is not None and (si, j) in s:
             s.discard((si, j))
             cnt[p] -= 1
-            if cnt[p] > 1:                   # keep a valid heap key for `p`
+            if cnt[p] > 1 and eligible(p):   # keep a valid heap key for `p`
                 heapq.heappush(heap, (-cnt[p], p))
 
     def incr(si, p, j):
@@ -144,14 +154,15 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
         if (si, j) not in s:
             s.add((si, j))
             cnt[p] += 1
-            heapq.heappush(heap, (-cnt[p], p))
+            if eligible(p):
+                heapq.heappush(heap, (-cnt[p], p))
 
     step = 0
     while budget > 0:
         p = None
         while heap:
             neg, pp = heapq.heappop(heap)
-            if cnt.get(pp, 0) == -neg and -neg > 1:
+            if cnt.get(pp, 0) == -neg and -neg > 1 and eligible(pp):
                 p = pp
                 break
         if p is None:
@@ -282,7 +293,8 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
         budget -= 1
         step += 1
         if len(heap) > 4 * len(cnt) + 4096:
-            heap[:] = [(-c, pp) for pp, c in cnt.items() if c > 1]
+            heap[:] = [(-c, pp) for pp, c in cnt.items()
+                       if c > 1 and eligible(pp)]
             heapq.heapify(heap)
         if verbose and step % 500 == 0:
             print(f"  step {step} pair {sym[new]!r} vocab {len(sym)}", flush=True)
@@ -647,17 +659,23 @@ def write_adj(outdir, big, uni, sym, name='adj'):
 
 
 def cmd_train(args):
-    outdir = args.outdir or f'work/tw{args.num_pairs}'
+    outdir = args.outdir or (f'work/tw{args.num_pairs}'
+                             + ('' if args.self_merge == 'allow' else 'ns'))
     os.makedirs(outdir, exist_ok=True)
     build = read_lines(args.corpus, stride=args.sample)
     print(f"dictionary corpus {args.corpus}: {len(build)} lines "
-          f"(stride {args.sample or 1})", flush=True)
-    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True)
-    print(f"dictionary: {len(rules)} rules, vocab {len(sym)}", flush=True)
+          f"(stride {args.sample or 1}, self-merge {args.self_merge})",
+          flush=True)
+    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True,
+                                         self_merge=args.self_merge == 'allow')
+    nruns = sum(1 for r in rules if r[0] == 'run')
+    print(f"dictionary: {len(rules)} rules ({nruns} run), vocab {len(sym)}",
+          flush=True)
     save_dictionary(outdir, chars, rules, sym)
     with open(os.path.join(outdir, 'meta.json'), 'w') as f:
         json.dump(dict(corpus=args.corpus, num_pairs=args.num_pairs,
-                       sample=args.sample, nlines=len(build), runs=True), f)
+                       sample=args.sample, nlines=len(build), runs=True,
+                       self_merge=args.self_merge == 'allow'), f)
 
     char_id = {c: i for i, c in enumerate(chars)}
     plan = make_plan(rules, len(chars))
@@ -760,7 +778,9 @@ def cmd_score(args):
     budgets = [int(x) for x in args.budgets.split(',')]
     print(f"mean bits {bits.mean():.2f}")
     for bud in budgets:
-        print(f"  fit <= {bud} bits: {100.0*(bits <= bud).mean():.1f}%")
+        n = int((bits <= bud).sum())
+        print(f"  fit <= {bud} bits: {100.0*(bits <= bud).mean():.1f}% "
+              f"({n} of {len(bits)})")
 
 
 def main():
@@ -772,6 +792,9 @@ def main():
     tr.add_argument('--sample', type=int, default=0,
                     help='stride for dictionary building (0 = all)')
     tr.add_argument('--outdir', default=None)
+    tr.add_argument('--self-merge', choices=['allow', 'forbid'], default='allow',
+                    help="'forbid' = the no-run-words rule (appends 'ns' to the "
+                         "default outdir name)")
     tr.add_argument('--jobs', type=int, default=1)
     tr.set_defaults(func=cmd_train)
     ad = sub.add_parser('adj')

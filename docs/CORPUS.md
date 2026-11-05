@@ -179,6 +179,40 @@ consumer.
 * **Python / Go / JavaScript / Perl (offline).** Harvested from sources already
   installed on the host, so they cost no network bandwidth.
 
+## Hardening: the literal-leak audit
+
+The scrubber is lexical, not a parser, so the interesting question is not "is it
+correct?" but "what still leaks?".  `scripts/audit_extract.py` answers it
+directly: it scans a source tree **with the production scrubber** and reports any
+file whose *output* still contains a token that looks like literal data (a hex
+blob, a UUID fragment, a digit blob), quoting the surrounding source so the
+missed construct can be identified.  Run over the Ruby tree (226,878 files) it
+flagged 241 files (0.11 %) — enough to find the misses, small enough to fix all
+of them by class rather than by exception.
+
+Five classes were found and fixed (all are now regression cases in
+`scripts/check_extract.py`, 15 cases):
+
+| class | example | effect if missed |
+|---|---|---|
+| **regex containing an apostrophe** | `raise_error( /can't modify frozen/i )` | the `'` starts a phantom string, **flipping the quote parity for the rest of the file** — every later literal then leaks |
+| **multi-line regex** (`/x`) | `/\\A (?:[0-9a-f]{8}-… )\\z/ix` over four lines | hex blobs and UUID patterns leak |
+| **quoted heredoc tag that is not an identifier** | `YAML.load <<-'5032c8a5-…e16381'` | the whole YAML fixture leaks (UUIDs, hostnames) |
+| **string nested in `#{…}`** | `"… #{x + "deadbeef…"} …"` | the outer string ends at the inner quote and the remainder leaks |
+| **leftover merge-conflict markers** | `>>>>>>> ccf863516cd6c75a…` (a commit hash) | the hash is harvested as an identifier |
+
+Two further changes came out of the same audit: the heredoc blank now starts at
+the line *after* the marker (so `cat <<EOF > out.txt` keeps `out`), and the tag
+itself is still blanked.  Scrubbers for Haskell (`--`, `{- -}`, `'c'` chars),
+OCaml (`(* *)`, `"…"`, `'c'` chars but **not** `'a` type variables) and Lua
+(`--`, `--[[ ]]`, `[[…]]` long strings) were added at the same time, because the
+four new ecosystems (below) need them: without OCaml's `(* *)` and Haskell's
+`--`, comments would have flooded those lists with English prose.
+
+**What it costs and what it bought** *(to be filled from the re-extraction —
+the point of the audit is that every leak class found is now fixed by rule, not
+by a per-token exception list, so the fix remains valid on a different corpus.)*
+
 ## What is — and is not — in here
 
 * ✅ Real identifiers from real shipped code: method/class/module/constant names,

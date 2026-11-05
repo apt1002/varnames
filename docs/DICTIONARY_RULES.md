@@ -147,3 +147,57 @@ run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.
   `uu` mass), so on real identifiers the crossover above is usually decided by
   `N(u,u)` vs `N(u,v)` alone — the length-`k` cases above are the synthetic
   stress tests.
+
+## Removing run words altogether (`--self-merge forbid`)
+
+Everything above assumes the run rule is *in use*.  The obvious question is
+whether it is needed at all: forbid **every** merge of a pair with itself, so a
+doubled character (or doubled word) is never collapsed — not even to `(uu)`, let
+alone a flat `(u^k)` — and a double can only enter the vocabulary inside a pair
+word that also contains a neighbour (`sse`, `ess`, `tte`, …).  The dictionary is
+then plain most-frequent-pair merge, with no k-ary nodes, no run-length table and
+no run path in the tokeniser.
+
+Both rules were built on the same stride-20 training sample (`work/tw*` vs
+`work/tw*ns`), counted on the full training corpus and scored on the full
+held-out validation set (229,534 identifiers, `kappa = 1000`):
+
+| vocab `V` | run rules | rules | mean bits | fit ≤64 | fit ≤128 |
+|---:|---:|---:|---:|---:|---:|
+| 576 | 7 → 0 | 499 → 512 | 54.05 → **53.83** | 169,980 → **170,672** | 224,782 → 224,816 |
+| 2,104 | 11 → 0 | 2,023 → 2,040 | 45.79 → 45.79 | 195,017 → 195,014 | 227,611 → 227,606 |
+| 4,478 | 23 → 0 | 4,389 → 4,414 | 42.48 → 42.48 | 205,531 → 205,486 | 228,506 → 228,512 |
+
+Cost of storing the list, Zipf-coded (`docs/MODEL_BUDGET.md`): 1,019 → 1,036 B,
+4,645 → 4,663 B, 10,815 → 10,850 B — the naive list needs a few more rules for
+the same `V` and each rule is marginally dearer, so the run machinery saves
+**0.2–0.4 % of the word list** and nothing else.
+
+* **At the sizes we use, the run rule is free to drop.**  At `V = 2,104` and
+  `4,478` the mean is identical to two decimals; the 64-bit fit moves by 3
+  identifiers out of 229,534 at `V = 2,104` and by 45 (0.02 pt) at `V = 4,478`,
+  and the 128-bit fit by 5 and 6.
+* **At a tiny vocabulary it is worth dropping.**  At `V = 576` the 13 words the
+  7 run rules buy (13 lengths of `r f m _ s 1 0`-doubles, including `f*15` and
+  `0*19`) are worth less than the 13 ordinary pairs the no-run list buys with the
+  same budget: 0.22 bits cheaper and 692 more identifiers inside 64 bits.
+* **Why it is cheap.**  Runs are 2.13 % of character adjacencies and 99 % of
+  them are length 2 (`docs/RUN_LENGTHS.md`), so the run rules mostly buy `ss`,
+  `tt`, `ee`, `__`, `00` — words that a pair word containing a neighbour
+  (`sse`, `ess`, `tte`, `__i`) delivers anyway.  What the run rules mostly add
+  on real identifiers is a handful of corpus-specific long runs (`f*15`,
+  `0*19`), which generalise badly.
+* **The simplification is the point.**  Dropping the rule removes the k-ary
+  node type, the run-length table and its per-length words, the run replay in
+  the tokeniser, and the run branch of the word-list encoder.  Nothing in the
+  model's statistics or its storage depended on it.
+
+So the run-aware rule is retired: the dictionary is plain pair-merge with
+self-merges forbidden.  The held-out numbers in
+[`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) were measured on the
+run-aware rule and are unchanged by the switch (same `V`, same counts to within
+3 identifiers), so they stand.
+
+*Caveat: measured on one corpus, one `kappa`, one stride; the 576 row is the
+only place the two rules differ appreciably, and the corpus rebuild recorded in
+`PLAN.md` will re-measure all of it.*

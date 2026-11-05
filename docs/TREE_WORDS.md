@@ -445,6 +445,15 @@ All of §9 is checked in `scripts/check_merge_delta.py` (`--exhaustive`,
 `check_sufficient_condition`, `check_run_aware`, the `check_delta_bound` Jensen
 bound of §9.0 and the `check_run_collapse_bound` bound of §9.1).
 
+> **The run machinery turned out to be unnecessary in production.**  On the real
+> corpus, forbidding self-merges outright (no `(uu)`, no `(uᵏ)`) leaves the
+> held-out numbers unchanged at the vocabularies used — mean bits identical to
+> two decimals and the 64-bit fit within 3 identifiers of 229,534 at `V = 2,104`
+> and `4,478` — and *improves* them at `V = 576`.  So the dictionary is now plain
+> pair-merge with self-merges forbidden, and the k-ary run node of §9.1 survives
+> only as the theory that justified checking it.  Measurement:
+> [`DICTIONARY_RULES.md`](DICTIONARY_RULES.md).
+
 ## 10. Why the cycle, and why `CS = S1 − S2`
 
 Per string,
