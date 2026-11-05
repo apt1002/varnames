@@ -76,6 +76,7 @@ varnames/
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   ├── PRUNE_WORDS.md                   # overshoot/prune the word list (unsuccessful: hurts the clustered model)
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
+│   ├── CLUSTER_LOSS.md                  # where the co-clustering loss lives + block structure
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
@@ -111,6 +112,8 @@ varnames/
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros of the word matrix
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
 │   ├── cluster_words.py                 # K-means co-clustering of the word matrix
+│   ├── cluster_loss_attribution.py      # attribute the assoc loss to cluster-pair cells
+│   ├── block_structure.py               # rank/sparsity of a high-loss cluster-pair block
 │   ├── matrix_compress.py               # direct compression of the word matrix (residual + top-N curve)
 │   ├── factor_cloud.py                  # 3D cloud viz of the rank-4 sqrt factorisation
 │   ├── shape_gain_test.py               # test the cloud "gain x shape" factorisation vs nulls

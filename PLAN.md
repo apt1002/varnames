@@ -114,14 +114,19 @@ labels (see `README.md`).
       the apparent "gain × shape" factorisation does **not** survive a
       pipeline-matched null — it is largely a low-rank reconstruction artefact.
       `scripts/factor_cloud.py`, `docs/HELLINGER_FACTORISATION.md`.
-- [ ] **C21. Where the co-clustering loss lives** (deferred): attribute the
-      `assoc`-vs-word×word loss to each (left cluster, right cluster) pair — is
-      it concentrated in the high-mass pairs, the tail, or the junk clusters?
-      `docs/CLUSTER_WORDS.md`.
-- [ ] **C22. Structure of a high-loss cluster-pair block** (deferred): for a
-      chosen `(a, b)`, study `P(u, v | a, b)` — is the block low-rank, or a
-      sparse deviation from its marginal?  Feasibility of a per-cluster-pair
-      "splat" model for the whole matrix.  `docs/CLUSTER_WORDS.md`.
+- [x] **C21. Where the co-clustering loss lives.** *Closed* — the loss is spread
+      across the whole low-mass tail (mean ~3.5 bits/bigram everywhere past the
+      top cells, ~1 bit in the heaviest), not concentrated in a few bad cells;
+      the junk clusters carry nothing; and on a quarter of bigrams the block
+      model *beats* the table.  `docs/CLUSTER_LOSS.md`,
+      `scripts/cluster_loss_attribution.py`.
+- [x] **C22. Structure of a high-loss cluster-pair block.** *Closed, negative for
+      per-block corrections* — the loss is the within-left-cluster heterogeneity
+      (the clustering residual); the worst blocks are neither low-rank nor
+      sparsely deviating from the row-independent marginal (the deviation
+      concentration matches a permutation null), so a per-cell "splat" would
+      cost as much as the block.  `docs/CLUSTER_LOSS.md`,
+      `scripts/block_structure.py`.
 - [x] **C23. Word-list size vs cluster-matrix budget.** *Closed, positive* —
       at matched model size the largest word list that fits beats a finer `k`;
       the word list, not the table, is the dominant budget lever.
