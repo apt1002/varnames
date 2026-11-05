@@ -60,6 +60,22 @@ Fit rate by character length (`V = 4,478`, `k = 105`):
 | 16 | 1,173 | 87.0 % | | 40 | 53 | 5.7 % |
 | 18 | 888 | 80.6 % | | 44+ | ~600 | ≲2 % |
 
+The two ends of the overlap, in full (`V = 2,104`, `k = 105`):
+
+* the **longest compressed size that fits** — identifiers landing within a
+  hundredth of a bit of the budget, at wildly different character lengths:
+  `viewFunctionsWithMetadataChange` (31 chars, 63.97 bits),
+  `FsrmEventType_Information` (25, 63.97),
+  `addKeychainToSearchList` (23, 63.98), `cycleSynthesizer` (16, 63.99),
+  `V128Load32Lane` (14, 63.98);
+* the **shortest uncompressed size that does not fit**:
+  `VfsgnjVV` (8 chars, 67.63 bits), `op_UNPKU` (8, 64.49),
+  `RADIX_u32` (9, 65.73).
+
+A 31-character identifier can fit while an 8-character one fails, and the
+8-character failure misses by up to three and a half bits — it is a genuinely
+unpredictable name, not a rounding error at the boundary.
+
 **The encoder cannot decide from the length** — it must encode and test.  A
 "short names always fit" rule holds only up to 7 characters; past that an
 unpredictable 8-character name fails while a predictable 50-character one

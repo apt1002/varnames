@@ -80,6 +80,8 @@ def main():
                          'ones (defaults to the whole validation corpus)')
     ap.add_argument('--stride', type=int, default=10)
     ap.add_argument('--sample-n', type=int, default=50000)
+    ap.add_argument('--examples', type=int, default=10,
+                    help='how many boundary examples to print per model')
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
 
@@ -140,6 +142,25 @@ def main():
             right = ("" if b[0] is None
                      else f"  {b[0]:>4} {b[1]:>7} {b[2]:>7.1f}%")
             print(left + right)
+
+        # --- boundary examples --------------------------------------------
+        print("  longest compressed size that fits (bits <= 64, largest first):")
+        shown = 0
+        for i in np.argsort(-bits):
+            if fit[i]:
+                print(f"    {bits[i]:6.2f} bits   {lens[i]:3d} chars  {lines[i]}")
+                shown += 1
+                if shown >= args.examples:
+                    break
+        print("  shortest uncompressed size that does not fit "
+              "(chars, shortest first):")
+        shown = 0
+        for i in np.argsort(lens, kind='stable'):
+            if not fit[i]:
+                print(f"    {lens[i]:3d} chars   {bits[i]:6.2f} bits  {lines[i]}")
+                shown += 1
+                if shown >= args.examples:
+                    break
 
         # --- generative view ----------------------------------------------
         rng = np.random.default_rng(args.seed + 7)
