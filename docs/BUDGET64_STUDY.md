@@ -1,117 +1,120 @@
 # The 64-bit and 128-bit identifier sets
 
-Status: **results (partial — the two larger vocabularies are pending).**  What
-fraction of real identifiers do the fixed budgets cover, where the boundary
-lies in *character* length, and what a random member of the set looks like.
-Run against models that actually fit the byte budget
-([`MODEL_BUDGET.md`](MODEL_BUDGET.md)), not against the full table.
+Status: **results.**  What fraction of real identifiers the fixed budgets cover,
+where the boundary lies in *character* length, and what a random member of the
+set looks like — measured on models that actually fit the byte budget
+([`MODEL_BUDGET.md`](MODEL_BUDGET.md)), not on the full table.
 
 ## Setup
 
-`scripts/budget64_study.py`, model `V = 2,104` (`work/tw2040`), `kappa = 300`,
-held-out validation at stride 10 (`n = 22,954` distinct identifiers).  The
-`assoc` transition is evaluated from the stored numbers `(c, D)`; `k = 52` is
-the 16.7 kB model and `k = 105` the 24.8 kB one.
+`scripts/budget64_study.py`.  Three vocabularies, each at the `k` that is
+nearest-optimal for its byte budget (16.7 / 43.0 / 84.7 kB respectively),
+`kappa = 300`, held-out validation at stride 10 (`n = 22,954` distinct
+identifiers).  The `assoc` transition is evaluated from the stored numbers
+`(c, D)`; sampling needs only the `k` distinct left-cluster rows.
 
 ## 1. Coverage
 
-| model | mean bits | fit ≤64 | fit ≤128 |
-|---|---:|---:|---:|
-| full table (4.2 MB) | 45.61 | 85.3 % | 99.2 % |
-| `k = 52` (16.7 kB) | 56.37 | 71.3 % | 97.1 % |
-| `k = 105` (24.8 kB) | 55.14 | 72.6 % | 97.4 % |
+| model | size | mean bits | fit ≤64 | fit ≤128 |
+|---|---:|---:|---:|---:|
+| `V = 2,104`, full table | 4.2 MB | 45.61 | 85.3 % | 99.2 % |
+| `V = 2,104`, `k = 52` | 16.7 kB | 56.37 | 71.3 % | 97.1 % |
+| `V = 2,104`, `k = 105` | 24.8 kB | 55.14 | 72.6 % | 97.4 % |
+| `V = 4,478`, full table | 19.1 MB | 42.05 | 89.9 % | 99.6 % |
+| `V = 4,478`, `k = 105` | 43.0 kB | 50.78 | 77.8 % | 98.3 % |
+| `V = 11,758`, full table | 131.8 MB | 39.07 | 93.8 % | 99.8 % |
+| `V = 11,758`, `k = 52` | 84.7 kB | 46.90 | 83.2 % | 99.0 % |
 
-The 64-bit set is the discriminating one; the 128-bit set is close to
-"everything except the generated long tail".  Clustering costs ~13 points of
-64-bit coverage against the full table — far more than the ~1 bit of mean it
-costs — so the budget question (how big a table we can afford) is really a
-64-bit-coverage question.
+The 64-bit set is the discriminating one; 128 bits is essentially "everything
+except the generated long tail".  Clustering costs far more 64-bit coverage than
+it costs mean bits — 14.0 points at `V = 2,104`, 12.1 at `4,478`, 10.6 at
+`11,758`, against ~1 bit of mean — so the budget question is really a
+64-bit-coverage question, and the penalty *shrinks* as the vocabulary grows.
 
 The occurrence-weighted view is not measured here (the source-code occurrence
 sampler was retired, see [`CODE_LENGTHS.md`](CODE_LENGTHS.md)); that earlier
 study found the 64-bit threshold covered ~92 % of identifier *occurrences* and
 was insensitive to model sharpening, because occurrences are dominated by
-short, predictable names.  The static rate above is the pessimistic end.
+short, predictable names.  The static rates above are the pessimistic end.
 
 ## 2. The boundary in uncompressed length
 
 Code length is **not** monotone in character length, so there is no clean length
-cut — only an overlap:
+cut — only an overlap that *widens* with the vocabulary:
 
-* the **longest identifier that still fits** is **42 characters**;
-* the **shortest identifier that fails** is **8 characters**;
-* **6,027 identifiers shorter than 42 characters still fail** (of 6,590 total
-  failures) — i.e. ~91 % of the failures are *inside* the fitting length range.
+| model | longest that fits | shortest that fails | failures inside the range |
+|---|---:|---:|---:|
+| `V = 2,104`, `k = 52` | 42 chars | 8 chars | 6,027 of ~6,590 (91 %) |
+| `V = 4,478`, `k = 105` | 50 chars | 8 chars | 4,829 of ~5,100 (95 %) |
+| `V = 11,758`, `k = 52` | 57 chars | 9 chars | 3,721 of ~3,860 (96 %) |
 
-Fit rate by character length (`k = 52`):
+Fit rate by character length (`V = 4,478`, `k = 105`):
 
 | len | n | fit ≤64 | | len | n | fit ≤64 |
 ---:|---:|---:|---|---:|---:|---:|
-| 1–7 | 2,305 | 100.0 % | | 20 | 737 | 58.1 % |
-| 8 | 964 | 99.8 % | | 24 | 464 | 40.1 % |
-| 10 | 1,278 | 97.8 % | | 28 | 302 | 21.9 % |
-| 12 | 1,368 | 93.9 % | | 32 | 176 | 8.0 % |
-| 14 | 1,376 | 89.1 % | | 36 | 112 | 0.9 % |
-| 16 | 1,173 | 82.1 % | | 40 | 53 | 0.0 % |
-| 18 | 888 | 71.4 % | | 42 | 52 | 1.9 % |
+| 1–7 | 2,305 | 100.0 % | | 20 | 737 | 68.7 % |
+| 8 | 964 | 99.9 % | | 24 | 464 | 53.9 % |
+| 10 | 1,278 | 98.3 % | | 28 | 302 | 36.1 % |
+| 12 | 1,368 | 95.9 % | | 32 | 176 | 19.3 % |
+| 14 | 1,376 | 92.8 % | | 36 | 112 | 7.1 % |
+| 16 | 1,173 | 87.0 % | | 40 | 53 | 5.7 % |
+| 18 | 888 | 80.6 % | | 44+ | ~600 | ≲2 % |
 
-The practical consequence: **the encoder cannot decide from the length** — it
-must encode and test.  A "short names always fit" rule holds only up to 7
-characters; past that an unpredictable 8-character name can fail while a
-predictable 42-character one succeeds.
+**The encoder cannot decide from the length** — it must encode and test.  A
+"short names always fit" rule holds only up to 7 characters; past that an
+unpredictable 8-character name fails while a predictable 50-character one
+succeeds.  A larger vocabulary pushes the *top* of the range out (42 → 57
+characters) much faster than the bottom (8 → 9), so it widens the overlap
+rather than sharpening the cut.
 
 ## 3. A generative view
 
 50,000 identifiers drawn from the model (a cycle from the stop token back to
-it), `k = 52`:
+it):
 
-| | generated | corpus |
-|---|---:|---:|
-| mean length | 17.03 | 16.97 |
-| valid `[A-Za-z_][A-Za-z0-9_]*` | 98.9 % | 100 % |
-| exactly a real identifier | 1.64 % | — |
-| mean bits | 56.81 | 56.37 |
-| fit ≤64 | 68.2 % | 71.3 % |
-| fit ≤128 | 92.0 % | 97.1 % |
+| model | mean len (corpus 16.97) | valid syntax | real identifier | mean bits | fit ≤64 | fit ≤128 |
+|---|---:|---:|---:|---:|---:|---:|
+| `V = 2,104`, `k = 52` | 17.03 | 98.9 % | 1.64 % | 56.81 (56.37) | 68.2 % (71.3) | 92.0 % (97.1) |
+| `V = 4,478`, `k = 105` | 17.06 | 97.7 % | 1.81 % | 52.01 (50.78) | 72.1 % (77.8) | 94.3 % (98.3) |
+| `V = 11,758`, `k = 52` | 16.99 | 94.2 % | 1.96 % | 47.72 (46.90) | 75.2 % (83.2) | 95.3 % (99.0) |
 
-Examples: `setArgs`, `count`, `signed`, `Crip_Vtblpace`, `enu`,
-`loallocingHeliseTyperoindest`, `reclassGroupResponse`, `constromMethod`.
+(bracketed values are the corpus's own, for comparison.)  Examples at
+`V = 4,478`: `proWhere`, `setup`, `testToStart`, `puclence_with_lookup_21`,
+`writeBlockFragawss`, `SetCompilingStackType`.
 
-A random member of the 64-bit set therefore *looks* like an identifier — 98.9 %
-parse, and the length distribution matches the corpus to a hundredth of a
-character — but only **1.6 %** is a real identifier, and its own 128-bit
-coverage (92 %) is worse than the corpus's (97 %): the model's generative tail
-is **heavier** than the empirical one.  So the residual mass of the bijection
-lands on plausible-looking but unreal names, and the *tail* of the set is
-worse-behaved than the average real identifier.  This is what the
-64-bit set's "usefulness" costs: the code is a good model of the common mass and
-a poor one of its own tail.
+Three things show up consistently:
+
+* **The model reproduces the identifier *shape* almost exactly** — the length
+  distribution matches the corpus to a tenth of a character.
+* **Almost none of it is real.** Only ~2 % of samples are an actual identifier
+  in the reference set, so the residual mass of the bijection lands on
+  plausible-looking but unreal names.
+* **The generative tail is heavier than the empirical one, and increasingly
+  so.**  A sample's own coverage is *below* the corpus's, and the gap widens
+  with the vocabulary: 64-bit 68.2 → 72.1 → 75.2 % against 71.3 → 77.8 →
+  83.2 %; 128-bit 92.0 → 94.3 → 95.3 % against 97.1 → 98.3 → 99.0 %.  At
+  `V = 11,758` the model's samples also stop being reliably well-formed
+  (94.2 % parse, down from 98.9 %) — a big vocabulary admits low-frequency
+  tokens that produce empty strings and bad starts.  So the *tail* of the
+  64-bit set behaves noticeably worse than the average real identifier, and a
+  bigger word list buys coverage at the cost of a noisier generation.
 
 ## What it shows
 
-* At 17–25 kB the 64-bit set covers ~71–73 % of distinct identifiers; the
-  128-bit set ~97 %.  Whether that is "useful" depends on the occurrence
-  weighting (retired finding: ~92 % of occurrences) and on the vocabulary size
-  — `V = 4,478` and `11,758` should recover several points
-  ([`MODEL_BUDGET.md`](MODEL_BUDGET.md): 77.0 % and 82.9 % on the smaller
-  stride-40 sample).
-* There is no length rule for membership: failures are unpredictable
-  identifiers of ordinary length, not long ones.
-* Sampling is a cheap sanity check on the decoder: the model reproduces the
-  identifier *shape* almost exactly, but its tail is heavier than reality.
-
-## Pending
-
-The same run for `V = 4,478` (`k = 105`) and `V = 11,758` (`k = 52`), on a
-machine with more than the ~900 MB this box has:
-
-```
-python3 scripts/budget64_study.py --dir work/tw4414  --ks 105 --stride 10
-python3 scripts/budget64_study.py --dir work/tw11694 --ks 52  --stride 10
-```
+* The 64-bit set covers 71 % of distinct identifiers at 17 kB, 78 % at 43 kB,
+  83 % at 85 kB; the 128-bit set ~97–99 %.  Whether that is *useful* depends on
+  the occurrence weighting (retired finding: ~92 % of occurrences) and on how
+  much model size the standard is willing to carry — note the 83 % figure needs
+  85 kB, not 50 kB ([`MODEL_BUDGET.md`](MODEL_BUDGET.md)).
+* Membership is not a length rule: failures are unpredictable identifiers of
+  ordinary length, and a bigger vocabulary widens the length overlap.
+* Sampling is a cheap check on the *decoder*: the model gets the shape right and
+  the tail wrong, so the two ends of the set behave differently.
 
 ## Reproducing
 
 ```
-python3 scripts/budget64_study.py --dir work/tw2040 --ks 52,105 --stride 10
+python3 scripts/budget64_study.py --dir work/tw2040  --ks 52,105 --stride 10
+python3 scripts/budget64_study.py --dir work/tw4414  --ks 105    --stride 10
+python3 scripts/budget64_study.py --dir work/tw11694 --ks 52     --stride 10
 ```

@@ -74,7 +74,10 @@ model.
 
 The full tables are far larger and the fit rates there are the ceilings:
 `V = 2 104` 4.2 MB / 85.1 %, `V = 4 478` 19.1 MB / 89.4 %,
-`V = 11 758` 131.8 MB / 93.5 % (≤64 bits).
+`V = 11 758` 131.8 MB / 93.5 % (≤64 bits).  These rates use a stride-40
+held-out sample (`n = 5 739`); [`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) repeats
+them at stride 10 (`n = 22 954`) and the two largest models move up by under a
+point (77.8 % and 83.2 %).
 
 ## What it shows
 

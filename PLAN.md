@@ -155,10 +155,12 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
 - [ ] **E3. Write up rejected alternatives** — reframe the gathered data as
       justifications for the design decisions.
 - [ ] **E4. Ablation study** (design TBD).
-- [~] **E5. Study the 64-bit and 128-bit identifier sets** — what fraction of
-      real identifiers fit; longest compressed length that fits vs shortest
-      uncompressed length that does not; use the model generatively to ask what
-      random identifiers look like.  `docs/BUDGET64_STUDY.md`,
+- [x] **E5. Study the 64-bit and 128-bit identifier sets.** *Done* — the
+      64-bit set covers 71–83 % of distinct identifiers over 17–85 kB (128-bit
+      97–99 %); membership is not a length rule (failures are unpredictable
+      names of ordinary length, and a larger vocabulary widens the overlap);
+      model samples reproduce the identifier shape but ~98 % are unreal and the
+      generative tail is heavier than the corpus.  `docs/BUDGET64_STUDY.md`,
       `scripts/budget64_study.py`.
 - [ ] **E6. Propose a standard** — a language-neutral bijection between
       identifiers and integers; define the 64-bit and 128-bit sets; decide how
