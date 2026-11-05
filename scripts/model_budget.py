@@ -30,6 +30,8 @@ import csv
 import os
 import sys
 
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw
 
@@ -38,18 +40,45 @@ def _bits(n):
     return max(1, (int(n) - 1).bit_length()) if n > 1 else 0
 
 
-def dictionary_bits(chars, rules):
-    """Cost of the merge rules with variable-width symbol indices."""
+def _zipf_bits(V, exponent):
+    w = (np.arange(V) + 1.0) ** (-exponent)
+    return w / w.sum()
+
+
+def dictionary_bits(chars, rules, code='var'):
+    """Cost of the merge rules under an index code.
+
+    ``fixed``  every child index costs ``ceil(log2 V)`` bits;
+    ``var``    every child index costs ``ceil(log2 s)`` bits, ``s`` = the
+               number of symbols defined when the rule was created (children
+               always precede their parent, so ``s <= V``);
+    ``zipf``   a static arithmetic code whose prior is ``p(j) ~ (j+1)^-a``,
+               truncated to ``[0, s)`` -- two parameters for the whole list.
+    """
+    V = len(chars) + 1 + sum(
+        1 if it[0] == 'pair' else len(it[2]) for it in rules)
+    zipf = _zipf_bits(V, 0.7)
     s = len(chars) + 1                       # the stop symbol is id len(chars)
     bits = 0
     for item in rules:
         if item[0] == 'pair':
-            _, _pair, _nid = item
-            bits += 2 * _bits(s)
+            _, (a, b), _nid = item
+            if code == 'fixed':
+                bits += 2 * _bits(V)
+            elif code == 'zipf':
+                bits += sum(-np.log2(zipf[j] / zipf[:s].sum())
+                            for j in (a, b))
+            else:
+                bits += 2 * _bits(s)
             s += 1
         else:
-            _, _a, created = item
-            bits += _bits(s)                 # the base symbol
+            _, a, created = item
+            if code == 'fixed':
+                bits += _bits(V)
+            elif code == 'zipf':
+                bits += -np.log2(zipf[a] / zipf[:s].sum())
+            else:
+                bits += _bits(s)
             bits += 8 * len(created)         # one byte per run length (>=2)
             s += len(created)
     return bits, s
@@ -64,12 +93,9 @@ def main():
                     help='bits per stored probability (default 8 = one byte)')
     ap.add_argument('--code', type=int, default=0,
                     help='bytes charged for the program code (default 0)')
-    ap.add_argument('--fixed-index', action='store_true',
-                    help='word list as fixed-width records (in-memory data '
-                         'structure) instead of variable-width; layout is one '
-                         'record per word: left child, right child (each '
-                         'ceil(log2 V) bits) and the unigram byte, padded to '
-                         'whole bytes; cluster labels are whole bytes too')
+    ap.add_argument('--index-code', default='var',
+                    choices=('fixed', 'var', 'zipf'),
+                    help='how the word-list child indices are coded')
     ap.add_argument('--results', default='',
                     help='optional CSV with columns V,k,store,assoc_bits '
                          '(e.g. work/c23_budget.csv) to print a byte frontier')
@@ -80,23 +106,16 @@ def main():
     for d in args.dirs.split(','):
         chars, rules, sym = tw.load_dictionary(d)
         V = len(sym)
-        dbits, s = dictionary_bits(chars, rules)
+        dbits, s = dictionary_bits(chars, rules, args.index_code)
         assert s == V, (s, V)
         info[V] = dict(dir=d, dict_b=dbits / 8.0, dict_bits=dbits,
                        nrule=len(rules), V=V)
 
     def total_b(V, k, code=0):
         m = info[V]
-        if args.fixed_index:
-            idx = _bits(V)                       # fixed index width, bits
-            rec = (2 * idx + 8 + 7) // 8         # + the unigram byte, padded
-            dict_b = (V - 64) * rec              # one record per created word
-            uni_b = 0.0                          # folded into the record
-        else:
-            dict_b = m['dict_b']
-            uni_b = V * nbytes
-        lab = max(1, (_bits(k) + 7) // 8) if args.fixed_index \
-            else _bits(k) / 8.0
+        dict_b = m['dict_b']
+        uni_b = V * nbytes
+        lab = _bits(k) / 8.0
         mem_b = 2 * V * lab
         blk_b = k * k * nbytes
         return dict(dict_b=dict_b, uni_b=uni_b, mem_b=mem_b, blk_b=blk_b,

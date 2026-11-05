@@ -164,6 +164,8 @@ def main():
 
         # --- what kind of identifiers fail? ---------------------------------
         feats = {
+            '_ then CAPITAL': lambda s: bool(re.search(r'_[A-Z]', s)),
+            'CAPS run >=2': lambda s: bool(re.search(r'[A-Z]{2}', s)),
             'has _': lambda s: '_' in s,
             'has digit': lambda s: any(c.isdigit() for c in s),
             'no aeiou vowel': lambda s: not any(c in s.lower() for c in 'aeiou'),

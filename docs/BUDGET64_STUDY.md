@@ -88,17 +88,27 @@ length, so the "shortest failing" column selects freaks by construction — the
 shortest thing the model cannot price is bound to look like an instruction
 mnemonic.  The failure *mass* is not like that.  Marking each identifier:
 
-| feature | share of fitters | share of failers | share of all |
+| feature | share of fitters | share of failers | over-represented by |
 |---|---:|---:|---:|
-| contains `_` | 5.6 % | **17.4 %** | 9.0 % |
-| contains a digit | 10.0 % | **19.8 %** | 12.8 % |
-| neither | 86.3 % | **70.1 %** | 81.7 % |
+| `_` followed by a capital (`t_NEWLINE`) | 2.3 % | **10.8 %** | **4.7×** |
+| a run of ≥2 capitals (`RADIX_u32`) | 4.5 % | **16.7 %** | 3.7× |
+| contains `_` | 5.6 % | **17.4 %** | 3.1× |
+| contains a digit | 10.0 % | **19.8 %** | 2.0× |
+| none of the above | 86.3 % | **70.1 %** | — |
 
-So underscores and digits are over-represented among failures (3.1× and 2.0×) —
-the C-ABI and SIMD-intrinsic names with no word structure — but **70 % of the
-failures carry no such marker at all**.  The bulk of the loss is ordinary
-CamelCase identifiers that happen to be an unseen combination of ordinary words,
-not a distinguishable syntactic class that could be special-cased.
+**The strongest single marker is unconventional capitalisation** — an underscore
+followed by an all-caps word, as in `t_NEWLINE`, `DW_OP_nop`, `SSL_CTX_remove_session`
+— 4.7× over-represented among failures.  These are exactly the identifiers the
+corpus's case normalisation *declines* to touch: `classify_identifiers.py` only
+rewrites the all-lower and all-upper classes, leaving genuinely mixed-case names
+verbatim, because rewriting them would collide across classes
+([`CASE_NORMALISATION.md`](CASE_NORMALISATION.md)).  `t_NEWLINE` really would
+compress as `t_newline` or `tNewline` — but recovering which of those it was
+needs the case class stored, which is a design change, not a free win.
+
+Even so, **70 % of the failures carry none of these markers**.  The bulk of the
+loss is ordinary CamelCase identifiers — an unseen *combination* of ordinary
+words — not a distinguishable syntactic class that could be special-cased.
 
 ## 3. A generative view
 

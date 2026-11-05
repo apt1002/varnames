@@ -1,111 +1,123 @@
 # Model size in bytes, word list included
 
-Status: **results.** The clustering notes measure the model in "numbers"
-(`k² + 2V`); this note replaces that with an end-to-end **byte** count of a
-practical in-memory representation, so the word list can be charged for and the
-size compared against the project's budget. The word model's *stored* size is
-what decides whether a configuration is usable at all, so it belongs next to the
-held-out bits, not behind them.
+Status: **results (revised).**  The clustering notes measure the model in
+"numbers" (`k² + 2V`); this note replaces that with an end-to-end **byte** count
+of a practical in-memory representation, so the word list can be charged for and
+the size compared against the project's budget.  It also costs the word list
+itself three ways, which is where the remaining slack is.
 
 ## What the decoder stores
 
 | object | representation | cost |
 |---|---|---|
-| word list | one fixed-width record per word: left child ‖ right child ‖ unigram byte, padded to whole bytes | `(V − 64)` records |
-| unigram | folded into the word record | — |
-| membership | the two maps word → left/right cluster, whole-byte labels | `2V · ⌈log₂k / 8⌉` B |
+| word list — structure | one merge rule per word: two child indices (or a run base + lengths) | see below |
+| word list — unigram | the `V` word probabilities, stored in creation order | `V` bytes (raw), ~0.7 `V` (entropy-coded) |
+| membership | the two maps word → left/right cluster | `2V · ⌈log₂k / 8⌉` B |
 | block | the `k × k` cluster-pair table, one byte per cell | `k²` B |
 
-The 63 characters (letters, `_`, digits) are implicit in the identifier syntax
-and cost nothing; the program code is allowed 2 kB. Because the record carries
-the unigram byte, the record width is `⌈(2⌈log₂V⌉ + 8) / 8⌉` bytes:
+The 63 characters are implicit in the identifier syntax and cost nothing, and
+anything derivable at load time — notably the *cluster* → list-of-words index
+(`V log₂V` bits at runtime) — is not charged.  The program code is allowed 2 kB.
+Probabilities are quantised to one byte per number on the logarithmic grid
+`P ∝ exp(byte/resolution) − 1`, `resolution = 12`; this is **free** to within
+0.01 bits (`model_fit_rates.py`).
 
-| `V` | index width | record | word list |
-|---:|---:|---:|---:|
-| ≤ 256 | 8 | 3 B | — |
-| 2,104 | 12 | **4 B** | 8.0 kB |
-| 4,478 | 13 | 5 B | 21.6 kB |
-| 11,758 | 14 | 5 B | 58.5 kB |
+## The word list
 
-There is a cliff at `V = 4096`: 12-bit indices keep the record at exactly 32
-bits, one bit more costs 25 % of the whole list. Fixed-width indices are what a
-real tokeniser/encoder wants (a variable-width, information-theoretic encoding
-is ~25 % smaller but needs an impractical decode structure).
+### Child indices
 
-The `assoc` transition probability is
+Every child index is `< s`, the number of symbols defined when its rule was
+created (children always precede their parent), so `s ≤ V` and the naive
+`⌈log₂V⌉` is not the right cost.  Coding the index stream three ways
+(`scripts/model_budget.py --index-code`):
 
-```
-P(b | a) = c[b] · D[lcl(a), rcl(b)] / Σ_j D[lcl(a), j] · C[j],
-```
+| `V` | fixed `⌈log₂V⌉` | variable `⌈log₂s⌉` | Zipf `p(j) ∝ (j+1)^−0.7` | empirical optimum |
+|---:|---:|---:|---:|---:|
+| 2,104 | 5.4 kB | 4.8 kB | **4.5 kB** | 4.2 kB |
+| 4,478 | 13.0 kB | 11.5 kB | **10.6 kB** | 9.9 kB |
+| 11,758 | 38.4 kB | 34.5 kB | **30.9 kB** | 29.3 kB |
 
-so the stored numbers that matter are the unigram `c` and the block table `D`
-(the row marginal cancels — see `CLUSTER_WORDS.md`). Probabilities are
-quantised to **one byte per number** on the logarithmic grid
-`P ∝ exp(byte/resolution) − 1` with `resolution = 12`, the scale inferred per
-array from its smallest positive entry.
+So the answer to "can we get away with fewer than `log V` bits" is **yes, about
+20 % fewer**, but almost all of it comes from coding the *skew within* `[0, s)`,
+not from `s < V`: variable-width buys only ~10 %, and a two-parameter Zipf prior
+over the index range buys another ~10 % at no side-information cost.  The
+empirical optimum (`H = 10.3` bits/child) is a further 5 % away and would need
+the distribution stored, so it is not worth it.  Two tempting ideas do **not**
+work: the *unigram* distribution is a poor code for child indices (43.4 kB at
+`V = 11 758`, worse than plain uniform — the two distributions are unrelated),
+and the children come in index order only 54–58 % of the time, so there is no
+triangular saving.
+
+### Unigram probabilities
+
+**The word list is in *creation* order, not unigram order.**  Adjacent pairs
+invert on ~50 % of steps (`V = 11 758`: 5,785 inversions in 11,694) and the mean
+rank displacement is 19 % of `V`, so the unigrams are *not* a monotone sequence
+and cannot be delta-coded for free.  The order is semantic — the tokeniser
+merges the lowest-ranked adjacent pair first — so it cannot be renumbered
+without changing the tokenisation, and storing the permutation would cost
+`V log₂V` bits, four times the unigram itself.
+
+Costed honestly it is `V` bytes (11.5 kB at `V = 11 758`); entropy-coding the
+byte grid (5.4–5.8 bits/value) brings it to **8.3 kB**.  Not negligible, but the
+second-smallest of the four objects.
 
 ## Model size
 
-With fixed-width records and the 2 kB code allowance, the total is:
+Zipf index code, raw-byte unigram, +2 kB code:
 
 | `V` | k=26 | 52 | 105 | 210 |
 |---:|---:|---:|---:|---:|
-| 2,104 | 14.7 | **16.7** | 24.8 | 57.1 |
-| 4,478 | 32.9 | 34.9 | **43.0** | 75.3 |
-| 11,758 | 82.7 | 84.7 | 92.8 | 125.1 |
+| 2,104 | 12.3 | **14.3** | 22.9 | 55.7 |
+| 4,478 | 22.6 | 26.1 | **35.3** | 68.7 |
+| 11,758 | 61.0 | **64.2** | 75.2 | 110.3 |
 
 (kB; `scripts/model_budget.py`.)
 
 ## Byte frontier with the 64-bit fit
 
-Held-out validation (`n = 5 739`), `kappa = 300`; bits and fit rates from
-`scripts/model_fit_rates.py`. Rows sorted by size; ★ = not beaten by any smaller
-model.
+Held-out validation at stride 40 (`n = 5 739`), `kappa = 300`; bits and fit rates
+from `scripts/model_fit_rates.py`.  ★ = not beaten by any smaller model.
 
 | size | `V` | `k` | mean bits | fit ≤64 | fit ≤128 | |
 |---:|---:|---:|---:|---:|---:|---|
-| 16.7 kB | 2,104 | 52 | 56.72 | 70.4 % | 97.0 % | ★ |
-| 24.8 kB | 2,104 | 105 | 55.48 | 71.8 % | 97.3 % | ★ |
-| 34.9 kB | 4,478 | 52 | 51.75 | 76.3 % | 98.1 % | ★ |
-| 43.0 kB | 4,478 | 105 | 51.10 | 77.0 % | 98.2 % | ★ |
-| 75.3 kB | 4,478 | 210 | 50.44 | 78.0 % | 98.2 % | ★ |
-| 84.7 kB | 11,758 | 52 | 47.21 | 82.5 % | 98.9 % | ★ |
-| 92.8 kB | 11,758 | 105 | 46.90 | 82.9 % | 98.9 % | ★ |
+| 14.3 kB | 2,104 | 52 | 56.72 | 70.4 % | 97.0 % | ★ |
+| 22.9 kB | 2,104 | 105 | 55.48 | 71.8 % | 97.3 % | ★ |
+| 26.1 kB | 4,478 | 52 | 51.75 | 76.3 % | 98.1 % | ★ |
+| 35.3 kB | 4,478 | 105 | 51.10 | 77.0 % | 98.2 % | ★ |
+| 64.2 kB | 11,758 | 52 | 47.21 | 82.5 % | 98.9 % | ★ |
+| 75.2 kB | 11,758 | 105 | 46.90 | 82.9 % | 98.9 % | ★ |
 
-The full tables are far larger and the fit rates there are the ceilings:
+The full tables are far larger and their fit rates are the ceilings:
 `V = 2 104` 4.2 MB / 85.1 %, `V = 4 478` 19.1 MB / 89.4 %,
-`V = 11 758` 131.8 MB / 93.5 % (≤64 bits).  These rates use a stride-40
-held-out sample (`n = 5 739`); [`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) repeats
-them at stride 10 (`n = 22 954`) and the two largest models move up by under a
-point (77.8 % and 83.2 %).
+`V = 11 758` 131.8 MB / 93.5 % (≤64 bits).  Those rates use stride 40;
+[`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) repeats them at stride 10 and the two
+largest move up by under a point (77.8 % and 83.2 %).
 
 ## What it shows
 
-* **The word list is small next to the cluster table at large `k`.** At
-  `V = 11 758` the list is 58.5 kB, but a `k = 840` block table alone is 706 kB;
-  a `k = 420` table is 176 kB, larger than the whole `V = 4 478` model. The byte
-  view *reinforces* the word-list conclusion of `CLUSTER_WORDS.md`: buy words,
-  keep `k` small. `V = 2 104 / k = 840` (703 kB, 48.7 bits) is dominated by
-  `V = 11 758 / k = 52` (85 kB, 47.2 bits) — ten times smaller *and* better.
-* **But the word list sets a floor.** A larger vocabulary costs `2V` labels plus
-  the records, so `V = 11 758` cannot be had for less than ~83 kB; the
-  "93 % ≤ 64 bits" configuration needs ~85–93 kB, not 50 kB.
-* **One byte per number is free.** Quantising `c` and `D` to the logarithmic
-  byte grid changes the mean by ≤ 0.01 bits and the 64-bit fit by ≤ 0.1 point —
-  so the byte counts above stand, and the `k²` block table really is `k²` bytes.
+* **Cheaper coding moves the whole frontier, and it is the word list that
+  moves.** The structure + unigram of the list fell from 57.1 kB to 39.2 kB at
+  `V = 11 758` — the model at `k = 52` went from 84.7 kB to 64.2 kB. The
+  `k = 840` block table alone is still 706 kB, so "buy words, keep `k` small"
+  holds more strongly than ever: `V = 2 104 / k = 840` (703 kB, 48.7 bits) is
+  dominated by `V = 11 758 / k = 52` (64 kB, 47.2 bits).
+* **The frontier is now 14 kB / 70 %, 35 kB / 77 %, 64 kB / 83 %** for 64-bit
+  coverage — the 83 % figure needs 64 kB, comfortably inside the "50 kB-ish is
+  acceptable if it rescues the 64-bit set" band.
 * **Size is not what costs the 64-bit set — clustering is.** The full table at
-  `V = 2 104` fits 85.1 %, the clustered models that fit in 17–25 kB fit
-  70–72 %; `V = 4 478` drops 89.4 % → 77 %, `V = 11 758` 93.5 % → 82.9 %. The
-  128-bit fit barely moves (99.4 % → 98.1 %): the loss lands on the identifiers
-  near the 64-bit boundary. So the honest summary is *"82.9 % of distinct
-  identifiers in 64 bits for 93 kB"* (`V = 11 758, k = 105`), and *"70.4 % for
-  17 kB"* (`V = 2 104, k = 52`) — not the full-table ceilings.
+  `V = 2 104` fits 85.1 %, the clustered models that fit in 14–23 kB fit
+  70–72 %; `V = 4 478` 89.4 % → 77 %; `V = 11 758` 93.5 % → 83 %.
+* **Membership is now the second-largest item and the next thing worth
+  attacking**: `2V · ⌈log₂k / 8⌉` is 17.6 kB at `V = 11 758, k = 52`, more than
+  the unigram and half the index stream.
 
 ## Rejected / not done
 
-* Variable-width (information-theoretic) indices: ~25 % smaller list, but needs
-  a decode structure we would not build.
-* Entropy-coding the word list: the merge-rule stream is highly structured, so
-  this is the obvious next lever on the list; unmeasured.
-* A cluster → members index would speed up decoding but is not charged here (it
-  is derivable at load time); if it must be stored it adds ~2–4 `V` bytes.
+* Reordering the word list by unigram — not possible without changing the
+  tokenisation; the list is in creation order (measured above).
+* A unigram-derived code for the child indices — worse than uniform.
+* Storing the empirical child-index distribution — 5 % of the index stream,
+  paid for by storing the distribution.
+* Entropy-coding the *index stream* beyond the two-parameter Zipf prior.
+* A cluster → members index: derivable at load time, not charged.
