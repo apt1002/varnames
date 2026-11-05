@@ -64,12 +64,41 @@ per identifier, since the stop is roughly one token in seven).  The yardstick
 that matters is the 64/128-bit **fit rate**, and the factorisation comparison
 (flat vs two trees) is unaffected, because both sides of it omit the stop.
 
+### Give the stop a zero weight in the tree
+
+Since the stop's bits are never spent, its *probability* should not be allowed
+to shape the other codes either.  Build the tree with the stop's weight set to
+zero (or just below the smallest real weight), keeping it as a leaf so the
+all-zeros path still exists.  Huffman then gives every other symbol the lengths
+optimal for the **renormalised** distribution:
+
+    len(b) ≈ log₂(1/p̂_b) = log₂(1/p_b) − log₂(1/(1 − p))
+
+with `p` the stop's conditional probability in that context.  At `p ≈ 0.15`
+(one token in seven is the stop) that is **0.23 bits per token, ~1.4 bits per
+identifier** — an order of magnitude more than the whole Huffman penalty
+`CODING_OVERHEAD.md` measured.  Without the zero weight, the tree is optimal for
+a quantity we never charge.
+
+The cost is one bit on the least probable symbol (the zero-weight leaf has to
+pair with something at the bottom of the tree), so the trade is overwhelmingly
+favourable.  Two things to check in measurement: Huffman's tie-breaking must not
+strand the zero-weight leaf at a shallow depth (force `depth ≥ 1`), and the
+all-zeros codeword is then the *deepest* leaf, so the decoder may need up to
+`max depth` zeros of padding to see the terminator — free, but it must be
+specified.
+
+A zero-weight leaf is exactly the classic "escape" symbol, and this is the
+cleanest way to describe the design: **the stop is an escape to end-of-budget,
+coded for free, and the other symbols are coded as if the identifier continued.**
+
 One small inefficiency remains: the trees are built on the full distribution
 (including the stop), but the stop's mass is never converted into bits.  The
 alternative — build over the renormalised non-stop distribution and graft the
 stop onto an edge — costs at least as much (grafting one extra edge onto the
 path of every leaf below it).  Including the stop and not spending it is
-therefore the practical optimum.
+therefore the practical optimum — provided its weight is driven to zero as
+above.
 
 ### The arithmetic case: why it does not transfer
 
@@ -205,19 +234,22 @@ CQF = k (2 (q k - 1) + q k log q k) + (2 (V - q k) + V log V)
 W   = k (2 (V - 1)   +  V log V)
 ```
 
-Three corrections, none of which change the conclusion:
+Two notes on the accounting:
 
 * **The bottom stage does not grow.** `2(V − qk)` instead of `2(V − k)` *saves*
-  `2(q−1)k` bits — a few hundred bytes.  All of CQF's cost is in the top stage.
-* **`V log V` over-charges both.**  The leaf-labelling term is
-  `Σ_j V_j log V_j`, which is about `V log(V/k)` for CF and `V log(V/qk)` for
-  CQF, not `V log V`.  At `V = 4,096, k = 64` that is 3 kB of over-charge (and
-  it over-charges CQF by 6 kB, so the *difference* between the schemes is
-  slightly overstated).
-* **The top stage is quadratic in `k` and linear in `q`**: `k·qk·log(qk)`.  So
-  `q = 2` costs a quarter of `q = 4`, and doubling `k` quadruples it.
+  `2(q−1)k` bits — a few hundred bytes.  All of CQF's cost is in the top stage,
+  which is `k·qk·log(qk)`: quadratic in `k`, linear in `q`.  So `q = 2` costs a
+  quarter of `q = 4`, and doubling `k` quadruples it.
+* **`V log V` is right, and it is what makes the scheme work.**  An earlier draft
+  of this note tried to charge `Σ_j V_j log V_j ≈ V log(V/qk)` instead and to add
+  a separate word→cluster map.  That double-charges: with every leaf annotated by
+  its word index, the *map is implied* — which tree a word's leaf sits in is its
+  right cluster, and its position in that tree is its rank.  The decomposition is
+  exact when the groups are equal-sized: `Σ_j V_j log V_j + V log q ≈ V log V`.
+  The same reading applies to CF (`V log V` implies the word→right-cluster map),
+  which is why the two schemes differ *only* through the top stage.
 
-With the stated formulas (bytes, including the `V log V` over-charge):
+With the stated formulas:
 
 | `V` | `k` | CF | CQF (`q=2`) | CQF (`q=4`) | W |
 |---:|---:|---:|---:|---:|---:|
@@ -286,6 +318,79 @@ and the best code for that same assignment (that is the CF penalty, already
 known), then the gap between that and the best code over all assignments of the
 same number of cells (a local search from the `k`-means optimum).  The second
 gap bounds what codesign can buy.
+
+### A single-phase build: what actually gets modified
+
+The question is whether the separation (cluster, then pair inside the cluster)
+can be collapsed into one phase that chooses pairs partly on Hellinger distance.
+It can, but it has to be at the level of **cells**, not codewords — and the two
+levels need separating, because only one of them pays.
+
+**Inside a tree the merge key is already optimal, and the geometry is absent.**
+A per-cell tree's leaves are words and their weights are `p(b | cell) ∝ p(b)`,
+the word's global frequency renormalised to the cell.  Huffman's "merge the two
+least probable subtrees" is a theorem about that objective, so any other pairing
+— including one that prefers contextually similar words as siblings — costs bits
+and buys nothing: the block model `D` is where similarity is spent, and the tree
+never sees context.  Two Hellinger-close words can have wildly different
+frequencies, which is exactly the case Huffman wants to separate.
+
+**One level up, the two greedy algorithms are the same shape.**  Both are
+repeated "merge the cheapest pair" loops:
+
+* Huffman's key is the merged mass; summed over merges it *is* the expected code
+  length.  This is Huffman with `k = 1`.
+* Hellinger/Ward `k`-means' key is the increase in within-cell distortion,
+  which for centroids is `w_A w_B / (w_A + w_B) · H²(θ_A, θ_B)`.  This is the
+  same loop with the code term switched off and `k` fixed.
+
+So the codesign is a single merge loop that starts at `k = V` (each word its own
+cell) and merges until it stops, with one compound key:
+
+    Δ(A,B) =  λ_fit · [ w_A w_B / (w_A + w_B) ] · H²(θ_A, θ_B)     (block fit worsens)
+            + λ_code · [ code length of A∪B  −  A  −  B ]           (one tree, not two)
+            − [ model bits freed by one fewer cell ]                (≈ V log₂(k/(k−1)) + 3k)
+
+Two consequences worth noting:
+
+* **`k` stops being a sweep parameter.**  It is where merges stop paying.  Plain
+  Hellinger clustering and plain Huffman are the two degenerate settings of λ.
+* **The merge key can be evaluated exactly and cheaply.**  The entropy part of
+  the code term is additive (`Σ p log p` is kept per cell), the Huffman
+  redundancy is bounded by `p_max`, which is also kept per cell, so
+  `Δcode ≈ [H(A∪B) + p_max(A∪B)] − [H(A) + p_max(A)] − [H(B) + p_max(B)]`,
+  scaled by the token counts of the words involved.  The fit term's exact
+  version (`Σ_a w_a D(p(·|a) ‖ pooled)`) is `O(|A|+|B|)` from cached row sums,
+  and the Ward form above is its `O(1)` surrogate — use Ward in the heap, exact
+  KL for the final acceptance test.  The heap-with-lazy-invalidation machinery
+  is the one `tree_words.py` already uses for the most-frequent-pair merge.
+
+The point of the compound key is *not* to let similarity override probability
+inside a tree; it is to decide **which words share a tree**, which is the only
+place the two objectives genuinely conflict.
+
+**The one modification of the tree build that can pay: balanced quarters.**
+For CQF the early-stop leaves `q` subtrees per cell, and those subtrees become
+the top tree's leaves.  A standard build leaves the `q` *largest* subtrees,
+which can be very unequal (`0.5 / 0.2 / 0.2 / 0.1` of a cell), so one quarter
+carries most of the cell's mass and the split bought nothing.  Constraining the
+final merges so the `q` survivors are near-equal in mass costs a little on the
+bottom tree and cuts the top tree's worst leaf by up to `q`.  That is a
+*balance* constraint, not a distance penalty — and it is the version of
+"modify the Huffman build" that has a mechanism behind it.
+
+**Walking (`scripts/codesign.py`, ~150 lines, reuses `cluster_words.py`):**
+
+1. For an existing `k`-means assignment at `(V, k)`, build the real Huffman
+   trees and record `Σ N(b)·len(b)` — the current code's cost.
+2. Run the merge loop with `λ_fit = 0` (code + model only) down to the same `k`.
+   If it does not beat the `k`-means cells on bits at matched `k`, codesigning
+   has nothing to win and only the model side matters — a one-afternoon answer.
+3. If it does, sweep `λ_fit` and let `k` fall out; compare the frontier with the
+   `k`-means frontier at matched model bytes (the shape used in `SHARED_CLUSTERS.md`).
+4. Independently, build each cell's tree with and without the balance constraint,
+   with `q = 2` and `4`, and measure the top-tree cost.  This one is cheap and
+   separable; do it first.
 
 ## 7. Open questions
 

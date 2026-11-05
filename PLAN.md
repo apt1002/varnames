@@ -169,6 +169,13 @@ labels (see `README.md`).
       back part of the two-tree factorisation penalty at `O(k² log k)` extra
       model bytes; price it against spending the same bytes on more words or
       more clusters.  `docs/ENCODING.md` §5.
+- [ ] **C29. Codesign the assignment and the code.** *Planned* — collapse
+      clustering and Huffman building into one greedy merge loop over cells,
+      keyed on `λ_fit·(fit loss)` + `λ_code·(code-length increase)` − (model
+      bytes freed), so that `k` falls out of the trade instead of being swept.
+      Walk it: first measure the existing assignment's code against the code-only
+      optimum at the same `k`; separately measure a balance constraint on the
+      quarters (CQF's early stop leaves unequal-massed subtrees).  `docs/ENCODING.md` §6.
 
 ## D. Corpus preprocessing
 
@@ -274,4 +281,6 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `V ∈ {512, 4096, 8192}` (`NUM_PAIRS` 448, 4032, 8128; 512 is for testing
       only) and `k ∈ {32, 64}`.  The old sweep (`V` 96/2040/4414/11694, `k`
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
-      H6 re-measures at it.
+      H6 re-measures at it.  Testing at `V = 512` uses `k ∈ {8, 16}` (8–16 words
+      per cluster at `k = 64`, which would flatter the block model's competition);
+      anything measured there is labelled testing-only.
