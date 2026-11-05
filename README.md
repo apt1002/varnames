@@ -78,6 +78,8 @@ varnames/
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
+│   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
+│   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -113,6 +115,9 @@ varnames/
 │   ├── factor_cloud.py                  # 3D cloud viz of the rank-4 sqrt factorisation
 │   ├── shape_gain_test.py               # test the cloud "gain x shape" factorisation vs nulls
 │   ├── wordlist_budget.py               # word-list size vs k^2 cluster-table budget
+│   ├── model_budget.py                  # model size in bytes (word list + tables)
+│   ├── model_fit_rates.py               # held-out fit rates of the clustered model
+│   ├── budget64_study.py                # 64/128-bit sets: coverage, boundary, generation
 │   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── run_lengths.py                   # run-length statistics of the corpus
@@ -351,7 +356,13 @@ the Hellinger factorisation of equal storage
 ([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)). The budget knob that matters
 most, though, is the word list itself: at matched model size the largest word
 list that fits beats a finer `k × k` table by ~3–5 bits
-([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)).
+([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)), and that holds once the word
+list is charged for in bytes and the whole model is sized as a real
+in-memory structure — 17 kB at `V = 2,104`, 43 kB at `V = 4,478`, 93 kB at
+`V = 11,758` ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Whether those
+are *useful* 64-bit sets is the question of
+[`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md): ~71 % of distinct
+identifiers at 17 kB, ~83 % at 93 kB.
 
 A third design question — whether to let a word span the identifier's end, so a
 token `v\n` captures the trigram `(u,v,\n)` — is answered negatively: the

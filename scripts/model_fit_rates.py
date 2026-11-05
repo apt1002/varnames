@@ -59,15 +59,14 @@ def tokenise(lines, chars, rules, nchars):
 
 
 def bits_full(seqs, Mref):
-    """Full-table bits: P(b|a) = Mref[a,b] / rowsum[a]."""
-    rs = Mref.sum(1)
-    logm = np.log2(np.maximum(Mref, 1e-300))
-    logr = np.log2(np.maximum(rs, 1e-300))
+    """Full-table bits: P(b|a) = Mref[a,b] / rowsum[a].  Evaluated per
+    transition so no V x V log matrix is materialised."""
+    logr = np.log2(np.maximum(Mref.sum(1), 1e-300))
     out = np.empty(len(seqs))
     for j, seq in enumerate(seqs):
-        a = np.asarray(seq)
+        a = np.asarray(seq, dtype=np.int64)
         b = np.roll(a, -1)
-        out[j] = float(np.sum(logr[a] - logm[a, b]))
+        out[j] = float(np.sum(logr[a] - np.log2(np.maximum(Mref[a, b], 1e-300))))
     return out
 
 
@@ -75,7 +74,7 @@ def bits_assoc(seqs, logc, logD, logden, lcl, rcl):
     """Clustered bits from the stored numbers, no V x V matrix."""
     out = np.empty(len(seqs))
     for j, seq in enumerate(seqs):
-        a = np.asarray(seq)
+        a = np.asarray(seq, dtype=np.int64)
         b = np.roll(a, -1)
         A = lcl[a]
         out[j] = float(np.sum(logden[A] - logc[b] - logD[A, rcl[b]]))
@@ -124,8 +123,10 @@ def main():
     r0 = M.sum(1)
     c0 = M.sum(0)
     T0 = float(M.sum())
-    M += alpha * np.outer(r0 / T0, c0 / T0)
-    del r0, c0
+    cb = alpha * c0 / T0
+    for i0 in range(0, V, 512):                  # row-blocked, no V x V temp
+        M[i0:i0 + 512] += np.outer(r0[i0:i0 + 512] / T0, cb)
+    del r0, c0, cb
 
     seqs = tokenise(lines, chars, rules, nchars)
     del lines

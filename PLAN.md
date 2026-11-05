@@ -127,6 +127,12 @@ labels (see `README.md`).
       the word list, not the table, is the dominant budget lever.
       `docs/WORD_COMPRESSIBILITY.md`, `docs/CLUSTER_WORDS.md`,
       `scripts/wordlist_budget.py`.
+- [x] **C24. Model size in bytes, word list included.** *Closed, positive* — the
+      word list is small next to the cluster table once `k` grows, so the
+      "buy words, keep `k` small" conclusion holds in bytes; one-byte
+      quantisation of the probabilities is free; it is the clustering, not the
+      size, that costs the 64-bit fit.  `docs/MODEL_BUDGET.md`,
+      `scripts/model_budget.py`, `scripts/model_fit_rates.py`.
 
 ## D. Corpus preprocessing
 
@@ -149,10 +155,11 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
 - [ ] **E3. Write up rejected alternatives** — reframe the gathered data as
       justifications for the design decisions.
 - [ ] **E4. Ablation study** (design TBD).
-- [ ] **E5. Study the 64-bit and 128-bit identifier sets** — what fraction of
+- [~] **E5. Study the 64-bit and 128-bit identifier sets** — what fraction of
       real identifiers fit; longest compressed length that fits vs shortest
       uncompressed length that does not; use the model generatively to ask what
-      random identifiers look like.
+      random identifiers look like.  `docs/BUDGET64_STUDY.md`,
+      `scripts/budget64_study.py`.
 - [ ] **E6. Propose a standard** — a language-neutral bijection between
       identifiers and integers; define the 64-bit and 128-bit sets; decide how
       to publish the lookup tables. (Hash fallback is out of scope.)
