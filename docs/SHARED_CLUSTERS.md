@@ -49,7 +49,8 @@ buys is real.
    vector to unit length, and `w → 0` degenerates to clustering on successors
    only.
 4. Spherical `k`-means on `{x_a}` with occurrence weights
-   (`cluster_substrings_lib.kmeans_sphere`), `k ∈ {32, 64}` — one label per word,
+   (`cluster_substrings_lib.kmeans_sphere`), `k ∈ {32, 64}` (`k = 16` at the
+   `V = 512` testing point) — one label per word,
    used as both `lcl` and `rcl`.
 5. Score exactly as `model_fit_rates.py` does: `assoc_numbers` for `c, D, Cc`,
    then held-out bits and the 64/128-bit fit rates.

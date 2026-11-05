@@ -22,6 +22,12 @@ Working into a *fixed budget* changes what "bijection" means:
   same identifier are wasted words, not alternative encodings.  So the object
   the standard defines is a bijection between identifiers and a *subset* of the
   integers, not the whole range.
+* **Canonical means "high bits zero".**  The decoder ignores every bit above the
+  last symbol it read — they carry no information, and a decoder that rejected
+  non-zero ones would be rejecting valid words.  But the *encoder* is required
+  to write zeros there, and that requirement is what makes the map from
+  identifiers to integers injective.  It belongs in the standard as a rule about
+  the encoder, not as a property the decoder checks.
 * **"No more bits" is a legal signal.**  The 64-bit budget is information in
   its own right, and §2 is exactly a use of it.
 
@@ -175,7 +181,8 @@ What the standard must pin, in order of how easily it goes wrong:
 
 * the canonical assignment (lengths → codewords) and the symbol numbering;
 * the orientation rule that puts the stop on the all-zeros leaf;
-* the bit order in the word, and that the unused high bits are zero;
+* the bit order in the word, and the encoder's duty to leave every unused high
+  bit zero (the decoder must ignore them, not test them);
 * the byte order for the 64/128-bit word (little-endian) and the stop's role as
   "the code continues past the budget as zeros";
 * for the clustered model: the word list, both cluster assignments and `D`, with
@@ -203,9 +210,21 @@ code of the joint distribution, while a product of two prefix codes is not
 optimal for it.  The split was 0.036 bits/token (cluster step) + 0.173
 bits/token (word step): the word step, a long-tailed alphabet, dominates.
 
-Two conclusions carry into the design below: use **one** tree per left cluster
-over the joint, and the remaining inefficiency is the word step — which is what
-the quarter idea attacks.
+Two conclusions carry into the design below: the remaining inefficiency is the
+word step, which is what the quarter idea attacks — and, on *bits*, one tree per
+left cluster over the joint is what to compare against.
+
+**But the flat code cannot be published.**  Its table is `k` trees of `V` leaves:
+224 kB at `(4,096, 32)`, 448 kB at `(4,096, 64)`, 960 kB at `(8,192, 64)`,
+against 7.9–19 kB for the factorised project.  Publishing probabilities instead
+of lengths does not rescue it (that is `k·V` bytes, 131 kB at `(4,096, 32)`).
+So the choice splits on §3: if the standard ships the code, the flat code is out
+and the design is **CF or CQF**; if the library derives codes at load time, the
+flat code is free and CQF is buying back a loss that need not exist.  Since
+publishing is the interoperable option, the honest reading is: **flat is the
+yardstick, CF or CQF is the product.**  At `V = 512, k = 16` the flat table is
+11 kB, so the shipped scheme can still be measured against the real thing at the
+testing point.
 
 ## 5. Cluster quarters (a cheaper way to buy back the factorisation loss)
 
@@ -242,8 +261,12 @@ Two notes on the accounting:
 
 * **The bottom stage does not grow.** `2(V − qk)` instead of `2(V − k)` *saves*
   `2(q−1)k` bits — a few hundred bytes.  All of CQF's cost is in the top stage,
-  which is `k·qk·log(qk)`: quadratic in `k`, linear in `q`.  So `q = 2` costs a
-  quarter of `q = 4`, and doubling `k` quadruples it.
+  which is `k·qk·log(qk)` — quadratic in `k`, and in `q` linear only up to the
+  logarithm.  The increments over CF are 1.1 kB (`q = 2`) and 3.6 kB (`q = 4`)
+  at `k = 32`, and 5.0 / 15.9 kB at `k = 64`: **`q = 4` costs about three times
+  what `q = 2` costs**, and doubling `k` roughly quadruples both.  (An earlier
+  draft said "a quarter"; that was wrong — `q = 2`'s top stage is 44 % of
+  `q = 4`'s.)
 * **`V log V` is right, and it is what makes the scheme work.**  An earlier draft
   of this note tried to charge `Σ_j V_j log V_j ≈ V log(V/qk)` instead and to add
   a separate word→cluster map.  That double-charges: with every leaf annotated by
@@ -272,11 +295,31 @@ which is the frontier measured in `WORDLIST_BUDGET.md` / `MODEL_BUDGET.md`.
 
 1. Tokenise a held-out set with the canonical dictionaries (`V ∈ {512, 4096,
    8192}`), as `words_per_identifier.py` already does.
-2. Cluster as now (`cluster_words.py`, Hellinger `k`-means, `k ∈ {32, 64}`),
-   then **split each right cluster into `q` quarters** by running the same
-   `k`-means inside the cluster (this is the "stop the tree early" step done
-   geometrically, which is simpler than stopping Huffman and agrees with it up
-   to the clustering metric).
+2. Cluster as now (`cluster_words.py`, Hellinger `k`-means, `k ∈ {32, 64}`, and
+   `k = 16` at `V = 512`), then form the quarters **by mass**:
+   * **early stop** (the reference): build each right cluster's tree and halt
+     when `q` subtrees remain.  Every subtree of a Huffman build is itself the
+     Huffman code of its own leaves, so the quarters arrive with optimal bottom
+     codes and no extra work; the grouping is chosen by mass.
+   * **equal-mass quantiles** (the balanced variant): cut each cluster's words
+     into `q` groups of equal probability mass, then build a tree in each.  This
+     makes every top-stage leaf `P(cell)/q`, which is what minimises the top
+     tree's largest leaf.
+   * **`k`-means inside the cluster** (the control that should lose): a
+     context-similarity split, which controls neither mass nor code length, so a
+     quarter can be dominated by one frequent word and the split buys nothing.
+     It is also *not* the same construction as the early stop — an earlier draft
+     of this note claimed it "agreed up to the clustering metric"; it does not,
+     and the criterion is the whole experiment.
+
+   The mechanism, stated once: **any** two-stage code pays one rounding per
+   token, and it is paid in the top stage.  What the split buys is that the top
+   stage's largest leaf is a *quarter* of a cell rather than a cell, so the
+   rounding shrinks.  The bottom tree is optimal for its quarter under all three
+   constructions above, so there is no "loss per quarter" — the only thing that
+   differs is which partition the rounding is measured against.  (A *nested*
+   factorisation — cluster, then quarter, then word — would pay three roundings;
+   that is a different scheme and not what CQF is.)
 3. Measure four lengths per identifier: arithmetic reference; flat Huffman
    (one tree per left cluster over `V` words — affordable for `V = 512`, and for
    `4,096` only as an upper-bound curiosity); CF (two trees); CQF for

@@ -281,6 +281,5 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `V ∈ {512, 4096, 8192}` (`NUM_PAIRS` 448, 4032, 8128; 512 is for testing
       only) and `k ∈ {32, 64}`.  The old sweep (`V` 96/2040/4414/11694, `k`
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
-      H6 re-measures at it.  Testing at `V = 512` uses `k ∈ {8, 16}` (8–16 words
-      per cluster at `k = 64`, which would flatter the block model's competition);
-      anything measured there is labelled testing-only.
+      H6 re-measures at it.  Testing at `V = 512` uses `k = 16` only; anything
+      measured there is labelled testing-only.
