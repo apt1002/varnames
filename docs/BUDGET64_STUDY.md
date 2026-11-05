@@ -60,28 +60,28 @@ Fit rate by character length (`V = 4,478`, `k = 105`):
 | 16 | 1,173 | 87.0 % | | 40 | 53 | 5.7 % |
 | 18 | 888 | 80.6 % | | 44+ | ~600 | ≲2 % |
 
-The two ends of the overlap, in full (`V = 2,104`, `k = 105`):
+The two ends of the overlap, in full — the longest compressed sizes that fit,
+and the shortest uncompressed sizes that do not:
 
-* the **longest compressed size that fits** — identifiers landing within a
-  hundredth of a bit of the budget, at wildly different character lengths:
-  `viewFunctionsWithMetadataChange` (31 chars, 63.97 bits),
-  `FsrmEventType_Information` (25, 63.97),
-  `addKeychainToSearchList` (23, 63.98), `cycleSynthesizer` (16, 63.99),
-  `V128Load32Lane` (14, 63.98);
-* the **shortest uncompressed size that does not fit**:
-  `VfsgnjVV` (8 chars, 67.63 bits), `op_UNPKU` (8, 64.49),
-  `RADIX_u32` (9, 65.73).
+| model | longest fitting | shortest failing |
+|---|---|---|
+| `V = 2,104`, `k = 105` | `viewFunctionsWithMetadataChange` 31 ch, 63.97 b; `FsrmEventType_Information` 25, 63.97; `V128Load32Lane` 14, 63.98; `DW_OP_nop` 9, 63.99 | `VfsgnjVV` 8 ch, 67.63 b; `op_UNPKU` 8, 64.49; `RADIX_u32` 9, 65.73 |
+| `V = 4,478`, `k = 105` | `testNameShouldContainArgumentName` 33 ch, 63.99 b; `AuthorizePrivilegesResponse` 27, 64.00; `HalDisplayNoBios` 16, 63.99; `test_N5_Max_P2` 14, 63.99 | `VfsgnjVV` 8 ch, 64.98 b; `RADIX_u32` 9, 68.90; `jifmkJpg5` 9, 70.83; `FT_F26Dot6` 10, 66.74 |
+| `V = 11,758`, `k = 52` | `IncreaseDecreaseInDueFromEmployeeCurrent` **40 ch**, 63.99 b; `SendPasswordInitializationEmailTo` 33, 63.94; `SSL_CTX_remove_session` 22, 64.00; `amazonFireTv` 12, 63.95 | `adxtCdyt0` 9 ch, 68.15 b; `rbuggyQSA` 9, 71.56; `t_NEWLINE` 9, 65.36; `_AeabiF2iz` 10, 72.71 |
 
-A 31-character identifier can fit while an 8-character one fails, and the
-8-character failure misses by up to three and a half bits — it is a genuinely
-unpredictable name, not a rounding error at the boundary.
+A 40-character identifier can fit while a 9-character one fails, and the short
+failure misses by up to nine bits — it is a genuinely unpredictable name, not a
+rounding error at the boundary.  The vocabulary also *heals the short end*:
+`VfsgnjVV` fails at `V = 2,104` and `4,478` but at `V = 11,758` **every**
+8-character identifier fits (the length-8 row is 100 %).  It moves the top of
+the range much faster than the bottom — 42 → 57 characters fitting against 8 → 9
+characters failing — so a bigger vocabulary *widens* the overlap rather than
+sharpening the cut.
 
 **The encoder cannot decide from the length** — it must encode and test.  A
 "short names always fit" rule holds only up to 7 characters; past that an
-unpredictable 8-character name fails while a predictable 50-character one
-succeeds.  A larger vocabulary pushes the *top* of the range out (42 → 57
-characters) much faster than the bottom (8 → 9), so it widens the overlap
-rather than sharpening the cut.
+unpredictable 9-character name fails while a predictable 40-character one
+succeeds.
 
 ## 3. A generative view
 
@@ -96,7 +96,9 @@ it):
 
 (bracketed values are the corpus's own, for comparison.)  Examples at
 `V = 4,478`: `proWhere`, `setup`, `testToStart`, `puclence_with_lookup_21`,
-`writeBlockFragawss`, `SetCompilingStackType`.
+`SetCompilingStackType`.  At `V = 11,758` the samples begin to come apart —
+`ativeacontrolTestclearLegalelase`, a blank string, `Email` — which is the
+94.2 % validity above made visible.
 
 Three things show up consistently:
 
