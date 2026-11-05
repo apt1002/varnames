@@ -29,9 +29,17 @@ import cluster_words as cw
 import model_fit_rates as mfr
 
 
-def huffman_lengths(p, V):
-    """Huffman code length (bits) of every symbol, as a length-`V` array."""
-    p = np.asarray(p, dtype=np.float64)
+def huffman_lengths(p, V, zero=None):
+    """Huffman code length (bits) of every symbol, as a length-`V` array.
+
+    `zero` is an optional symbol index whose weight is driven to zero before the
+    build (the stop token: its bits are never spent, so it must not shape the
+    other codes).  The symbol keeps its leaf in a real build; here it simply
+    drops out, which gives the lengths of the renormalised code.
+    """
+    p = np.asarray(p, dtype=np.float64).copy()
+    if zero is not None:
+        p[zero] = 0.0
     pos = np.where(p > 0)[0]
     n = len(pos)
     out = np.zeros(V, dtype=np.int64)
@@ -68,6 +76,9 @@ def main():
     ap.add_argument('--validation', default='work/camel/merged_validation.txt')
     ap.add_argument('--stride', type=int, default=10)
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--zero-stop', action='store_true',
+                    help='build the trees with the stop weighted zero and charge '
+                         'only the non-stop tokens (the zero-padding terminator)')
     args = ap.parse_args()
 
     M, uni, chars, rules, sym = hf.dense_matrix(args.dir)
@@ -129,21 +140,45 @@ def main():
         Prow = (c[None, :] * D[:, rcl]) / np.maximum(den[:, None], 1e-300)
         Prow = Prow / Prow.sum(1, keepdims=True)
 
+        stop = nchars
         Larr = np.empty((k, V), dtype=np.int64)
         for i in range(k):
-            Larr[i] = huffman_lengths(Prow[i], V)
+            Larr[i] = huffman_lengths(Prow[i], V,
+                                      stop if args.zero_stop else None)
+        if args.zero_stop:
+            # where the all-zeros codeword lands, i.e. the padding the decoder
+            # may have to read; build once more with a vestigial stop weight
+            Lzero = np.empty(k, dtype=np.int64)
+            for i in range(k):
+                q = Prow[i].copy()
+                q[stop] = 1e-12
+                Lzero[i] = huffman_lengths(q, V)[stop]
         A = lcl[a_all]
         b_ideal = logc[b_all] + logD[A, rcl[b_all]] - logden[A]
         b_huff = Larr[A, b_all]
 
-        id_ideal = np.zeros(n_id)
-        id_huff = np.zeros(n_id)
-        off = 0
-        for j, s in enumerate(seqs):
-            m = len(s)
-            id_ideal[j] = -b_ideal[off:off + m].sum()
-            id_huff[j] = b_huff[off:off + m].sum()
-            off += m
+        # `a` is the token, `b` its successor in the rolled cycle, so the stop
+        # appears once as a `b` per identifier.  Under the zero-padding
+        # terminator that transition is never paid, so the codec charges every
+        # token except it (`keep`); the cyclic model charges both stop edges.
+        keep = b_all != stop
+
+        def per_id(x, mask=None):
+            out = np.zeros(n_id)
+            off = 0
+            for j, s in enumerate(seqs):
+                m = len(s)
+                seg = x[off:off + m]
+                if mask is not None:
+                    seg = seg[mask[off:off + m]]
+                out[j] = seg.sum()
+                off += m
+            return out
+
+        id_ideal = per_id(-b_ideal)
+        id_huff = per_id(b_huff)
+        id_ideal_c = per_id(-b_ideal, keep)
+        id_huff_c = per_id(b_huff, keep)
 
         # --- factored: cluster step + word step, two Huffman trees ----------
         Pc = (D * Cc[None, :]) / np.maximum(den[:, None], 1e-300)   # P(j|i)
@@ -179,17 +214,36 @@ def main():
             print(f"    {name}: arithmetic {100 * (id_ideal <= val).mean():.1f}%"
                   f" -> factored Huffman {100 * (id_huff2 <= val).mean():.1f}%")
 
-        red = float((b_huff - (-b_ideal)).sum()) / len(a_all)
+        ntok = len(a_all)
+        red = float((id_huff - id_ideal).sum()) / ntok
         print(f"\nHuffman vs arithmetic (k={k}, one tree per left cluster, "
-              f"{len(a_all)} tokens):")
+              f"{ntok} tokens):")
         print(f"  arithmetic {id_ideal.sum() / n_id:8.3f} bits/id")
         print(f"  Huffman    {id_huff.sum() / n_id:8.3f} bits/id")
         print(f"  penalty    {(id_huff - id_ideal).sum() / n_id:8.3f} bits/id "
               f"({100 * (id_huff - id_ideal).sum() / id_ideal.sum():.2f}%), "
-              f"{red:.3f} bits per token over {len(a_all) / n_id:.2f} tokens/id")
+              f"{red:.3f} bits per token over {ntok / n_id:.2f} tokens/id")
         for name, val in (('fit<=64', 64.0), ('fit<=128', 128.0)):
             print(f"  {name}: arithmetic {100 * (id_ideal <= val).mean():.1f}%"
                   f" -> Huffman {100 * (id_huff <= val).mean():.1f}%")
+        if args.zero_stop:
+            pst = Prow[A, stop]
+            saved = float(np.sum(-np.log2(np.maximum(1.0 - pst, 1e-300)))) / n_id
+            print(f"\ncodec convention (the stop's own transition is free, "
+                  f"{int(keep.sum())} tokens):")
+            print(f"  arithmetic {id_ideal_c.sum() / n_id:8.3f} bits/id")
+            print(f"  Huffman    {id_huff_c.sum() / n_id:8.3f} bits/id")
+            print(f"  penalty    {(id_huff_c - id_ideal_c).sum() / n_id:8.3f} "
+                  f"bits/id, {(id_huff_c - id_ideal_c).sum() / keep.sum():.3f} "
+                  f"bits/token")
+            for name, val in (('fit<=64', 64.0), ('fit<=128', 128.0)):
+                print(f"  {name}: arithmetic "
+                      f"{100 * (id_ideal_c <= val).mean():.1f}% -> Huffman "
+                      f"{100 * (id_huff_c <= val).mean():.1f}%")
+            print(f"\nzero-weight stop: longest word code {int(Larr.max())} "
+                  f"bits; all-zeros codeword at depth {int(Lzero.max())} "
+                  f"(padding bound); renormalisation gives back {saved:.3f} "
+                  f"bits/id")
         pen = id_huff - id_ideal
         print(f"  penalty: min {pen.min():.2f}, p50 {np.percentile(pen, 50):.2f}"
               f", p90 {np.percentile(pen, 90):.2f}, max {pen.max():.2f} bits; "

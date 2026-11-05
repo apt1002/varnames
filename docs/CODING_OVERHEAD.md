@@ -83,6 +83,36 @@ Consequence for the 64-bit set: the factored code *lowers* the fit rate by
 ~1.1 points, whereas the flat code raised it slightly.  If a Huffman coder is
 wanted, use **one tree per left cluster over the joint**, not two trees.
 
+## The zero-weight stop changes the verdict
+
+Every number above charges the stop token like any other symbol.  That is the
+right convention for an *arithmetic* code, which cannot end an identifier for
+free (`ENCODING.md` §2).  It is the wrong one for the Huffman code: the
+all-zeros codeword is never written, so the padded zeros *are* the terminator
+and the stop's bits are never spent.  Building each tree with the stop's weight
+driven to zero gives the other symbols the lengths of the renormalised
+distribution, and that changes what the code costs.
+
+`work/tw2040ns`, `V = 2104`, `k = 52`, `kappa = 300`, stride 10 (22,954 ids,
+154,615 tokens); `words_per_identifier.py --zero-stop`:
+
+| convention | arithmetic | Huffman (stop weight 0) | Huffman − arithmetic |
+|---|---:|---:|---:|
+| cyclic (both stop edges charged) | 56.463 | 53.389 | −3.074 |
+| codec (the stop's transition is free) | 54.426 | **53.389** | **−1.037** |
+
+* The renormalisation is worth **1.736 bits/identifier** (0.258 bits/token), so
+  the ideal cost of the words is `54.426 − 1.736 = 52.690`; the Huffman rounding
+  on top is 0.699 bits/identifier (0.104 bits/token).
+* So the flat code **beats the arithmetic reference outright** once the stop is
+  free — by 1.04 bits/identifier at `k = 52`, with `fit <= 64` rising from
+  73.0 % to 74.8 %.  The terminator is worth more than the rounding costs.
+* The all-zeros codeword lands at depth 26 (longest word code 25 bits), so the
+  decoder may have to read up to 26 zeros of padding to see the terminator —
+  free, but the standard has to say so.
+
+Measured on the pre-rebuild corpus; re-measured with the rest under the rebuild.
+
 ## What it shows
 
 * **Huffman is nearly free here** — ~0.2 bits per identifier, 0.35 % of the total

@@ -91,6 +91,10 @@ specified.
 A zero-weight leaf is exactly the classic "escape" symbol, and this is the
 cleanest way to describe the design: **the stop is an escape to end-of-budget,
 coded for free, and the other symbols are coded as if the identifier continued.**
+Measured at `V = 2104, k = 52` this is worth 1.74 bits/identifier, and it is
+enough to make the flat Huffman code cheaper than the arithmetic reference
+(1.04 bits/identifier) — see `CODING_OVERHEAD.md`.  The all-zeros codeword
+landed at depth 26, which is the padding bound.
 
 One small inefficiency remains: the trees are built on the full distribution
 (including the stop), but the stop's mass is never converted into bits.  The
