@@ -77,6 +77,7 @@ varnames/
 │   ├── PRUNE_WORDS.md                   # overshoot/prune the word list (unsuccessful: hurts the clustered model)
 │   ├── CLUSTER_WORDS.md                 # co-cluster the word matrix to compress it
 │   ├── CLUSTER_LOSS.md                  # where the co-clustering loss lives + block structure
+│   ├── CODING_OVERHEAD.md               # words per identifier + Huffman vs arithmetic
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
@@ -118,6 +119,7 @@ varnames/
 │   ├── factor_cloud.py                  # 3D cloud viz of the rank-4 sqrt factorisation
 │   ├── shape_gain_test.py               # test the cloud "gain x shape" factorisation vs nulls
 │   ├── wordlist_budget.py               # word-list size vs k^2 cluster-table budget
+│   ├── words_per_identifier.py          # token-count histogram + Huffman penalty
 │   ├── model_budget.py                  # model size in bytes (word list + tables)
 │   ├── model_fit_rates.py               # held-out fit rates of the clustered model
 │   ├── budget64_study.py                # 64/128-bit sets: coverage, boundary, generation
