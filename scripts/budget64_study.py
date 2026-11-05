@@ -162,6 +162,23 @@ def main():
                 if shown >= args.examples:
                     break
 
+        # --- what kind of identifiers fail? ---------------------------------
+        feats = {
+            'has _': lambda s: '_' in s,
+            'has digit': lambda s: any(c.isdigit() for c in s),
+            'no aeiou vowel': lambda s: not any(c in s.lower() for c in 'aeiou'),
+            'all-caps after 1st': lambda s: s[1:].upper() == s[1:],
+            'none of the above': lambda s: not ('_' in s
+                or any(c.isdigit() for c in s)
+                or not any(c in s.lower() for c in 'aeiou')),
+        }
+        print(f"  {'feature':>20} {'share in fitters':>17} "
+              f"{'share in failers':>17}")
+        for name, fn in feats.items():
+            v = np.array([bool(fn(s)) for s in lines])
+            print(f"  {name:>20} {100 * v[fit].mean():>16.1f}% "
+                  f"{100 * v[~fit].mean():>16.1f}%")
+
         # --- generative view ----------------------------------------------
         rng = np.random.default_rng(args.seed + 7)
         gen = sample(m, stop, args.sample_n, rng)

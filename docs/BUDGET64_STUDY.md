@@ -83,6 +83,23 @@ sharpening the cut.
 unpredictable 9-character name fails while a predictable 40-character one
 succeeds.
 
+A caution about reading those example lists: they are sorted by *character*
+length, so the "shortest failing" column selects freaks by construction — the
+shortest thing the model cannot price is bound to look like an instruction
+mnemonic.  The failure *mass* is not like that.  Marking each identifier:
+
+| feature | share of fitters | share of failers | share of all |
+|---|---:|---:|---:|
+| contains `_` | 5.6 % | **17.4 %** | 9.0 % |
+| contains a digit | 10.0 % | **19.8 %** | 12.8 % |
+| neither | 86.3 % | **70.1 %** | 81.7 % |
+
+So underscores and digits are over-represented among failures (3.1× and 2.0×) —
+the C-ABI and SIMD-intrinsic names with no word structure — but **70 % of the
+failures carry no such marker at all**.  The bulk of the loss is ordinary
+CamelCase identifiers that happen to be an unseen combination of ordinary words,
+not a distinguishable syntactic class that could be special-cased.
+
 ## 3. A generative view
 
 50,000 identifiers drawn from the model (a cycle from the stop token back to
