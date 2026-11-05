@@ -153,6 +153,23 @@ labels (see `README.md`).
       cluster over the joint, not two.  `docs/CODING_OVERHEAD.md`,
       `scripts/words_per_identifier.py`.
 
+- [ ] **C26. One cluster assignment for both sides.** *Planned* — cluster the
+      concatenated row/column profiles of `√M` so that each word has a single
+      left-and-right label, halving the membership table; measure the held-out
+      cost of the extra constraint against the bytes saved, on the
+      matched-bytes frontier rather than at matched `k`.
+      `docs/SHARED_CLUSTERS.md`.
+- [ ] **C27. Reserved stop clusters.** *Planned* — give `\n` a singleton left
+      cell and a singleton right cell so the start and end distributions are
+      exact up to the block; measure the (expected small) compressibility change
+      and the (expected large) drop in generated identifiers that start or end
+      mid-word.  `docs/NEWLINE_CLUSTER.md`.
+- [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
+      early at `q` trees and encode `P(quarter | left cluster)` instead, buying
+      back part of the two-tree factorisation penalty at `O(k² log k)` extra
+      model bytes; price it against spending the same bytes on more words or
+      more clusters.  `docs/ENCODING.md` §5.
+
 ## D. Corpus preprocessing
 
 - [x] **D1. Case-normalisation ablation.** *Closed, positive* — normalisation
@@ -167,8 +184,12 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
 (E2–E4) precede the standard (E6). Design intent, scope and audiences:
 `docs/PRODUCTISATION.md`.
 
-- [ ] **E1. Design the encoding.** Little-endian; the stop token is a zero-length
-      code placed beyond the target compressed length (64 or 128 bits).
+- [~] **E1. Design the encoding.** *Started* — little-endian; the stop token is
+      the all-zeros Huffman codeword, never written, so the zero padding past the
+      budget *is* the terminator (an arithmetic coder cannot do this and must
+      encode the stop); the standard publishes the code rather than the
+      probabilities.  Still open: which tables ship, and the quarter and cluster
+      choices.  `docs/ENCODING.md`.
 - [ ] **E2. Write up the best algorithm** — corpus, case normalisation, word
       list, tokenisation, adjacency matrix, clustering, encoding.
 - [ ] **E3. Write up rejected alternatives** — reframe the gathered data as
@@ -233,10 +254,10 @@ these can be rebuilt in any order, later, without losing the old numbers.
       (case-normalised variants + `merged_training.txt` /
       `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
 - [ ] **H5. Rebuild the model artefacts** (deferred, blocked on H4): the
-      dictionaries `work/tw{96,512,2040,4414,11694}/` and their `s0` twins
-      (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), `work/tw2040raw/`,
-      `work/tw2040p/`, `_ttw*` scratch dirs, the pair matrix
-      (`work/*/pair_stats.txt`, `pair_factors_L*.npy` via
+      dictionaries on the canonical grid (H7) and their `s0` twins
+      (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), the case-ablation and
+      break-open variants of the canonical `V`, `_ttw*` scratch dirs, the pair
+      matrix (`work/*/pair_stats.txt`, `pair_factors_L*.npy` via
       `scripts/pair_matrix.py`), and `work/occ/`.
 - [ ] **H6. Re-measure the corpus-dependent reports** (deferred, blocked on H5):
       the numbers (not the arguments) in `docs/CORPUS.md`, `CODE_LENGTHS.md`,
@@ -246,4 +267,11 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `CLUSTER_SIZE_STUDY.md`, `CLUSTER_WORDS.md`, `CLUSTER_LOSS.md`,
       `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`, `BREAK_OPEN_PRIOR.md`,
       `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`, `MODEL_BUDGET.md`,
-      `BUDGET64_STUDY.md`, and the headline figures in `README.md`/`PLAN.md`.
+      `BUDGET64_STUDY.md`, the measurements in `SHARED_CLUSTERS.md`,
+      `NEWLINE_CLUSTER.md` and `ENCODING.md`, and the headline figures in
+      `README.md`/`PLAN.md`.
+- [ ] **H7. Rationalise the `(V, k)` grid.** *Planned* — the canonical grid is
+      `V ∈ {512, 4096, 8192}` (`NUM_PAIRS` 448, 4032, 8128; 512 is for testing
+      only) and `k ∈ {32, 64}`.  The old sweep (`V` 96/2040/4414/11694, `k`
+      26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
+      H6 re-measures at it.

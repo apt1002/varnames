@@ -69,9 +69,9 @@ varnames/
 │   ├── MATRIX_COMPRESSION.md            # direct coding of the word matrix (residual + top-N)
 │   ├── STRUCTURAL_ZEROS.md              # structural zeros of the word prior (negligible)
 │   ├── CLUSTER_SIZE_STUDY.md            # choosing k and N for the model size
-│   ├── TREE_WORDS.md                    # dictionary model (run-aware) + merge delta
+│   ├── TREE_WORDS.md                    # dictionary model + merge delta (§9.1 keeps the run theory)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
-│   ├── DICTIONARY_RULES.md              # building the dictionary: run words, Δ vs frequency
+│   ├── DICTIONARY_RULES.md              # building the dictionary: rule choice, Δ vs frequency
 │   ├── BOUNDARY_TRIGRAM.md              # boundary words (v\n) are worth ~1% held-out
 │   ├── BREAK_OPEN_PRIOR.md              # structured back-off prior; loses to P_mar
 │   ├── PRUNE_WORDS.md                   # overshoot/prune the word list (unsuccessful: hurts the clustered model)
@@ -82,6 +82,9 @@ varnames/
 │   ├── WORD_COMPRESSIBILITY.md          # applying the word model: held-out 64/128-bit fit
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
+│   ├── ENCODING.md                      # the encoding: stop token, published tables, cluster quarters
+│   ├── SHARED_CLUSTERS.md               # one cluster assignment for both sides (planned)
+│   ├── NEWLINE_CLUSTER.md               # reserved clusters for the stop token (planned)
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
