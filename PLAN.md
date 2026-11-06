@@ -187,7 +187,10 @@ labels (see `README.md`).
       and 4–6x cheaper than the frontier at `k = 32`; `q = 4` is dominated there
       and inside the noise at `k = 64`.  The `k = 32` margins are `+1.3 ± 0.2`
       fit points and `−0.868 ± 0.023` bits paired, so the claim is not a sampling
-      artefact.  Remaining follow-up: re-measure on a 10x held-out set at H6.
+      artefact.  Against the *free* alternative (arithmetic decoding of the same
+      tables) the margin is `+0.9 pt` at `k = 32` and nil at `k = 64`, so CQF is
+      a Huffman-product optimisation: it wins on the threshold, not on the mean.
+      Remaining follow-up: re-measure on a 10x held-out set at H6.
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` (pricing),
       `scripts/quarter_codes.py` (held-out scoring) — stop each
       right-cluster Huffman tree early at `q` trees and encode
