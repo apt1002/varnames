@@ -494,6 +494,10 @@ Two results are worth keeping, whichever way the design goes:
 
       Δ_CS = (a + b)·(1 − h₂(a/(a+b))),      h₂ = binary entropy in bits
 
+  and in any base `b`, `Δ_CS = (a+b)(log_b 2 − h_b(a/(a+b)))` — "one unit of
+  log 2 minus the binary entropy" — so the identity is base-free; the numbers
+  below are in bits because the code lengths and the fit rates are.
+
   i.e. zero exactly when the masses are equal, maximal when one is zero, and
   *increasing in the partner's mass*.  Consequences: with the Hellinger term
   switched off the rule is exactly Huffman; and at a fixed point, where the
