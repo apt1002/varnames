@@ -98,115 +98,14 @@ slightly but (b) is strong, the trade is still likely worth it — say so
 explicitly rather than hiding it behind a single number, because the generative
 property is what the product sells.
 
-## First measurement (`V = 512`, `k = 16`, `work/tw512ns`)
+## Measurement at the canonical grid
 
-Held-out: 2,114 validation identifiers (stride 200), `kappa = 300`; generation:
-2,000 samples.  `scripts/newline_cluster.py --dir work/tw512ns --k 16
---stride 200`.
-
-| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | len (chars) | "real" |
-|---|---|---|---|---|---|---|---|---|---|
-| `plain(k)` | 67.725 | 57.1% | 93.7% | 3.0% | 2.2% | 0.300 | 1.170 | 16.66 | 1.45% |
-| `plain(k-1)` | 67.766 | 57.3% | 93.7% | 3.0% | 2.1% | 0.292 | 1.161 | 16.32 | 1.75% |
-| `reserved(k)`, `profile=sub` | 67.617 | 57.7% | 93.9% | 2.9% | **0.1%** | 0.488 | 1.195 | 16.05 | 2.45% |
-| `reserved(k)`, `profile=full` | 67.703 | 57.2% | 93.8% | **2.1%** | **0.0%** | 0.311 | **1.096** | 16.82 | 2.40% |
-
-(The corpus values for the same held-out set: 9.14 tokens / 16.26 characters,
-digit first-token mass 0.00%, last-token digit mass 5.58%, chance mid-word
-5.9% starts / 0.6% ends.  The `"real"` column is a memorisation rate, not a
-success rate — see the correction below.)
-
-**Compression is neutral-to-better**, as predicted: the reservation costs no
-model bytes (`k` cells either way) and the boundary transitions are only ~15% of
-the bits.
-
-**The end boundary behaves exactly as designed** — "ends mid-word" falls from
-2.2% to 0.1% (`profile=sub`) or 0.0% (`profile=full`) and the last-token KL
-improves.  Mechanism: the stop's **column** is allocated through `rcl[\n]`,
-which is now a singleton, so `P(\n | a)` is exact at left-cluster resolution.
-
-**The start boundary does not, and the asymmetry is structural.**  `P(b | \n)`
-is allocated through `lcl[\n]`: the *row* of `D` is exact, but the within-row
-allocation inside each right cluster is proportional to the unigram `c[b]`.  A
-token's "start-ness" cannot be expressed, so tokens that are frequent in the
-interior and never start an identifier — the digits above all, corpus first-token
-digit mass 0.00% — are over-produced: 0.45% (`plain`) vs 2.45% (`sub`) vs 1.91%
-(`full`) of first tokens are digits.  Pooling `\n` into a cell hides this,
-because the cell average happens to shrink the row towards words with compatible
-successor statistics; that is an accident, not a guarantee.
-
-`profile=full` (keep the stop's row and column inside each word's clustering
-profile) is the fix that costs nothing: it recovers the start boundary to parity
-as well (2.1% mid-word starts, first-token KL 0.311 vs `plain`'s 0.300) while
-keeping the end-boundary win, and it is the better configuration on every other
-metric too.  **Adopt `profile=full` as the reservation's definition.**
-
-What is left is the within-cluster allocation.  The **cost of the defect in
-bits** is measurable without committing to a fix: the two boundary transitions
-(first token out of the stop, last token into it) cost 15.742 bits/identifier
-under `reserved(k)` and 15.676 under `plain(k)`, against **14.912** if the stop's
-own row and column were stored exactly — so an exact `2V`-number boundary table
-would recover 0.76–0.83 bits/identifier (`exact_boundary_gap` in the script).
-
-At `V = 512` that table is 1,024 B, i.e. ~1.9 bits on the frontier slope read
-off the `k`-doubling control in `SHARED_CLUSTERS.md` — so the exact table is
-**not** worth its bytes there.  The options, in increasing cost:
-
-1. more right clusters — the digits may separate on their own, since "preceded
-   by the stop" is literally the first entry of a word's column profile and
-   `profile=full` puts it in the clustering metric (untested: needs `k = 64`);
-2. a start-ability bitmap — `V/8` bytes of "this word ever starts an
-   identifier", which kills the digit leak but not the bit deficit; the same
-   kind of structural knowledge as `STRUCTURAL_ZEROS.md`;
-3. the exact stop row as a `V`-number table (or row and column, `2V`).
-
-Options 2 and 3 both break "the stop is ordinary" in the table layout, so the
-first question remains whether the defect survives at `k = 64`.
-
-### The defect does not survive larger `k`
-
-Raising `k` at the testing point (`V = 512`, diagnostic `k` — the canonical
-pairing is `k = 32/64` at `V = 4096/8192`), `reserved(k)`, `profile=full`,
-2,114 held-out identifiers, 1,500 samples:
-
-| k | bits | fit<=64 | starts mid | ends mid | first-tok KL | digit mass | boundary table would recover |
-|---|---|---|---|---|---|---|---|
-| 16 | 67.703 | 57.2% | 2.1% | 0.0% | 0.311 | 1.91% | 0.83 bits |
-| 32 | 66.056 | 59.8% | 0.5% | 0.2% | 0.220 | 0.02% | 0.38 bits |
-| 64 | 63.624 | 63.0% | 0.3% | 0.1% | 0.180 | 0.02% | 0.08 bits |
-
-So the start-boundary defect is a **resolution** artefact, not a structural
-flaw in the reservation: once the right clusters are fine enough, the words that
-never start an identifier separate on their own ("preceded by the stop" is the
-first entry of a word's column profile, and `profile=full` puts it in the
-clustering metric).  Options 2 and 3 are therefore unnecessary — and at `k = 64`
-the exact-table reference is even *worse* than the block model (−0.04 bits,
-because the exact raw-count row is unfitted where the block model carries the
-`kappa` prior).
-
-### `reserved` vs `plain` at `k = 64`
-
-| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | digit |
-|---|---|---|---|---|---|---|---|---|
-| `plain(k)` | **63.227** | **63.7%** | 94.9% | 2.5% | 0.4% | 0.204 | 1.102 | 1.7% |
-| `plain(k-1)` | 63.325 | 63.4% | 94.9% | 2.4% | 0.3% | 0.210 | 1.104 | 1.8% |
-| `reserved(k)` | 63.624 | 63.0% | **95.0%** | **0.3%** | **0.1%** | **0.180** | **1.039** | **0.0%** |
-
-The reservation now **costs** 0.40 bits (0.6%) and 0.7 points of fit<=64, where
-at `k = 16` it was free.  Under the decision rule of this note, (a) fails
-marginally and (b) is strong: mid-word starts fall 8x, mid-word ends 4x, the
-digit leak is eliminated, and both boundary KLs improve.  **Recommend adopting
-it with `profile=full`** — the compression price is 0.6% and the generative
-property is what the product sells.  Note also that the pooled stop leaks digits
-at *every* `k` (1.7% at `k = 64`), so this is not a small-`k` curiosity on the
-`plain` side either.
-
-Two things that are *not* C27 effects but are visible here and matter later:
-the sampled length distribution is ~1.8x too long in every configuration
-(16.7 vs 9.1 tokens), and the real-identifier hit rate is 1.5-2.5% — both are
-properties of the sampler/model as it stands (`docs/BUDGET64_STUDY.md`).
-
-## The canonical grid reverses it
+(The first run of this experiment was at the testing vocabulary `V = 512`,
+where the reservation looked free and beneficial — and where the observed
+start-boundary defect turned out to be a resolution artefact rather than a
+structural one.  Those numbers, and the `k` sweep that dissolved them, are in
+[`SMALL_DICT.md`](SMALL_DICT.md#reserving-clusters-for-the-stop-token-worktw512ns-k--16).
+Nothing is decided there; this section is the decision.)
 
 `V = 4096, k = 32/64` and `V = 8192, k = 64`, 10,567 held-out identifiers
 (stride 40), 20,000 samples, `profile=sub` (the pre-`full` command; see the
@@ -238,7 +137,7 @@ Three things are unambiguous:
    `V = 8192` (3.1% -> 5.0%), mid-word ends do not improve (2.7% -> 3.0%), and
    both boundary KLs worsen by 3x.
 
-### Why the testing point misled us
+### Why pooling wins here: closeness to the marginal
 
 At `V = 4096/8192` almost every token can both start and end an identifier
 (7,484 of 8,192 ever start, 7,806 ever end), so `P(first | .)` and `P(last | .)`
@@ -253,58 +152,52 @@ different.
 
 The rule for when pooling wins is therefore: **pool whenever the boundary
 distribution is close to the marginal over words** — i.e. whenever the token
-set is nearly uniformly "startable".  At `V = 512`, `k = 16` that was false
-(482 of 512 startable, and the stop's cell was dominated by words with genuinely
-different dynamics); at the canonical grid it is true.
+set is nearly uniformly "startable".  At the canonical grid it is true, and the
+reservation is inert; at a coarse vocabulary with few startable tokens it can be
+false, which is why the testing point read the other way.  The primitive is
+`startable/V`, not `V` itself, so the rule travels.
+
+(This account explains the `profile=sub` charge in the table above.  With the
+stop kept in each word's profile the charge largely disappears; see "The profile
+control" below, which supersedes this attribution.)
 
 ### The outstanding control
 
-The three canonical runs used `profile=sub`.  `profile=full` was adopted at the
-testing point because it recovers the *start* boundary there (first-token KL
-0.488 -> 0.311, mid-word starts 2.9% -> 2.1%); it keeps the stop's row and column
-inside each word's clustering profile.  Until that control is run the verdict is
+The three canonical runs used `profile=sub`.  `profile=full` keeps the stop's
+row and column inside each word's clustering profile; it was chosen at the
+testing point, where it recovers the start boundary (see
+[`SMALL_DICT.md`](SMALL_DICT.md)), and carried forward as the definition of the
+reservation.  Until that control is run the verdict is
 "rejected, with one configuration of the design untested" — but note that it
 cannot explain a deficit that sits in the *boundary transitions* while the
 clustering only changes which words share a cell.  Expect it to narrow the gap,
 not to reverse it.
 
-## Correction: the length numbers were a units bug
+## Two corrections to the generative reading
 
-An earlier revision of this note reported the model as generating identifiers
-"3x too long".  That was wrong, and the fault was in
-`newline_cluster.py`: the generated length was the length of the *string* in
-characters while the corpus length was the number of *tokens*.  Matched units
-(`V = 512`, `k = 16`, 3,000 samples):
+**The generated length is compared in matched units.**  An earlier revision of
+this note reported the model as generating identifiers "3x too long"; that was a
+units bug in `newline_cluster.py` (string characters compared against corpus
+tokens), recorded with its numbers in
+[`SMALL_DICT.md`](SMALL_DICT.md).  With units matched the length distribution is
+reproduced well, and the residual is explained by the prior — see the section
+below.
 
-| config | tokens (corpus 9.14) | chars (corpus 16.26) |
-|---|---|---|
-| `plain(k)` | 8.37 | 16.61 |
-| `plain(k-1)` | 8.14 | 16.23 |
-| `reserved(k)`, `profile=full` | 8.38 | 16.67 |
-
-The length distribution is in fact reproduced well — 2% long in characters, 8%
-short in tokens, with the 95th percentile slightly heavy (24 vs 18 tokens).  The
-penalty of the factorisation is 8% on the token mean, not a factor of three.
-
-The same correction applies to every "real identifier hit rate" figure quoted
-here.  That number is **not** a success metric: a model that generalises is
-*supposed* to emit identifiers that are not in the corpus, so the rate cannot be
-required to be high.  What it does measure is **memorisation** — at 2% of 20,000
-samples against a 3.8M-identifier corpus, the model is reproducing literally
-several hundred corpus members, which is a high rate, not a low one.  It should
-be reported under that name or not at all.
+**The "real identifier" hit rate is not a success metric.**  A model that
+generalises is *supposed* to emit identifiers that are not in the corpus, so the
+rate cannot be required to be high.  What it measures is **memorisation**: at 2%
+of 20,000 samples against a 3.8M-identifier corpus, the model is reproducing
+literally several hundred corpus members, which is a high rate, not a low one.
+Report it under that name or not at all.
 
 Of the generative numbers, only the mid-word metrics actually discriminate, and
 they need the marginal baseline: a token drawn from the unigram is "mid-word"
-with probability `1 - (startable / V)`, which is 5.9% at `V = 512` and 8.6% at
-`V = 8192`.  Against that, every configuration is *better* than chance on
-starts, so the metric discriminates weakly and the reservation's advantage at the
-testing point (2.1% vs `plain`'s 3.3%, chance 5.9%) is real but small.  At the
-canonical grid the ordering reverses (5.0% vs 3.1% at `V = 8192`).  On ends the
-signal is at least consistent: at the testing point `plain` is *worse* than
-chance (2.4% vs 0.6%) while `reserved` is perfect (0.0%).  So the rejection rests
-on the compression numbers, where there is no ambiguity; the generative columns
-are weak corroboration, not the case against the design.
+with probability `1 - (startable / V)`, which is 8.6% at `V = 8192`.  The
+reservation's generative advantage at a smaller vocabulary was real but small,
+and it disappeared at the canonical grid, where the reservation is *worse* on
+starts (5.0% vs 3.1% at `V = 8192`).  So the rejection rests on the compression
+numbers, where there is no ambiguity; the generative columns are weak
+corroboration, not the case against the design.
 
 ### The profile control: the cost was mostly the *profile*, not the cell
 
@@ -339,10 +232,9 @@ Three conclusions, all different from the first pass:
    4-7x (0.14% -> 0.93%).  Only mid-word *ends* improve, slightly and only at
    `V = 4096` (1.2% -> 1.3%, 1.8% -> 1.4%).
 3. **The exact boundary table is also dead.**  At the canonical grid an exact
-   `2V`-number stop row and column would recover only 0.21-0.42 bits/identifier
-   — not the 0.83 found at `V = 512`.  Eight kB (`V = 4096`) on a frontier worth
-   ~4.3 kB per bit is ~1.9 bits equivalent, so the table cannot pay for itself
-   either.
+   `2V`-number stop row and column would recover only 0.21-0.42 bits/identifier.
+   Eight kB (`V = 4096`) on a frontier worth ~4.3 kB per bit is ~1.9 bits
+   equivalent, so the table cannot pay for itself either.
 
 So the verdict is **reject**, now on the clean ground that there is nothing to
 buy: the reservation is cheap but inert, and the mechanism it was supposed to
@@ -351,14 +243,14 @@ the bytes it would take to store it.
 
 ## Length: the model is ~13% short, and the prior explains it
 
-With the units bug fixed, every configuration generates identifiers slightly
+With units matched, every configuration generates identifiers slightly
 *shorter* than the corpus: 4.05-4.08 tokens against 5.06 at `V = 8192`, 4.69-4.72
 against 5.72 at `V = 4096`.  The `kappa` prior accounts for a known part of it:
 it adds `kappa*V/T = 0.128` of the stop column's mass at `V = 8192` (`T` is the
 transition count), i.e. it inflates `P(stop|.)` by ~13% and shortens the walk by
 ~1/1.128.  That predicts 4.49 tokens where 4.07 is measured, so the rest is
 model error.  It is a *regularisation* effect with a knob (`kappa`), not a
-defect, and it is the opposite of the 3x over-generation I wrongly reported.
+defect.
 
 ## Implementation
 

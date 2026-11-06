@@ -246,9 +246,7 @@ So the choice splits on §3: if the standard ships the code, the flat code is ou
 and the design is **CF or CQF**; if the library derives codes at load time, the
 flat code is free and CQF is buying back a loss that need not exist.  Since
 publishing is the interoperable option, the honest reading is: **flat is the
-yardstick, CF or CQF is the product.**  At `V = 512, k = 16` the flat table is
-11 kB, so the shipped scheme can still be measured against the real thing at the
-testing point.
+yardstick, CF or CQF is the product.**
 
 ## 5. Cluster quarters (a cheaper way to buy back the factorisation loss)
 
@@ -322,41 +320,10 @@ which is the frontier measured in `WORDLIST_BUDGET.md` / `MODEL_BUDGET.md`.
 
 `scripts/quarter_accounting.py` computes the three layouts exactly from the
 counts — no sampling, no held-out set — as Huffman costs (so the rounding is
-real, not modelled).  `V = 512`, `k = 16`, `kappa = 300`, 3.82M identifiers,
-35.1M transitions (9.20 per identifier):
+real, not modelled).  The first run was at the testing vocabulary; those numbers
+are in [`SMALL_DICT.md`](SMALL_DICT.md) and none of them is used here.
 
-| scheme | bits/identifier | vs flat | model bytes |
-|---|---:|---:|---:|
-| flat (yardstick) | **65.371** | — | 11,260 |
-| CF | 69.250 | +3.878 | 888 |
-| CQF `q = 2` | 68.548 | +3.177 | 1,140 |
-| CQF `q = 4` | 68.072 | +2.701 | 1,708 |
-
-and the mechanism, checked to three decimals against the identity above:
-
-| q | top stage | CF cluster step | increase | merges avoided | net | bytes |
-|---|---:|---:|---:|---:|---:|---:|
-| 2 | 32.689 | 24.207 | +8.482 | 9.184 | **+0.702** | +252 |
-| 4 | 40.470 | 24.207 | +16.263 | 17.440 | **+1.177** | +820 |
-
-The Huffman rounding on the flat trees is 0.034 bits/token (0.31 per
-identifier), so these are essentially rounding-free numbers: the `kappa` prior
-makes every cell non-zero, which is why Huffman is so efficient here.
-
-**Two conclusions.** The mechanism is real — CQF recovers 18% (`q = 2`) and 30%
-(`q = 4`) of the flat → CF penalty, and the amounts are exactly the expensive
-in-cell merges.  But the *fraction* is measured where the penalty is large: at
-`V = 512, k = 16` the penalty is 3.878 bits/identifier because 16 clusters is
-coarse.  An earlier draft guessed that the canonical-grid penalty would be
-~1.2 bits/identifier, so that the same fractions would recover only ~0.22
-(`q = 2`) and ~0.36 (`q = 4`) bits.  **That guess was wrong in both terms**, and
-it was wrong in a way that matters: at the canonical grid the penalty is
-*larger* (2.3 bits at `k = 32`, 3.0 at `k = 64`) and the recovered fraction is
-*larger* too (35–43%), because the in-cell merge mass is nearly independent of
-`k` while CF's cluster step is not.
-
-The same check at the canonical grid (`V = 4096`, `k = 32`, 4.02M identifiers,
-22.9M transitions) is **better**, not worse:
+`V = 4096`, `k = 32`, `kappa = 300`, 4.02M identifiers, 22.9M transitions:
 
 | scheme | bits/identifier | vs flat | model bytes |
 |---|---:|---:|---:|
@@ -365,16 +332,27 @@ The same check at the canonical grid (`V = 4096`, `k = 32`, 4.02M identifiers,
 | CQF `q = 2` | 51.615 | +1.493 | 9,192 |
 | CQF `q = 4` | 51.480 | +1.358 | 11,736 |
 
+and the mechanism, checked to three decimals against the identity above:
+
 | q | top stage | CF cluster step | increase | merges avoided | net | bytes |
 |---|---:|---:|---:|---:|---:|---:|
 | 2 | 22.948 | 18.055 | +4.893 | 5.704 | **+0.811** | +1,144 |
 | 4 | 27.563 | 18.055 | +9.508 | 10.454 | **+0.946** | +3,688 |
 
-So CQF recovers **35% (`q = 2`) and 41% (`q = 4`)** of the flat → CF penalty
-here, against 18% and 30% at `V = 512, k = 16`.  The extrapolation in the earlier
-draft (which assumed the smaller fractions) is therefore too pessimistic: the
-word step is 66% of CF's cost (34.371 of 52.426) and the expensive in-cell merges
-are a larger share of it at the canonical grid.
+The `kappa` prior makes every cell non-zero, so the Huffman rounding is small
+here and these are close to rounding-free numbers.
+
+**The mechanism is real, and the fraction grows with the model.**  CQF recovers
+**35% (`q = 2`) and 41% (`q = 4`)** of the flat → CF penalty, and the amounts are
+exactly the expensive in-cell merges.  An earlier draft guessed a ~1.2-bit
+penalty at the canonical grid, so that a small recovered fraction would give
+~0.22 (`q = 2`) and ~0.36 (`q = 4`) bits.  **That guess was wrong in both
+terms**: the penalty is *larger* (2.3 bits at `k = 32`, 3.0 at `k = 64`) and the
+recovered fraction is *larger* too, because the in-cell merge mass is nearly
+independent of `k` while CF's cluster step is not.  The extrapolation in that
+earlier draft is therefore too pessimistic: the word step is 66% of CF's cost
+(34.371 of 52.426) and the expensive in-cell merges are a larger share of it at
+the canonical grid.
 
 The `k = 64` cell (`V = 4096`, 4.02M identifiers) completes the picture:
 
@@ -612,10 +590,9 @@ are *cross-model* differences (a different code for a different `k`), so their
 sampling error is the unpaired one, ~0.6 pt, and individually they are not
 significant.  What is significant is the bits gap they are built from
 (`−0.868 ± 0.023` here), and the fact that the fit ordering agrees with the bits
-ordering in all three cells.  And at `V = 512, k = 16` the same test gives
-`−0.677 ± 0.056` bits but only `+0.6 ± 0.5` fit points: a bits gain that does not
-show up in a 64-bit threshold count, which is a good reminder that the two
-metrics can disagree when the mean sits well below the threshold.
+ordering in all three cells.  The two metrics can disagree when the mean sits
+well below the 64-bit threshold — a bits gain that does not appear as fit
+points — which is why both are always reported.
 
 A larger held-out set (`--stride 10`, ~42k identifiers) would tighten all of
 this by `sqrt(10)` at negligible cost, and is the right setting for the H6
@@ -623,10 +600,10 @@ re-measurement.
 
 ### The experiment
 
-1. Tokenise a held-out set with the canonical dictionaries (`V ∈ {512, 4096,
+1. Tokenise a held-out set with the canonical dictionaries (`V ∈ {4096, 6144,
    8192}`), as `words_per_identifier.py` already does.
-2. Cluster as now (`cluster_words.py`, Hellinger `k`-means, `k ∈ {32, 64}`, and
-   `k = 16` at `V = 512`), then form the quarters **only by truncating the
+2. Cluster as now (`cluster_words.py`, Hellinger `k`-means, `k ∈ {16, 32, 64}`),
+   then form the quarters **only by truncating the
    build**: halt each right cluster's tree when `q` subtrees remain, and take
    those survivors as the quarters.  There is no freedom here, and that is the
    point (see "How the gain arises" below): an imposed partition — equal-mass
@@ -670,8 +647,8 @@ re-measurement.
      all).  Where to stop is chosen by the build.
 
 4. Measure four lengths per identifier: arithmetic reference; flat Huffman
-   (one tree per left cluster over `V` words — affordable for `V = 512`, and for
-   `4,096` only as an upper-bound curiosity); CF (two trees); CQF for
+   (one tree per left cluster over `V` words — affordable at `4,096` only as an
+   upper-bound curiosity); CF (two trees); CQF for
    `q ∈ {2, 4}`.
 5. Price each scheme with the size accounting above, then plot **total model
    bytes (word list + memberships + block + code lengths) against mean bits and

@@ -1,10 +1,11 @@
 # One cluster assignment for both sides
 
-Status: **measured at the testing point and at the canonical grid.**  Rejected
-at `V = 512, k = 16`; **adopted at the canonical grid**, where it sits at or
-above the asymmetric frontier at matched total bytes.  The reading of the
-decision rule that produces the flip is spelled out below, because it is the
-part that changed.
+Status: **adopted at the canonical grid**, where it sits at or above the
+asymmetric frontier at matched total bytes.  A first measurement at the testing
+vocabulary (`V = 512`) rejected it; that measurement is a statement about a
+cheap model, not about the constraint, and it now lives in
+[`SMALL_DICT.md`](SMALL_DICT.md) with the rest of the testing-point numbers.
+The decision rule that reads the result is spelled out below.
 
 ## The question
 
@@ -52,9 +53,8 @@ buys is real.
    vector to unit length, and `w → 0` degenerates to clustering on successors
    only.
 4. Spherical `k`-means on `{x_a}` with occurrence weights
-   (`cluster_substrings_lib.kmeans_sphere`), `k ∈ {32, 64}` (`k = 16` at the
-   `V = 512` testing point) — one label per word,
-   used as both `lcl` and `rcl`.
+   (`cluster_substrings_lib.kmeans_sphere`), `k ∈ {32, 64}` — one label per
+   word, used as both `lcl` and `rcl`.
 5. Score exactly as `model_fit_rates.py` does: `assoc_numbers` for `c, D, Cc`,
    then held-out bits and the 64/128-bit fit rates.
 
@@ -83,43 +83,7 @@ unigram + membership + block), and the full-table reference bits.  Adopt if at
 CS loss is smaller than the bytes-equivalent loss on the `WORDLIST_BUDGET.md`
 frontier.
 
-## Measurement (`V = 512`, `k = 16`, `work/tw512ns`)
-
-4,227 held-out identifiers (stride 100), `kappa = 300`, seed 1;
-`scripts/shared_clusters.py --dir work/tw512ns --ks 16 --stride 100`.
-
-| model | k | bits | fit<=64 | fit<=128 | bytes | `D` asymmetry |
-|---|---|---|---|---|---|---|
-| full table | — | 53.134 | 77.0% | 97.8% | — | — |
-| `asymmetric` | 16 | 68.105 | 57.1% | 93.7% | 1,980 | 1.33 |
-| `shared`, `w = 1/√2` | 16 | 69.071 | 54.8% | 93.4% | 1,724 | 0.92 |
-| `shared`, `w = 1` | 16 | **68.784** | 55.9% | 93.5% | 1,724 | 1.20 |
-| `shared`, `w = √2` | 16 | 69.140 | 55.0% | 93.5% | 1,724 | 1.09 |
-| `asymmetric` | 32 | 66.480 | 59.0% | 94.2% | 2,872 | 1.37 |
-
-**The weight sweep vindicates the 1:1 default** — `w = 1` is the best of the
-three, so the concatenation's equal weighting is not a handicap.
-
-**The constraint costs 0.68 bits/identifier and 1.2 points of fit<=64**, in
-exchange for 256 B (13% of the model).  The frontier slope at this point is read
-off the `k`-doubling control: 892 B buys 1.63 bits, so 256 B is worth ~0.47 bits
-— the shared model loses 0.68 and saves 0.47.  **Dominated at matched bytes**,
-so the decision rule says do not adopt, and the margin (1.2 pt) is four times
-the +-0.3 pt noise band.
-
-Note that the saving here is the *smallest* case in the design note's table
-(13% at `V = 512`, `k = 16` against 12-15% at the canonical grid), and the
-frontier slope is what scales with it, so the verdict is not obviously a
-small-`V` artefact — but it is one point, and at `k = 16` the memberships are
-cheap.  Confirm at `V = 4096, k = 32/64` before closing it: that is where the
-membership saving is 2.5-3.0 kB against a 21 kB model and where the clustering
-has enough clusters for "the same kind of token from either side" to be a
-meaningful claim.
-
-`D` asymmetry 1.2-1.4 (Frobenius ratio `||D - D^T|| / ||D||`) confirms the block
-is genuinely not symmetric, so the `k^2` table cannot be halved.
-
-## The canonical grid: measured, and it flips the verdict
+## Measurement at the canonical grid
 
 4,096: `k = 32, 64`; 8,192: `k = 64`.  10,567 held-out identifiers (stride 40),
 `kappa = 300`, seed 1; `scripts/shared_clusters.py --dir work/tw… --ks …`.
@@ -144,11 +108,10 @@ within 0.2 bits.  Keep the 1:1 default; the concatenation is not a handicap.)
 ### At matched `k` it loses; at matched bytes it wins
 
 At matched `k` the constraint costs 0.19 bits at `k = 32` and 0.33-0.52 bits at
-`k = 64`, with fit<=64 down 0.1, 0.6 and 0.5 points.  That reads as a rejection
-— and it is how the `V = 512` measurement was decided.  But the decision rule is
-about **matched total bytes**, and the asymmetric model does not exist at 14.8,
-18.4 or 33.8 kB.  Placing each shared point against the asymmetric frontier
-interpolated to the same size:
+`k = 64`, with fit<=64 down 0.1, 0.6 and 0.5 points.  That is not the question
+the decision rule asks: it is about **matched total bytes**, and the asymmetric
+model does not exist at 14.8, 18.4 or 33.8 kB.  Placing each shared point
+against the asymmetric frontier interpolated to the same size:
 
 | point | bytes | fit<=64 | frontier at that size | margin |
 |---|---:|---:|---:|---:|
@@ -161,13 +124,14 @@ noise boundary.  The rule's tolerance is +-0.3 pt, so all three pass: the shared
 point is *not below* the asymmetric frontier anywhere measured, and at `V = 8192`
 it is a clear 0.9 points above it.
 
-**Why the testing point said otherwise.**  The frontier is steep in bytes at
-`V = 512` — 892 B buys 1.9 points of fit<=64 (0.47 kB/pt) — so saving 256 B is
-worth almost nothing, while the constraint still costs 1.2 points.  At the
-canonical grid the frontier is 4,287-4,542 B/pt over the same kind of step: bytes
-are worth four to ten times more, and the membership saving is 2.5-6.1 kB rather
-than 256 B.  The `V = 512` verdict was a statement about a cheap model, not about
-the constraint.
+Why the trade pays here: a point of fit<=64 costs 4.3-4.5 kB on this frontier,
+so the 2.5-6.1 kB the shared assignment frees is worth 0.6-1.4 pt, against a
+constraint that costs 0.1-0.6 pt.  In a model of under two kilobytes the same
+percentage saving is 256 B — half a point — against a constraint that costs more
+than a point, so the identical trade is a loss.  The verdict is a statement about
+the size of the model, not about the constraint, and it must be re-measured, not
+scaled: the testing-point run is recorded in
+[`SMALL_DICT.md`](SMALL_DICT.md#shared-cluster-assignment-worktw512ns-k--16).
 
 ### Verdict
 
