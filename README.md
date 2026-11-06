@@ -7,53 +7,50 @@ is usable as a bijection in practice, but its *inverse* is far too large; so
 instead we are trying to build a **compression algorithm** that encodes an
 identifier as an integer and can recover it.
 
-Identifiers are restricted to the form
-
-```
-[A-Za-z_][A-Za-z0-9_]*      (ASCII only)
-```
-
-i.e. they start with an ASCII letter or underscore, and subsequent characters are
-ASCII letters, underscores, or digits.
-
-We deliberately favour **namespace-rich languages** (modules / classes / packages)
-over languages like C that lack namespaces and therefore push authors into global
-prefixing conventions (`gl_`, `SDL_`, …), which distort identifier statistics.
-
 **Status.** A *feasibility study* and an *experimental statistical exploration*:
 the corpus, the models and the reports below exist to test whether a compact
-bijection is reachable at all. This is research, not a finished codec.
+bijection is reachable at all. This is research, not yet a finished codec.
 
-## The corpus
+## The product
 
-| File | Distinct identifiers | Description |
-|---|---|---|
-| `corpus/identifiers.multilang.txt` | **4,441,974** | **Recommended.** Union across 10 ecosystems, sorted, unique, lexically scrubbed. |
-| `corpus/by_language/*.txt` | — | Per-ecosystem lists: `ruby`, `rust`, `ocaml`, `haskell`, `java`, `python`, `go`, `lua`, `perl`, `javascript`. |
+The goal is to provide a library to encode identifiers into integers and decode them again. Integers are much more efficient to process than strings, and more compact, so a bijective map between them would be useful. We propose to specify a portable (cross-language) standard for the encoding, and to ship implementations of it.
 
-Statistics and full reproduction instructions: [`docs/CORPUS.md`](docs/CORPUS.md).
-(The old Ruby-only `corpus/identifiers.txt` was byte-identical with
-`by_language/ruby.txt`, and the length-capped `*.max128.*` variants were never
-used; all three have been removed.)
+The library works with CamelCase identifiers, containing only letters, digits, and underscores. We ship functions to convert identifiers between different capitalisation conventions, and using those we can also encode lower_case and UPPER_CASE identifiers efficiently too. This covers the majority of programming use cases. The original capitalisation convention is not encoded; it is the caller's responsibility. The encoding is otherwise lossless.
 
-### Composition
+We target two fixed budgets: 64-bit integers and 128-bit integers. Exceptionally long or rare identifiers do not fit in the budget; it is left to the caller to decide how to handle these cases. We think it would be sensible to reject them, or to encode them using a hash function and decode them using a hash map. The 64-bit budget is a little restrictive; about 10% of identifiers in the training corpus cannot be encoded, though they tend to be pretty ugly ones. The 128-bit budget is enough for almost any identifier.
 
-| Language | Distinct IDs | Mean len | Median len | How obtained |
-|---|---:|---:|---:|---|
-| Rust | 1,290,194 | 18.77 | 17 | crates.io: 2,500 crates, 64,650 `.rs` files |
-| OCaml | 1,019,741 | 15.39 | 14 | opam: sources of packages ranked by reverse dependencies |
-| Haskell | 886,251 | 13.44 | 12 | Hackage: sources of packages ranked by reverse dependencies |
-| Ruby | 710,173 | 17.82 | 15 | RubyGems: 8,423 unpacked gems, 226,878 files |
-| Java | 403,427 | 17.17 | 16 | Maven Central: `org/apache/**` `-sources.jar` |
-| Python | 364,165 | 15.46 | 14 | local CPython 3.13 stdlib + dist-packages, 13,710 files |
-| Go | 154,229 | 13.53 | 11 | local Go 1.24 standard library, 7,115 files |
-| Lua | 139,816 | 14.75 | 13 | LuaRocks: all packages, ranked by published versions |
-| Perl | 17,196 | 10.06 | 9 | local Perl 5 module tree, 752 files |
-| JavaScript | 10,049 | 8.60 | 8 | local `/usr/share/javascript`, 2,786 files |
-| **union** | **4,441,974** | **16.99** | **15** | 553,267 overlaps removed (per-language sum 4,995,241) |
+Compressing long identifiers into small integers is an exercise in information theory. The bulk of the work is statistics, not programming. What you will find in this repo are the tools we used to study the statistics and to come up with a simple, compact model that can form the basis of the standard.
 
-How each ecosystem was harvested, the lexing rules, and what the corpus
-does and does not contain are documented in [`docs/CORPUS.md`](docs/CORPUS.md).
+## The strategy
+
+The experimental strategy is as follows:
+
+- Build a corpus (see *TODO*)
+- Case-normalise it (see *TODO*)
+- Build word lists (see *TODO*)
+- Measure statistics (see *TODO*)
+- Cluster words with similar statistics (see *TODO*)
+- Build a cheap model of the probability distributions (see *TODO*)
+- Build an encoder based on the model (see *TODO*)
+
+It is important that the model is small and efficient, otherwise nobody will want to use it. The pertinent optimisation criterion is the fraction of identifiers in the training corpus that fit in 64 bits, measured as a function of the model size. With a large model we could do much better, but that's not the point; the question is how well we can do with a small model. See *TODO* for details on the optimisation methodology.
+
+We tried two main strategies, and found that the second one is much better:
+
+- Rejected: Encode each character conditionally on the word that precedes it (see *TODO*).
+- Adopted: Tokenise the string into words, and define a Markov model on the words (see *TODO*).
+
+In the above, "word" means any string that is commonly used in identifiers; many are in fact English words or abbreviations but many are not.
+
+We explored many ways of defining "word". It turns out that the list of words is the most important part of the model, and it therefore accounts for the majority of the model size. The best idea for the rejected strategy (See *TODO*) was different from the best idea for the adopted strategy (see *TODO*). For the supporting theory see *TODO*.
+
+In both strategies, we found that there is a huge benefit from clustering words with similar statistics. This reduces the model size a lot, but worsens compression only a little. The clustering study for the rejected strategy is *TODO*, and for the adopted strategy it is *TODO*.
+
+Along the way, we tried a lot of things that didn't work:
+
+- *TODO*
+- *TODO*
+- ...
 
 ## Layout
 
@@ -196,231 +193,12 @@ saves a fixed number of bytes is scored differently at each. Measurements at
 `V = 512` are kept in [`docs/SMALL_DICT.md`](docs/SMALL_DICT.md), which carries
 the same warning; the experiment reports quote only the grid.
 
-## CamelCase normalisation and common substrings
-
-The successor and adjacency models are built on a **case-normalised** copy of
-the corpus and on its **common substrings**. `scripts/run_camel_pipeline.sh`
-derives both from `corpus/identifiers.multilang.txt` in four steps — classify,
-camelize, merge, and enumerate the substrings occurring at least *T* times.
-On the current union (4,441,974 identifiers → 4,226,707 after normalisation and
-de-duplication) the common-substring set grows quickly as the threshold falls:
-
-| threshold T | common substrings | max length |
-|---:|---:|---:|
-| 100000 | 278 | 5 |
-| 10000 | 3,935 | 13 |
-| 2000 | 20,198 | 15 |
-| 500 | 80,869 | 44 |
-
-The empty string, `^`, `$` and all 65 single characters (`a-z`, `A-Z`, `0-9`,
-`_`, `^`, `$`) are common at every threshold. Full details, the exact
-CamelCase rules and the complete threshold table are in
-[`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md).
-
-```sh
-sh scripts/run_camel_pipeline.sh corpus/identifiers.multilang.txt work/camel
-# a non-default threshold: THRESHOLD=2000 produces work/common2000
-```
-
-## Successor clustering
-
-`scripts/successor_distributions.py` builds, for every common substring, the
-empirical distribution of the character that follows it. It uses a
-**longest-suffix (variable-order) model**: at each split of a wrapped identifier
-`^identifier$` (from just after the `^` to just after the identifier) the
-successor is credited to the *longest common substring that is a suffix of the
-prefix*, so e.g. after `^Ac` the successor is credited to `^Ac` rather than to
-`Ac` or `c`. Every one of the 41,272,149 split positions is assigned to exactly
-one context. The rows are the common substrings that can occur as a prefix
-suffix (non-empty, not ending in `$`) and a `#global` row carries the
-corpus-wide successor marginal, used as a shared Dirichlet prior for smoothing.
-
-`scripts/cluster_substrings.py` groups the contexts by their successor
-distribution, with two objectives:
-
-* `--method kl` (default) directly minimises the occurrence-weighted
-  cross-entropy `Σ_s N_s · H(p_s ‖ P_cluster(s))`, which equals `H(next |
-  cluster)`; assignment is to the smallest cross-entropy and the update is the
-  pooled-count mean (Lloyd's algorithm for the KL/multinomial objective). This
-  optimises exactly the quantity we report.
-* `--method sphere` embeds `√p` on the unit sphere (squared Euclidean distance =
-  twice the squared Hellinger distance, a metric surrogate for the non-metric KL
-  "compression" distance) and runs spherical K-means. Both methods are
-  occurrence-weighted: each context contributes with weight `N_s`, and the
-  sphere update is the re-normalised count-weighted mean `Σ N_s x_s` (the `kl`
-  update is the pooled-count mean). The assignment steps are unaffected by the
-  weighting, since the weight is a per-point constant factor.
-
-`k` is fixed by the caller (`--k`); there is deliberately no automatic
-selection. Every criterion tried (the elbow of the bits curve, the mean
-silhouette, and in principle held-out compression) was either arbitrary or
-merely relocated the arbitrariness — the best compromise depends on how much
-pressure one feels to keep the model low-dimensional — so `k` is chosen by hand
-and the `H(next | cluster)` vs `k` curve is produced by sweeping `--k` yourself.
-The two clustering methods agree to within ~0.04 bits (over `k = 2..100` on the
-current corpus the gap is at most 0.035 bits, mean 0.015; `kl` is a hair better
-at small `k` (up to ~30), the sphere method a hair better at large `k`), so it
-does not matter which one you run. At threshold 2000 (10,890 contexts, `k`
-sampled on a coarse grid) the gap is at most 0.052 bits, mean 0.019.
-`scripts/cluster_entropy.py` reports `H(next)`,
-`H(next | substring)`, `H(next | cluster)` and the information retained.
-
-On the current corpus (1,950 analysable contexts), `H(next) = 4.966` and
-`H(next | substring) = 3.070` bits. With the `kl` objective:
-
-| k | 12 | 22 | 100 |
-|---|---|---|---|
-| `H(next | cluster)` | 4.011 | 3.821 | 3.502 |
-
-So **k is the dominant lever**: the cluster model approaches — but with 100
-clusters still does not reach — the exact-context 3.070 bits. At `k = 22` the
-clustering retains 1.145 bits (60% of the 1.896-bit achievable reduction); at
-`k = 12` it retains 0.955 bits (50%). The earlier plain
-"character after substring" count gave a less sharp context model (3.520 bits)
-and retained ~49% at `k = 12`.
-
-```sh
-python3 scripts/successor_distributions.py work/camel/merged.txt work/common10000/common_substrings.txt
-python3 scripts/cluster_substrings.py --outdir work/common10000 --k 22   # --method kl (default)
-python3 scripts/cluster_entropy.py --outdir work/common10000
-```
-
-### Scaling up: more substrings, more clusters
-
-Lowering the common-substring threshold to 2000 gives 11,758 common substrings
-(max length 14) and 10,890 analysable successor distributions. (`k` is chosen by
-hand rather than by silhouette.)
-
-At a hand-picked `k = 17` the successor structure sharpens considerably: many
-clusters are near-deterministic, each pinned to a single likely next character,
-plus a digit/underscore cluster and a large mixed "junk drawer". The measured
-entropies are: `H(next) = 4.966`, `H(next | substring) = 2.611`,
-`H(next | cluster) = 3.547` bits, so the clustering retains 1.419 bits
-(28.6% of `H(next)`).
-
-The clustering runs on plain NumPy matmuls; with a tuned BLAS (e.g. OpenBLAS:
-`apt install libopenblas0-pthread`, which registers the `libblas.so.3` /
-`liblapack.so.3` alternatives) these are fast at this size, so no compiled
-kernel is needed. (An earlier OpenMP kernel, `fastkern.c`, was removed once
-OpenBLAS became a standing requirement; it remains in the git history.)
-
-```sh
-python3 scripts/common_substrings.py work/camel/merged.txt \
-        --outdir work/common2000 --threshold 2000
-python3 scripts/successor_distributions.py work/camel/merged.txt \
-        work/common2000/common_substrings.txt --outdir work/common2000
-python3 scripts/cluster_substrings.py --outdir work/common2000 \
-        --k 17 --restarts 10
-python3 scripts/cluster_entropy.py --outdir work/common2000
-```
-
-## Fixed-budget compressibility
-
-`scripts/code_lengths.py` computes the ideal arithmetic-code length of each
-identifier under the longest-suffix successor model. It is the natural estimate
-of whether an identifier fits a fixed budget (64 or 128 bits; no separate
-capitalisation allowance is charged here). Scoring is on the `camel/merged`
-identifiers — a **static** success rate. The method, the full threshold table,
-and the finding that **the 64-bit threshold accounted for about 92% of
-identifier occurrences in real source code, a proportion relatively insensitive
-to improvements in compression**, are in
-[`docs/CODE_LENGTHS.md`](docs/CODE_LENGTHS.md). The occurrence-weighted study
-that produced that 92% figure has been retired (it is easy to reproduce if the
-exact curve is ever wanted), but the qualitative result stands.
-
-Headline: the static 64-bit success rate runs from **52% to 89%** across
-thresholds 500–100000 (and 93%–99% at 128 bits).
-
-## Factorising the word adjacency matrix (Hellinger)
-
-The word × word adjacency matrix of the dictionary (§ above) is the
-largest table in the model, so it is the natural thing to factorise. The
-**Hellinger (square-root) factorisation** roots the counts, truncates the SVD of
-`√M` to rank `L`, and squares the reconstruction back:
-
-    M ≈ (√M)_L²   —   non-negative by construction, and fitted in the metric
-    that matches KL.
-
-It is scored by the **joint** KL `KL(M/T ‖ M̂/ΣM̂)` (`pair_matrix_lib.kl_joint`),
-which differs from the occurrence-weighted *conditional* KL only by a
-model-independent constant, so no conditional `p(b|a)` is formed. A *counting*
-fix for unobserved pairs — an independence-shaped prior of fixed mass
-(`M + κ·N·P_mar`, κ = 1000) added to the reference matrix — is described in
-`docs/ADJACENCY_MATRIX.md` §6 and studied in
-[`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md), which also
-carries the negative-entry remedies (clip, `|M̂|`, backoff, NMF) that the
-Hellinger model supersedes.
-
-An earlier low-rank study of the *prefix/suffix* adjacency matrix (longest
-common substring that is a suffix of the left half against the longest common
-substring that is a prefix of the right half) is retired: only its NMF and
-square-root factorisations were principled, NMF is clearly inferior, and the
-square-root factorisation is the same Hellinger model now applied to the word
-matrix. It lives in git history. The prefix/suffix matrix construction itself
-remains the canonical reference in
-[`docs/ADJACENCY_MATRIX.md`](docs/ADJACENCY_MATRIX.md), and its reversal-symmetry
-invariant is checked by `scripts/symmetry_check.py`.
-
-A separate line of work builds a **dictionary by repeatedly merging the most
-common adjacent word pair** and models the tokenised corpus with a first-order
-Markov chain; the description length of that code has a closed form, and the
-exact change from one merge is derived in
-[`docs/TREE_WORDS.md`](docs/TREE_WORDS.md). The `m = 1` (bigram-only) part of
-that change turns out to be **identically zero** for a merge of two distinct
-words — so a merge only ever pays off through trigram dependence, and in a
-perfectly bigram-Markov corpus no merge changes the size. Writing the trigram
-dependence as the factor `m − 1`, the whole change reduces to a sum of
-conditional entropies whose linear term in `m − 1` also cancels. The sign is now
-proved **exactly**: a merge of two distinct words has `Δ ≤ 0` (Jensen on the two
-context sums plus subadditivity), and a run collapse never enlarges `CS` either
-(superadditivity on the boundary bigrams plus the geometric maximal-entropy
-bound) — so the run-aware dictionary weakly shrinks at every step. The
-identities are regression-tested by `scripts/check_merge_delta.py`.
-
-Two levers on the resulting model are measured. Building the word list 1.5× too
-large and pruning the least valuable words down to size beats the plain greedy
-build on the *raw bigram score* (0.86 bits at `NUM_PAIRS = 512`), **but that
-word list is worse once the word × word matrix is co-clustered** — the prune
-optimises a different objective — so this lever is judged **unsuccessful**
-([`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md)). The word × word matrix — the
-largest table — does compress better by two-sided K-means co-clustering than by
-the Hellinger factorisation of equal storage
-([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)). The budget knob that matters
-most, though, is the word list itself: at matched model size the largest word
-list that fits beats a finer `k × k` table by ~3–5 bits
-([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md)), and that holds once the word
-list is charged for in bytes and the whole model is sized as a real
-in-memory structure — 17 kB at `V = 2,104`, 43 kB at `V = 4,478`, 93 kB at
-`V = 11,758` ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Whether those
-are *useful* 64-bit sets is the question of
-[`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md): ~71 % of distinct
-identifiers at 17 kB, ~83 % at 93 kB.
-
-A third design question — whether to let a word span the identifier's end, so a
-token `v\n` captures the trigram `(u,v,\n)` — is answered negatively: the
-boundary trigram is worth only ≈0.5 bits/string (≈1 % of the compressed size,
-held out), which is an upper bound on any such word, and it would cost the
-exact `CS = S1 − S2` form and the causal start
-([`docs/BOUNDARY_TRIGRAM.md`](docs/BOUNDARY_TRIGRAM.md)).
-
-`scripts/run_sweep.sh` runs the successor, code-length and factorisation
-analyses over a list of thresholds:
-
-```sh
-sh scripts/run_sweep.sh            # successor + code_lengths + pair_matrix
-```
-
-## Extending the corpus
-
-`scripts/extract.py` is language-agnostic and whitelists a broad set of
-namespace-rich file types. Good next targets: npm/Packagist (JS/PHP), Maven source
-jars (Java), PyPI wheels for packages not installed locally, and more Rust/Java
-generated-code ecosystems. Add a language by running the three stages
-(fetch → unpack → extract) and dropping the result in `corpus/by_language/`.
-
 ## Licensing & provenance
 
-Identifiers are extracted as facts from openly published package sources and
-locally installed open-source software. Individual packages carry their own
-licenses. This repository contains only the derived token lists, not the original
-source code.
+Identifiers are extracted as facts from openly published package sources and locally installed open-source software. Individual packages carry their own licenses. This repository contains only the derived token lists, not the original source code.
+
+The original work in this repo is offered under a well-known permissive licence that we hope will encourage its adoption: *TODO*.
+
+## Contributing
+
+We welcome contributions on [GitHub](https://github.com/apt1002/varnames) and you can email us at `varnames -at- minworks.co.uk`.
