@@ -150,7 +150,14 @@ work/common<T>/     # ... one directory per threshold T
 ```
 
 `work/` also holds the corpus-build intermediates (`gems_dl/`, `*_src/`,
-`clean_ids/`, `*.shards`, per-ecosystem logs).
+`clean_ids/`, `*.shards`, per-ecosystem logs) — tens of thousands of files and
+several GB, none of it tracked.
+
+**Search with `rg` or `git grep`, never a bare `grep -r`.** `grep -r` ignores
+`.gitignore`, so it walks the downloads and the multi-million-line corpora (and
+this checkout lives on slow storage): the same query that takes seconds with
+`rg` — which skips everything ignored, `work/` included — can run for minutes.
+`git grep` is the right tool when only tracked files matter.
 
 ## Repository conventions
 
