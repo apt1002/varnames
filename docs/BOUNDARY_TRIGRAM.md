@@ -1,13 +1,13 @@
 # The identifier-boundary trigram (`u v \n`)
 
-Status: **negative.**  The run-aware word dictionary never merges across the
-string boundary, so a tokenised identifier ends `… u v \n` and the first-order
-model codes that boundary with the two **bigrams** `P(v|u)` and `P(\n|v)`.  The
+Status: **negative.**  The pair-merge dictionary never merges across the string
+boundary, so a tokenised identifier ends `… u v \n` and the first-order model
+codes that boundary with the two **bigrams** `P(v|u)` and `P(\n|v)`.  The
 **trigram** `P(\n | u, v)` — "is `v` final, *given* `u`?" — is left on the
 table.  A word `v\n` would capture it, but the held-out gain is only
-**≈0.5 bits/string, about 1 % of the compressed size**, and that is an *upper
-bound* (any `v\n` word can at most reproduce the full second-order boundary
-model).  Not worth the design cost.
+**≈0.4–0.5 bits/string, about 1 % of the compressed size**, and that is an
+*upper bound* (any `v\n` word can at most reproduce the full second-order
+boundary model).  Not worth the design cost.
 
 ## What is on the table
 
@@ -37,8 +37,8 @@ is non-negative by construction.
 
 ## Measurement
 
-`scripts/boundary_trigram.py` tokenises the corpus once with the run-aware
-dictionary and accumulates `N(u,v,\n)`, then reports `gain` two ways:
+`scripts/boundary_trigram.py` tokenises the corpus once with the dictionary of
+the directory it is given, accumulates `N(u,v,\n)`, and reports `gain` two ways:
 
 * **in-sample** — plug-in over the whole corpus.  This is optimistic (the
   trigram is fit on the data it is scored on);
@@ -53,26 +53,29 @@ slightly larger κ-smoothed bits/string).
 
 ## Results
 
-Full corpus `work/camel/merged_training.txt` (2,065,806 identifiers), train/test
-split in half:
+The whole training corpus `work/camel/merged_training.txt` (3,804,036
+identifiers), split in half (1,902,018 train / 1,902,018 test):
 
 | dictionary | `V` | CS (bits/string) | in-sample | held-out | as % of CS | trigram coverage |
 |---|---:|---:|---:|---:|---:|---:|
-| `tw512` | 576 | 53.841 | 0.608 | **0.553** | 1.03 % | 97.3 % |
-| `tw2040` | 2104 | 44.481 | 0.725 | **0.506** | 1.14 % | 81.0 % |
+| `tw4096ns` | 4096 | 40.535 | 0.769 | **0.464** | 1.14 % | 72.1 % |
+| `tw8192ns` | 8192 | 37.332 | 0.833 | **0.388** | 1.04 % | 58.2 % |
 
-The held-out gain is remarkably stable across vocabulary size (0.55 and 0.51
-bits/string) and is the same order as the ~1 bit spanned by the `κ` sweep in
-`WORD_COMPRESSIBILITY.md` — and an order of magnitude below the ~9 bits/string
-won by going from `tw512` to `tw2040`.
+The held-out gain is stable across vocabulary size (0.46 and 0.39 bits/string,
+~1 % of the compressed size) and is the same order as the ~1 bit spanned by the
+`κ` sweep in `WORD_COMPRESSIBILITY.md` — and an order of magnitude below the
+2.3 bits/string won by going from `V = 4096` to `8192`.
 
 ## The unobserved-data wrinkle
 
-The in-sample → held-out drop (0.73 → 0.51 at `tw2040`, 0.61 → 0.55 at `tw512`)
-is only 8–30 %.  It is small because **81–97 % of held-out identifiers** land on
-a `(u,v,\n)` pattern seen in training, so a backoff estimator can actually use
-the trigram most of the time.  This is *not* a case where the apparent gain
-evaporates once you refuse to score the data you fit: the ≈0.5 bits/string is a
+The in-sample → held-out drop is steep here: 0.77 → 0.46 at `V = 4096` and
+0.83 → 0.39 at `V = 8192` (40 % and 53 % of the apparent gain).  The reason is
+coverage: only **72 %** (at 4096) and **58 %** (at 8192) of held-out identifiers
+end in a `(u,v,\n)` pattern seen in training, so a backoff estimator has to give
+up the trigram on the rest.  A larger vocabulary makes words longer and the
+last-two-token triples rarer, which is why coverage falls with `V`.
+
+This is not a case where the apparent gain evaporates: ~0.4 bits/string is a
 real held-out effect, just a small one.
 
 ## Interpretation
@@ -95,11 +98,21 @@ Weighed against ~1 %, these costs are not worth paying.  Boundary words are
 recorded here so the negative is on the books; the simpler design (the stop is
 not part of any word) is kept.
 
+## Pre-expansion record
+
+The measurement that established the negative was taken on the 2,065,806-
+identifier corpus with the legacy vocabularies `tw512` (CS 53.841) and `tw2040`
+(CS 44.481): in-sample 0.608 / 0.725 bits/string, held-out **0.553 / 0.506**
+(1.03 % / 1.14 % of CS) with trigram coverage 97.3 % / 81.0 %.  Coverage fell
+with `V` there too; the grid simply continues the trend.
+
 ## Reproduce
 
-    python3 scripts/boundary_trigram.py --dirs work/tw512 work/tw2040
-    # ~5–7 min per dictionary on 4 cores; --stride N and --jobs J for a quick/large run
+    python3 scripts/boundary_trigram.py --dirs work/tw4096ns work/tw8192ns --jobs 2 --stride 1
+    # tokenisation alone is ~2.5 min/dictionary on 4 cores (138 s at V=4096,
+    # 148 s at V=8192) over the full 3.8M-line training corpus; --stride N and
+    # --jobs J for a quick/large run
 
-(The in-sample and held-out estimates are self-consistent at any `--stride`
-because every count is taken from the same sampled lines; the full-corpus
-numbers above are `--stride 1`.)
+(`--dirs` takes a space-separated list.  The in-sample and held-out estimates
+are self-consistent at any `--stride` because every count is taken from the
+same sampled lines; the numbers above are `--stride 1`.)
