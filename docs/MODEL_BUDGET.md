@@ -119,69 +119,95 @@ The frontier above is a set of points at different `V`; anything priced against
 it (C26's shared clusters, C27's reservation, C28's quarters) was compared with
 a *slope* obtained from two of those points.  `scripts/k_frontier.py` sweeps `k`
 at fixed `V` with the same accounting and the same held-out set, which turns the
-slope into a curve.  `V = 4096`, stride 100 (`n = 4,227`):
+slope into a curve — at two vocabularies.
+
+`V = 4096`, stride 10 (`n = 42,268`):
 
 | `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
 |---:|---:|---:|---:|---:|
-| 16 | 51.294 | 78.5 % | 97.9 % | 15,612 |
-| 24 | 51.191 | 78.5 % | 98.1 % | 16,529 |
-| 32 | 51.071 | 78.7 % | 98.0 % | 17,400 |
-| 48 | 50.708 | 79.3 % | 98.1 % | 19,275 |
-| 64 | 50.337 | 79.8 % | 98.1 % | 21,488 |
-| 96 | 50.043 | 80.4 % | 98.2 % | 27,199 |
+| 16 | 51.462 | 77.8 % | 98.1 % | 15,612 |
+| 24 | 51.333 | 77.9 % | 98.1 % | 16,529 |
+| 32 | 51.245 | 78.1 % | 98.1 % | 17,400 |
+| 48 | 50.889 | 78.5 % | 98.2 % | 19,275 |
+| 64 | 50.527 | 78.9 % | 98.3 % | 21,488 |
+| 96 | 50.203 | 79.3 % | 98.3 % | 27,199 |
+
+`V = 8192`, stride 100 (`n = 4,227`, so the fit column carries ±0.9 pt):
+
+| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+|---:|---:|---:|---:|---:|
+| 16 | 47.507 | 83.5 % | 98.6 % | 31,996 |
+| 24 | 47.319 | 83.7 % | 98.6 % | 33,512 |
+| 32 | 47.256 | 83.7 % | 98.6 % | 34,808 |
+| 48 | 47.180 | 83.9 % | 98.6 % | 37,282 |
+| 64 | 47.053 | 84.1 % | 98.7 % | 39,920 |
 
 | step | Δbits | Δbytes | kB/bit | Δ fit ≤64 | kB per point |
 |---|---:|---:|---:|---:|---:|
-| 16→24 | −0.103 | +917 | 8.9 | +0.0 | — |
-| 24→32 | −0.120 | +871 | 7.2 | +0.2 | 5.3 |
-| 32→48 | −0.363 | +1,875 | 5.2 | +0.7 | **2.8** |
-| 48→64 | −0.371 | +2,213 | 6.0 | +0.5 | 4.7 |
-| 64→96 | −0.294 | +5,711 | 19.4 | +0.6 | 9.3 |
+| 4096: 16→24 | −0.130 | +917 | 7.1 | +0.1 | 6.8 |
+| 4096: 24→32 | −0.088 | +871 | 9.9 | +0.2 | 4.6 |
+| 4096: 32→48 | −0.356 | +1,875 | 5.3 | +0.4 | 4.6 |
+| 4096: 48→64 | −0.362 | +2,213 | 6.1 | +0.4 | 5.4 |
+| 4096: 64→96 | −0.325 | +5,711 | 17.6 | +0.4 | **14.8** |
+| 8192: 16→24 | −0.188 | +1,516 | 8.1 | +0.2 | 8.0 |
+| 8192: 24→32 | −0.063 | +1,296 | 20.6 | +0.0 | 27 |
+| 8192: 32→48 | −0.076 | +2,474 | 32.6 | +0.2 | 12 |
+| 8192: 48→64 | −0.127 | +2,638 | 20.8 | +0.1 | 19 |
 
-Three things follow.
+Four things follow.
 
-* **The curve is not straight.** The marginal cost per fit point ranges from
-  2.8 kB (32→48) to 9.3 kB (64→96), a factor of 3.3.  The average over
-  `k = 32..64` is 3.4 kB/pt, which *understates* the last step by 2.7x and
-  overstates the cheapest step by 1.2x.  Since every pricing decision uses a
-  local slope, the neighbouring segment has to be quoted, not the average.
-* **The knee is at `k ≈ 64`**, where the `k²` cluster-pair table starts to
-  dominate: bytes per step go 871 → 1,875 → 2,213 → 5,711 while the bit gain
-  stays flat at ≈0.3–0.37 per step.  Buying `k` beyond 64 is the worst
-  available use of bytes on this grid.
-* **Fit ≤128 is saturated** (97.9–98.2 % across the whole sweep), so every
-  trade here is a 64-bit trade.  A byte spent for a 128-bit gain is worth
-  nothing.
+* **`k` is weak at 4096 and nearly dead at 8192.**  The middle of the 4096 sweep
+  costs 4.6–6.8 kB per fit point; at 8192 the same steps cost 8–27 kB/pt and the
+  whole `k = 16 → 64` range buys 0.45 bits for 7.9 kB.  Fit increments at 8192
+  are 0.0–0.2 pt — inside the sample's own noise.  At that vocabulary, raising
+  `k` buys almost nothing at any price.
+* **The apparent cheap segment was noise.**  At `n = 4,227` the 32→48 step
+  looked like 2.8 kB/pt, which invited a story about a cheap stretch of the
+  curve; at `n = 42,268` it is 4.6, in line with its neighbours.  The 10x
+  held-out set was run for exactly this reason and the correction is the point
+  of it: with 4,227 identifiers, adjacent fit differences of 0.2–0.7 pt are
+  ±0.9 pt, so segment *slopes* were never reliable to better than a factor of
+  two.  Absolute fit rates also fell 0.2–0.9 pt at every `k`.
+* **The knee survives.**  `k = 64 → 96` costs 14.8 kB/pt at 4096 (bytes per step
+  871 → 1,875 → 2,213 → 5,711 for a flat ≈0.35 bits): the `k²` cluster-pair
+  table dominates.  This is the one structural feature of the k-curve that a
+  larger sample did not soften.
+* **Fit ≤128 is saturated** (98.1–98.7 % everywhere), so every trade here is a
+  64-bit trade.
 
-The earlier two-point estimates (4.5–5.8 kB/pt for `k = 32 → 64`, 3.9 kB/pt for
-`V = 4096 → 8192`) sit inside this range and are consistent with it; the sweep's
-value is not that they were wrong but that the *sign* of the error is now known.
+**`V` versus `k` at matched bytes — a staircase.**  The comparison the record
+never had is now measurable: `V = 8192, k = 16` is 32.0 kB / 83.5 %, while
+`V = 4096` tops out at 27.2 kB / 79.3 % (`k = 96`).  So the last ~5 kB spent
+crossing from 4096 to 8192 buys ≈4.2 points (≈1.2 kB/pt, ±0.5 for the mixed
+stride), whereas the next 8 kB spent *inside* 8192 — `k = 16 → 64` — buys
+0.6 points (13 kB/pt).  On matched `k` the `V` step is 3.1–3.5 kB/pt
+(`4096/32 → 8192/32`: +17.4 kB for +5.6 pt), against 4.6–27 kB/pt for `k`.
+So the frontier is not a curve through `(bytes, fit)` that `k` can walk along;
+it is a staircase in `V` with a flat tread in `k`.
 
-**This is a slice, not the frontier.**  The frontier is the envelope over `V` as
-well as `k`, and the earlier finding stands: **`V` is the productive direction
-and `k` is not.**  In this document's own table, `k = 52 → 105` costs 8.6–9.2 kB
-for 0.7–1.4 points (6–13 kB/pt), while `V = 2 104 → 4 478` at `k = 52` costs
-11.8 kB for 5.9 points (2.0 kB/pt).  The reason is mechanical, not accidental: a
-bigger word list shortens identifiers — held-out mean length falls 4.70 → 4.05
-tokens from `V = 4096` to `8192` — and the 64-bit budget is dominated by the
-*long* identifiers, so `V` attacks the part of the distribution the threshold
-measures.  A finer `k` only shaves 0.3–0.4 bits off the conditional entropy of
-tokens already inside an identifier.
+Two consequences for the operating point:
 
-So the sweep answers a narrower question than "where is the frontier": it says
-what the *next* kilobyte buys **at fixed `V`**, which is the right comparison for
-a candidate that adds bytes to an existing model (C26's shared clusters, C27's
-reserved cell, C28's quarters) but the wrong one for "should this model be
-bigger".  Read it that way and the two pictures agree: the k-curve is interior to
-the V-envelope, and its local slope (2.8 kB/pt at `k = 32 → 48`) is the
-opportunity cost of spending a kilobyte *inside* a model rather than replacing
-it.
+* **`8192, k = 16–32` is where the cheap frontier is.**  `k = 64` at that
+  vocabulary spends 8 kB to buy 0.6 points; it should not be the default unless
+  something else needs the resolution.
+* **`k = 16` is not a floor we have found.**  Fit rises monotonically as `k`
+  falls to 16, so `k = 8` may be better still at 8192 — the sweep stops at the
+  lowest `k` anyone has tried, not at an optimum.
 
-The gap in the record is that the envelope is only sampled at six points, one per
-`V`, all at `k ≈ 52` or 105.  The configuration that would test the `V`-first
-policy directly — same bytes, more words versus more clusters — is a `k` sweep at
-`V = 8192`: `k = 16` there costs ≈32 kB, the same budget as `V = 4096, k = 48`
-(19.3 kB) plus slack, and the comparison has never been run.
+The reason `V` wins is mechanical, not accidental: a bigger word list shortens
+identifiers — held-out mean length falls 4.70 → 4.05 tokens from `V = 4096` to
+`8192` — and the 64-bit budget is dominated by the *long* identifiers, so `V`
+attacks the part of the distribution the threshold measures.  A finer `k` only
+shaves the conditional entropy of tokens already inside an identifier.
+
+**This is a slice, not the frontier.**  The sweep answers a narrower question
+than "where is the frontier": it says what the *next* kilobyte buys **at fixed
+`V`**, which is the right comparison for a candidate that adds bytes to an
+existing model (C26's shared clusters, C27's reserved cell, C28's quarters) but
+the wrong one for "should this model be bigger".  Used that way the two pictures
+agree: the k-curve is interior to the V-envelope, and its local slope
+(4.6 kB/pt in the middle of the 4096 sweep) is the opportunity cost of spending
+a kilobyte *inside* a model rather than replacing it.
 
 ## What it shows
 
