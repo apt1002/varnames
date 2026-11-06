@@ -113,7 +113,7 @@ The full tables are far larger and their fit rates are the ceilings:
 [`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) repeats them at stride 10 and the two
 largest move up by under a point (77.8 % and 83.2 %).
 
-### The local slope, `k` swept at fixed `V`
+### The frontier along `k` — an interior slice
 
 The frontier above is a set of points at different `V`; anything priced against
 it (C26's shared clusters, C27's reservation, C28's quarters) was compared with
@@ -156,6 +156,32 @@ Three things follow.
 The earlier two-point estimates (4.5–5.8 kB/pt for `k = 32 → 64`, 3.9 kB/pt for
 `V = 4096 → 8192`) sit inside this range and are consistent with it; the sweep's
 value is not that they were wrong but that the *sign* of the error is now known.
+
+**This is a slice, not the frontier.**  The frontier is the envelope over `V` as
+well as `k`, and the earlier finding stands: **`V` is the productive direction
+and `k` is not.**  In this document's own table, `k = 52 → 105` costs 8.6–9.2 kB
+for 0.7–1.4 points (6–13 kB/pt), while `V = 2 104 → 4 478` at `k = 52` costs
+11.8 kB for 5.9 points (2.0 kB/pt).  The reason is mechanical, not accidental: a
+bigger word list shortens identifiers — held-out mean length falls 4.70 → 4.05
+tokens from `V = 4096` to `8192` — and the 64-bit budget is dominated by the
+*long* identifiers, so `V` attacks the part of the distribution the threshold
+measures.  A finer `k` only shaves 0.3–0.4 bits off the conditional entropy of
+tokens already inside an identifier.
+
+So the sweep answers a narrower question than "where is the frontier": it says
+what the *next* kilobyte buys **at fixed `V`**, which is the right comparison for
+a candidate that adds bytes to an existing model (C26's shared clusters, C27's
+reserved cell, C28's quarters) but the wrong one for "should this model be
+bigger".  Read it that way and the two pictures agree: the k-curve is interior to
+the V-envelope, and its local slope (2.8 kB/pt at `k = 32 → 48`) is the
+opportunity cost of spending a kilobyte *inside* a model rather than replacing
+it.
+
+The gap in the record is that the envelope is only sampled at six points, one per
+`V`, all at `k ≈ 52` or 105.  The configuration that would test the `V`-first
+policy directly — same bytes, more words versus more clusters — is a `k` sweep at
+`V = 8192`: `k = 16` there costs ≈32 kB, the same budget as `V = 4096, k = 48`
+(19.3 kB) plus slack, and the comparison has never been run.
 
 ## What it shows
 
