@@ -550,9 +550,9 @@ bits, so the honest comparison for CQF is not against CF but against arithmetic:
 | 4096, k=64 | 80.0% | 79.8% | +0.2 | +5,104 | 26 |
 
 So CQF is a **`k = 32`, `q = 2`, Huffman-only** optimisation: worth ~0.9 fit
-points there at 1,144 B — still 3x cheaper per point than the cheapest `k`
-segment (2.8 kB/pt) — and worth nothing at `k = 64` once arithmetic decoding is
-admitted.  Since `ENCODING.md` §1–3 chooses code lengths over probabilities for
+points there at 1,144 B — still 3x cheaper per point than the `k` direction
+(4.6 kB/pt in the middle of the 4096 sweep) — and worth nothing at `k = 64`
+once arithmetic decoding is admitted.  Since `ENCODING.md` §1–3 chooses code lengths over probabilities for
 the decoder's sake, this is a real and conditional gain: it exists *because* the
 product is a Huffman product.
 
