@@ -146,6 +146,16 @@ slope into a curve — at two vocabularies.
 | 48 | 47.399 | 82.9 % | 98.8 % | 37,282 |
 | 64 | 47.285 | 83.1 % | 98.8 % | 39,920 |
 
+`V = 6144`, stride 10 (`n = 42,268`) — the intermediate point built to test
+whether the envelope is smooth or stepped:
+
+| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+|---:|---:|---:|---:|---:|
+| 4 | 50.384 | 79.3 % | 98.3 % | 20,432 |
+| 8 | 49.674 | 80.0 % | 98.4 % | 22,015 |
+| 16 | 49.317 | 80.5 % | 98.5 % | 23,741 |
+| 32 | 48.959 | 80.9 % | 98.5 % | 26,041 |
+
 | step | Δbits | Δbytes | kB/bit | Δ fit ≤64 | kB per point |
 |---|---:|---:|---:|---:|---:|
 | 4096: 16→24 | −0.130 | +917 | 7.1 | +0.1 | 6.8 |
@@ -189,19 +199,47 @@ Four things follow.
 * **Fit ≤128 is saturated** (98.1–98.7 % everywhere), so every trade here is a
   64-bit trade.
 
-**`V` versus `k` at matched bytes — a staircase.**  The comparison the record
-never had is now measurable, on the same held-out set: `V = 8192, k = 16` is
-32.0 kB / 82.5 %, while `V = 4096` tops out at 27.2 kB / 79.3 % (`k = 96`).  So
-the crossover is now even sharper than that: `V = 8192, k = 4` costs 27.7 kB and
-fits **81.2 %**, against 27.2 kB and 79.3 % for 4096's best point (`k = 96`) —
-**+1.9 points for 464 bytes**, because 4096's last 1.5 kB is spent on `k`, which
-is worthless there.  Above the step, the next 12 kB spent *inside* 8192
-(`k = 4 → 64`) buys 1.9 points (6.5 kB/pt).  On matched `k` the `V` step is 3.5–3.7 kB/pt
-(`4096/16 → 8192/16`: +16.4 kB for +4.7 pt; `4096/32 → 8192/32`: +17.4 kB for
-+4.7 pt), against 4.6–21 kB/pt for `k`.  So `V` is 2–6x cheaper per fit point
-than `k` on matched `k`, and ~9x cheaper at the point where the two curves meet.
-The frontier is not a curve through `(bytes, fit)` that `k` can walk along; it is
-a staircase in `V` with a flat tread in `k`.
+**The envelope is a ramp, not a staircase — and the earlier claim was an
+artefact.**  Reading only the two `k`-sweeps, the frontier looked discontinuous:
+4096's best point was 27.2 kB / 79.3 % and 8192's worst was 27.7 kB / 81.2 %, a
+1.9-point jump for 464 bytes.  That comparison was wrong in a specific way: it
+put the *top* of one `k`-curve (4096 at `k = 96`, where `k` is worth nothing)
+against the *bottom* of the next (8192 at `k = 4`).  With `V = 6144` measured in
+between, the jump disappears:
+
+| bytes | `V` | `k` | bits | fit ≤64 | kB/pt to next |
+|---:|---:|---:|---:|---:|---:|
+| 15,612 | 4096 | 16 | 51.462 | 77.8 % | 5.6 |
+| 17,400 | 4096 | 32 | 51.245 | 78.1 % | 6.7 |
+| 19,275 | 4096 | 48 | 50.889 | 78.5 % | 4.2 |
+| 20,432 | 6144 | 4 | 50.384 | 79.3 % | 2.6 |
+| 22,015 | 6144 | 8 | 49.674 | 80.0 % | 2.7 |
+| 23,741 | 6144 | 16 | 49.317 | 80.5 % | 5.6 |
+| 26,041 | 6144 | 32 | 48.959 | 80.9 % | 5.3 |
+| 27,663 | 8192 | 4 | 48.995 | 81.2 % | 4.3 |
+| 31,996 | 8192 | 16 | 47.727 | 82.5 % | 9.4 |
+| 34,808 | 8192 | 32 | 47.481 | 82.8 % | 13.2 |
+| 39,920 | 8192 | 64 | 47.285 | 83.1 % | — |
+
+Three things to take from it.
+
+* **The cheap stretch is 20–32 kB at ≈3 kB per fit point**, and it belongs to the
+  `V = 6144` and low-`k` 8192 configurations.  Above 32 kB the envelope turns
+  expensive (9–13 kB/pt); below 20 kB you are on 4096 and `k` is the only knob.
+* **`V = 6144` dominates the whole upper half of the 4096 sweep.**  Its *worst*
+  point (`k = 4`, 20.4 kB, 79.3 %) matches 4096's best (27.2 kB, 79.3 %) at
+  **6.8 kB cheaper** — the same fit for two-thirds of the bytes.
+* **The `V` step is where the money goes at every budget**: 4096→6144 buys
+  2.2 bits for 8.1 kB (3.8 kB/bit), 6144→8192 buys 1.6 bits for 8.3 kB
+  (5.2 kB/bit), while a doubling of `k` above 16 buys ≈0.3 bits for 2–6 kB and
+  is worthless above 32.
+
+**Method note.**  Two consecutive shape claims from the `k`-sweeps (a "cheapest
+segment at 32→48", then a "staircase in `V`") were both artefacts of comparing
+badly chosen points, and both were corrected by adding the missing row rather
+than by re-running the same measurements.  The lesson is to build the envelope
+from every measured point *before* interpreting its shape: each `k`-sweep is a
+slice, and the endpoint of one slice is not the frontier.
 
 Two consequences for the operating point:
 
