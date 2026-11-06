@@ -111,6 +111,13 @@ distribution, and that changes what the code costs.
   decoder may have to read up to 26 zeros of padding to see the terminator —
   free, but the standard has to say so.
 
+One more bit comes for free and is not in the table: the code occupies the low
+bits of the integer, so whatever zeros sit at the top of the final codeword are
+indistinguishable from the terminator's padding.  On average that is one bit per
+identifier (`ENCODING.md` §2), so the Huffman advantage over arithmetic is about
+**2 bits/identifier**, and `fit <= 64` is ~1 bit better than a sum of codeword
+lengths suggests.
+
 Measured on the pre-rebuild corpus; re-measured with the rest under the rebuild.
 
 ## What it shows

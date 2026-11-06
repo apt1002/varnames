@@ -110,6 +110,29 @@ path of every leaf below it).  Including the stop and not spending it is
 therefore the practical optimum — provided its weight is driven to zero as
 above.
 
+### The trailing zeros are free
+
+The code sits in the low bits of the integer and the terminator is the run of
+zeros above it, so a zero at the **top** of the written code is indistinguishable
+from padding and need not be stored.  The top bits of the code are the last bits
+of the final codeword, so whenever that codeword ends in zero the identifier is
+one bit shorter.  For a code whose last bits are about balanced that happens half
+the time, then a quarter of the time for two zeros, and so on:
+
+    E[trailing zeros] ≈ ½ + ¼ + … = 1 bit per identifier, purely by luck.
+
+Nothing has to be stripped to get it: the canonical form is *the integer*, whose
+binary length already ends at the highest set bit.  Two consequences:
+
+* It is another **~1 bit/identifier that arithmetic coding cannot match** — the
+  shortest fraction in the arithmetic interval is already optimal, and has no
+  such structural slack.  Together with the zero-weight stop this is ~2 bits per
+  identifier in Huffman's favour (against ~0.7 bits of rounding).
+* It is a further reason the **fit rate** is the yardstick and "mean bits" is
+  only a capacity statement: a code with fewer trailing zeros produces *smaller*
+  integers, which the fit rate counts and a summed codeword length does not.
+  Any measurement that sums codeword lengths is therefore ~1 bit conservative.
+
 ### The arithmetic case: why it does not transfer
 
 Arithmetic coding replaces the per-symbol code by one number: a point in the
