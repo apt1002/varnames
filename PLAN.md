@@ -185,11 +185,11 @@ labels (see `README.md`).
       measured where the penalty is 3.9 bits and the canonical penalty is 1.2.
       Open: the canonical accounting run (`V = 4096`, `k = 32/64`), then the
       measured-code experiment only if that survives.
-      `docs/ENCODING.md` §5.  *Originally planned* — stop each right-cluster Huffman tree
-      early at `q` trees and encode `P(quarter | left cluster)` instead, buying
-      back part of the two-tree factorisation penalty at `O(k² log k)` extra
-      model bytes; price it against spending the same bytes on more words or
-      more clusters.  `docs/ENCODING.md` §5.
+      `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` — stop each
+      right-cluster Huffman tree early at `q` trees and encode
+      `P(quarter | left cluster)` instead, buying back part of the two-tree
+      factorisation penalty at `O(k² log k)` extra model bytes; price it against
+      spending the same bytes on more words or more clusters.
 - [ ] **C29. Codesign the assignment and the code.** *Planned* — collapse
       clustering and Huffman building into one greedy merge loop over cells,
       keyed on `λ_fit·(fit loss)` + `λ_code·(code-length increase)` − (model
