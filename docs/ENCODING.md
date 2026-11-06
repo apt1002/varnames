@@ -556,6 +556,37 @@ admitted.  Since `ENCODING.md` §1–3 chooses code lengths over probabilities f
 the decoder's sake, this is a real and conditional gain: it exists *because* the
 product is a Huffman product.
 
+**The operating point: `V = 8192, k = 16`.**  The frontier measurement moved the
+cheap model down to a coarse `k` at the largest vocabulary, which changes CQF's
+economics because the top stage is `k x kq` — at `k = 16, q = 2` it is 16 × 32
+leaves:
+
+| scheme | bits/id | fit ≤64 | bytes |
+|---|---:|---:|---:|
+| flat (yardstick) | 46.951 | 83.9% | 245,756 |
+| CF | 48.987 | 81.9% | 15,544 |
+| CF, arithmetic | 47.727 | 82.5% | 15,544 |
+| CQF `q = 2` | 47.891 | **82.8%** | 15,796 |
+| CQF `q = 4` | 47.820 | 82.8% | 16,364 |
+
+Paired against CF: arithmetic `−1.260 ± 0.005` bits / `+0.6 ± 0.0` pt; CQF `q = 2`
+`−1.095 ± 0.006` / `+0.9 ± 0.1` pt; CQF `q = 4` `−1.167 ± 0.006` / `+1.0 ± 0.1`.
+
+So at the operating point CQF `q = 2` costs **252 bytes** and buys 0.9 points
+over CF, or **0.3 points over arithmetic decoding at 0.84 kB/pt**.  It is the
+cheapest fit point in the whole study, and `q = 4` is again dominated (same fit,
+3.3x the bytes).
+
+This cell also settles the mechanism question the `k = 32` cell left ambiguous.
+Here CQF's mean bits are *worse* than arithmetic decoding (47.891 against
+47.727, i.e. +0.16) while its **fit rate is better** (82.8% against 82.5%): the
+code pays more on average and still puts more identifiers under 64 bits.  That is
+only possible if the cost distribution is being reshaped — short lengths for the
+heavy symbols of a quarter, long for the rare ones — which is exactly the effect
+§5's redundancy argument predicts and cannot be explained by "Huffman catching up
+to its own entropy".  CQF's value is a threshold gain, not an entropy gain, and
+at a coarse `k` it is both cheap and effective.
+
 **The noise, measured.** These are proportions over 4,227 identifiers, so the
 right yardstick is the *paired* per-identifier difference (same held-out
 identifiers, same trees below the top stage).  At `V = 4096, k = 32`:

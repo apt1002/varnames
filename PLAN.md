@@ -190,7 +190,9 @@ labels (see `README.md`).
       artefact.  Against the *free* alternative (arithmetic decoding of the same
       tables) the margin is `+0.9 pt` at `k = 32` and nil at `k = 64`, so CQF is
       a Huffman-product optimisation: it wins on the threshold, not on the mean.
-      Remaining follow-up: re-measure on a 10x held-out set at H6.
+      At the measured operating point (`V = 8192, k = 16`) it costs 252 B and
+      buys 0.9 pt over CF, 0.3 pt over arithmetic decoding — the cheapest fit
+      point in the study.  Remaining follow-up: re-measure at H6.
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` (pricing),
       `scripts/quarter_codes.py` (held-out scoring) — stop each
       right-cluster Huffman tree early at `q` trees and encode
