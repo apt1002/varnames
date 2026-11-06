@@ -163,13 +163,15 @@ labels (see `README.md`).
       frontier slope: dominated at matched bytes.  Open: the canonical grid
       (`V = 4096`, `k = 32/64`), where the membership saving is 2.5-3.0 kB.
       `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
-- [ ] **C27. Reserved stop clusters.** *Measured at the testing point* — the
-      end boundary improves as designed, the start boundary does not (the
-      within-right-cluster allocation is proportional to the unigram, so digits
-      leak into first position); `profile=full` recovers it to parity and is
-      adopted as the reservation's definition.  Open: the same three-way
-      comparison at the canonical grid, and whether the start defect survives
-      `k = 64`.  `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
+- [ ] **C27. Reserved stop clusters.** *Measured at the testing point,
+      recommended for adoption with `profile=full`* — at `k = 16` the
+      reservation is free and fixes the end boundary; the apparent start-side
+      defect (digits leaking into first position) is a resolution artefact that
+      vanishes by `k = 32`, so no extra boundary table is needed.  At `k = 64` it
+      costs 0.40 bits (0.6%) and 0.7 pt of fit<=64 for 8x fewer mid-word starts,
+      4x fewer mid-word ends and the elimination of the digit leak.  Open: the
+      three-way comparison at the canonical grid.
+      `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
 - [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
       early at `q` trees and encode `P(quarter | left cluster)` instead, buying
       back part of the two-tree factorisation penalty at `O(k² log k)` extra

@@ -1,7 +1,8 @@
 # Reserving clusters for the stop token
 
-Status: **measured at the testing point** (`V = 512`, `k = 16`); the canonical
-grid and the start-boundary defect below are the open work.
+Status: **measured at the testing point** (`V = 512`); recommended for
+adoption with `profile=full`, on the trade stated below.  The canonical grid is
+the open confirmation.
 
 ## The question
 
@@ -155,6 +156,44 @@ off the `k`-doubling control in `SHARED_CLUSTERS.md` — so the exact table is
 
 Options 2 and 3 both break "the stop is ordinary" in the table layout, so the
 first question remains whether the defect survives at `k = 64`.
+
+### The defect does not survive larger `k`
+
+Raising `k` at the testing point (`V = 512`, diagnostic `k` — the canonical
+pairing is `k = 32/64` at `V = 4096/8192`), `reserved(k)`, `profile=full`,
+2,114 held-out identifiers, 1,500 samples:
+
+| k | bits | fit<=64 | starts mid | ends mid | first-tok KL | digit mass | boundary table would recover |
+|---|---|---|---|---|---|---|---|
+| 16 | 67.703 | 57.2% | 2.1% | 0.0% | 0.311 | 1.91% | 0.83 bits |
+| 32 | 66.056 | 59.8% | 0.5% | 0.2% | 0.220 | 0.02% | 0.38 bits |
+| 64 | 63.624 | 63.0% | 0.3% | 0.1% | 0.180 | 0.02% | 0.08 bits |
+
+So the start-boundary defect is a **resolution** artefact, not a structural
+flaw in the reservation: once the right clusters are fine enough, the words that
+never start an identifier separate on their own ("preceded by the stop" is the
+first entry of a word's column profile, and `profile=full` puts it in the
+clustering metric).  Options 2 and 3 are therefore unnecessary — and at `k = 64`
+the exact-table reference is even *worse* than the block model (−0.04 bits,
+because the exact raw-count row is unfitted where the block model carries the
+`kappa` prior).
+
+### `reserved` vs `plain` at `k = 64`
+
+| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | digit |
+|---|---|---|---|---|---|---|---|---|
+| `plain(k)` | **63.227** | **63.7%** | 94.9% | 2.5% | 0.4% | 0.204 | 1.102 | 1.7% |
+| `plain(k-1)` | 63.325 | 63.4% | 94.9% | 2.4% | 0.3% | 0.210 | 1.104 | 1.8% |
+| `reserved(k)` | 63.624 | 63.0% | **95.0%** | **0.3%** | **0.1%** | **0.180** | **1.039** | **0.0%** |
+
+The reservation now **costs** 0.40 bits (0.6%) and 0.7 points of fit<=64, where
+at `k = 16` it was free.  Under the decision rule of this note, (a) fails
+marginally and (b) is strong: mid-word starts fall 8x, mid-word ends 4x, the
+digit leak is eliminated, and both boundary KLs improve.  **Recommend adopting
+it with `profile=full`** — the compression price is 0.6% and the generative
+property is what the product sells.  Note also that the pooled stop leaks digits
+at *every* `k` (1.7% at `k = 64`), so this is not a small-`k` curiosity on the
+`plain` side either.
 
 Two things that are *not* C27 effects but are visible here and matter later:
 the sampled length distribution is ~1.8x too long in every configuration
