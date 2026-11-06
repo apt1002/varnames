@@ -153,9 +153,7 @@ labels (see `README.md`).
       `docs/CODING_OVERHEAD.md`, `scripts/words_per_identifier.py`.
 
 - [x] **C26. One cluster assignment for both sides.** *Adopted at the canonical
-      grid; rejected at the testing point, where the byte frontier is too cheap
-      for the saving to be worth a fit point.* `docs/SHARED_CLUSTERS.md`,
-      `scripts/shared_clusters.py`.
+      grid.* `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
 - [x] **C27. Reserved stop clusters.** *Rejected — cheap but inert; the exact
       boundary table it would replace cannot pay for itself.  The sample-0
       dictionaries stay plain.* `docs/NEWLINE_CLUSTER.md`,
@@ -273,8 +271,9 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`, `BREAK_OPEN_PRIOR.md`,
       `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`, `MODEL_BUDGET.md`,
       `BUDGET64_STUDY.md`, the measurements in `SHARED_CLUSTERS.md`,
-      `NEWLINE_CLUSTER.md` and `ENCODING.md`, and the headline figures in
-      `README.md`/`PLAN.md`.
+      `NEWLINE_CLUSTER.md` and `ENCODING.md`, the testing-point numbers in
+      `SMALL_DICT.md` (which exist only to exercise scripts), and the headline
+      figures in `README.md`/`PLAN.md`.
 - [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
       `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
       pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
@@ -282,12 +281,13 @@ these can be rebuilt in any order, later, without losing the old numbers.
       (they are within-`V`), but any cross-`V` price must carry the term.
       `docs/MODEL_BUDGET.md` ("What the byte numbers include").
 - [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done* — the grid is now
-      `V ∈ {512, 4096, 6144, 8192}` (`NUM_PAIRS` 448, 4032, 6080, 8128; 512 is
-      for testing only), and the measured operating points replace the old
+      `V ∈ {4096, 6144, 8192}` (`NUM_PAIRS` 4032, 6080, 8128), with `V = 512`
+      kept only to exercise scripts (`docs/SMALL_DICT.md`; nothing is decided
+      there), and the measured operating points replace the old
       `k ∈ {32, 64}` default; see `docs/MODEL_BUDGET.md` for the frontier.  The old sweep (`V` 96/2040/4414/11694, `k`
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
       H6 re-measures at it.  Testing at `V = 512` uses `k = 16` only; anything
-      measured there is labelled testing-only.
+      measured there is labelled testing-only and lives in `docs/SMALL_DICT.md`.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 

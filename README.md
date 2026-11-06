@@ -83,8 +83,9 @@ varnames/
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables, cluster quarters
-│   ├── SHARED_CLUSTERS.md               # one cluster assignment for both sides (planned)
-│   ├── NEWLINE_CLUSTER.md               # reserved clusters for the stop token (planned)
+│   ├── SHARED_CLUSTERS.md               # one cluster assignment for both sides (adopted)
+│   ├── NEWLINE_CLUSTER.md               # reserved clusters for the stop token (rejected)
+│   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -161,7 +162,7 @@ this checkout lives on slow storage): the same query that takes seconds with
 
 ## Repository conventions
 
-Two house rules keep the plan and the reports from drifting apart.
+Three house rules keep the plan and the reports from drifting apart.
 
 **Keep plan identifiers out of reports and filenames.** `PLAN.md` labels each
 thread with a short identifier (`A1`, `B1`, `C5`, …). Those labels are *local to
@@ -178,6 +179,17 @@ owns the detail. Design notes, derivations and experimental results do **not**
 belong in `PLAN.md`; they live in the individual experiment reports, which
 `PLAN.md` links to. This keeps the plan readable, and lets the reports evolve
 without touching it.
+
+**Nothing is decided at the testing vocabulary.** The pair-merge dictionary is
+built at a fixed grid (`V = 4096, 6144, 8192`), and `V = 512` exists only to
+exercise scripts: it builds in seconds and fits in memory, so a new harness can
+be run end to end before the real one is paid for. It is **not** a small version
+of the product. No accept/reject decision, no byte budget and no frontier price
+may be taken from it — the frontier is priced in kB per point of fit, and that
+price differs by an order of magnitude between 512 and the grid, so a scheme that
+saves a fixed number of bytes is scored differently at each. Measurements at
+`V = 512` are kept in [`docs/SMALL_DICT.md`](docs/SMALL_DICT.md), which carries
+the same warning; the experiment reports quote only the grid.
 
 ## CamelCase normalisation and common substrings
 
