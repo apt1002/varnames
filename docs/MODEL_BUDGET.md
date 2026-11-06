@@ -183,8 +183,8 @@ the last ~4.8 kB spent crossing from 4096 to 8192 buys ≈3.2 points
 (≈1.5 kB/pt), whereas the next 7.9 kB spent *inside* 8192 — `k = 16 → 64` —
 buys 0.6 points (13 kB/pt).  On matched `k` the `V` step is 3.5–3.7 kB/pt
 (`4096/16 → 8192/16`: +16.4 kB for +4.7 pt; `4096/32 → 8192/32`: +17.4 kB for
-+4.7 pt), against 4.6–21 kB/pt for `k`.  So `V` is 2.5–3x cheaper per fit point
-than `k` on matched `k`, and 8x cheaper at the point where the two curves meet.
++4.7 pt), against 4.6–21 kB/pt for `k`.  So `V` is 2–6x cheaper per fit point
+than `k` on matched `k`, and ~9x cheaper at the point where the two curves meet.
 The frontier is not a curve through `(bytes, fit)` that `k` can walk along; it is
 a staircase in `V` with a flat tread in `k`.
 
