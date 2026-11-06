@@ -38,20 +38,25 @@ for the `Δ` rule.
 | 3.0 | 0.6 | 19 567 | 18 427 | **+5.8 %** |
 | 3.0 | 0.9 | 17 328 | 16 309 | **+5.9 %** |
 
-**Real** (`merged_training.txt`, stride-500 sample, 2 000 train / 2 000 test):
+**Real** (`merged_training.txt`, stride-500 sample, 3 804 train / 3 805 test,
+63 symbols):
 
 | NUM_PAIRS | freq | delta | better |
 |---:|---:|---:|---|
-| 8  | 143 779 | 143 293 | delta (**+0.34 %**) |
-| 16 | 140 443 | 140 123 | delta (**+0.23 %**) |
-| 24 | 137 434 | 137 625 | freq (**−0.14 %**) |
+| 8  | 253 999 | 253 194 | delta (**+0.32 %**) |
+| 16 | 248 596 | 248 242 | delta (**+0.14 %**) |
+| 24 | 244 369 | 243 891 | delta (**+0.20 %**) |
 
 So the `Δ` rule's edge is large on structured synthetic data but **small and
-non-monotone on real identifiers** — it fades to a fraction of a percent and
-actually reverses by `NUM_PAIRS = 24`.  This is exactly the documented drawback:
-`Δ` is estimated on the training counts, so it happily spends words on rare
-short-range patterns that do not generalise, whereas the most-frequent-pair rule
-is a robust, cheap proxy.  For real corpora, keep the frequency rule.
+unstable on real identifiers** — a third of a percent at `NUM_PAIRS = 8`, a
+seventh at 16, for eight times the work per step (the `Δ` rule scores the top
+eight candidate pairs).  The sign is not even stable across splits: on the
+smaller 2 000 / 2 000 split of the same corpus it reads `+0.21 %`, `−0.10 %`,
+`+0.02 %`.  (The pre-expansion table, on the smaller corpus, showed a reversal
+at `NUM_PAIRS = 24`; that does not reproduce.)  This is exactly the documented
+drawback: `Δ` is estimated on the training counts, so it happily spends words on
+rare short-range patterns that do not generalise, whereas the most-frequent-pair
+rule is a robust, cheap proxy.  For real corpora, keep the frequency rule.
 
 ## The `(u^k)` run word vs the `(uv)` boundary word
 
@@ -164,6 +169,13 @@ since been removed, the no-run rule being the only one), counted on the full
 training corpus and scored on the full
 held-out validation set (229,534 identifiers, `kappa = 1000`):
 
+> **Historical measurement.** These are the pre-expansion numbers (the
+> 2.37 M-identifier corpus, held-out 229,534). The run path has since been
+> deleted from `scripts/tree_words.py`, so the comparison cannot be re-run at the
+> canonical grid; the tables stand as the record of why the rule was dropped.
+> The run statistics that justify it are re-measured in
+> [`RUN_LENGTHS.md`](RUN_LENGTHS.md).
+
 | vocab `V` | run rules | rules | mean bits | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|
 | 576 | 7 → 0 | 499 → 512 | 54.05 → **53.83** | 169,980 → **170,672** | 224,782 → 224,816 |
@@ -183,7 +195,7 @@ the same `V` and each rule is marginally dearer, so the run machinery saves
   7 run rules buy (13 lengths of `r f m _ s 1 0`-doubles, including `f*15` and
   `0*19`) are worth less than the 13 ordinary pairs the no-run list buys with the
   same budget: 0.22 bits cheaper and 692 more identifiers inside 64 bits.
-* **Why it is cheap.**  Runs are 2.13 % of character adjacencies and 99 % of
+* **Why it is cheap.**  Runs are 2.17 % of character adjacencies and 99.0 % of
   them are length 2 (`docs/RUN_LENGTHS.md`), so the run rules mostly buy `ss`,
   `tt`, `ee`, `__`, `00` — words that a pair word containing a neighbour
   (`sse`, `ess`, `tte`, `__i`) delivers anyway.  What the run rules mostly add
@@ -199,8 +211,8 @@ self-merges forbidden, and the run machinery (the run rule, the run-length
 table, the k-ary node and the replay path) has been deleted from
 `scripts/tree_words.py` rather than left as a dead branch.  The held-out numbers in
 [`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) were measured on the
-run-aware rule and are unchanged by the switch (same `V`, same counts to within
-3 identifiers), so they stand.
+run-aware rule; they are re-measured on the no-run dictionaries in
+`WORD_COMPRESSIBILITY.md` itself (H6).
 
 ### Robustness of the conclusion
 
@@ -232,6 +244,6 @@ Differences of 0.02–0.04 bits and ≤0.2 pt, in both directions — noise, aga
 a saving of two model-budget items (the run-length table and the k-ary node
 type).
 
-*Caveat: measured on one corpus and one stride; the 576 row is the
-only place the two rules differ appreciably, and the corpus rebuild recorded in
-`PLAN.md` will re-measure all of it.*
+*Caveat: measured on the pre-expansion corpus at one stride; the 576 row is the
+only place the two rules differ appreciably.  The canonical grid runs the no-run
+rule only, so this table is the record rather than a live comparison.*
