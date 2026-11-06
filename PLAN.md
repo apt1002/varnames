@@ -178,15 +178,15 @@ labels (see `README.md`).
       pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
       case for the stop.  `docs/NEWLINE_CLUSTER.md`,
       `scripts/newline_cluster.py`.
-- [ ] **C28. Cluster quarters.** *Accounting done at the testing point* —
-      `quarter_accounting.py` confirms the mechanism exactly: CQF recovers the
-      expensive in-cell merges (18% of the flat → CF penalty at `q = 2`, 30% at
-      `q = 4`) minus the increase in the top stage, and the identity closes to
-      three decimals.  Priced against the frontier the scheme is a loss at
-      `k = 64` and at best a draw at `k = 32`, because the recovery fraction was
-      measured where the penalty is 3.9 bits and the canonical penalty is 1.2.
-      Open: the canonical accounting run (`V = 4096`, `k = 32/64`), then the
-      measured-code experiment only if that survives.
+- [ ] **C28. Cluster quarters.** *Accounting done; pays at `k = 32`.*  The
+      mechanism is confirmed exactly (the identity closes to three decimals) and
+      at the canonical grid CQF recovers 35% (`q = 2`) / 41% (`q = 4`) of the
+      flat → CF penalty, i.e. 0.81 / 0.95 bits per identifier — better than the
+      18% / 30% seen at the testing point, because the word step is 66% of CF's
+      cost there.  Against a frontier of ≈5.5 kB/bit (measured two ways) `q = 2`
+      nets +0.60 bits and `q = 4` +0.28.  Open: `k = 64` accounting (expected
+      loss), then the measured-code experiment, since these are training-count
+      Huffman numbers with no fit rate and the decision rule is in fit rates.
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` — stop each
       right-cluster Huffman tree early at `q` trees and encode
       `P(quarter | left cluster)` instead, buying back part of the two-tree

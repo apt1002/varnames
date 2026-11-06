@@ -347,22 +347,49 @@ in-cell merges.  But the *fraction* is measured where the penalty is large: at
 coarse.  At the canonical grid the flat → CF penalty is ~1.2 bits/identifier,
 so the same fractions recover only ~0.22 (`q = 2`) and ~0.36 (`q = 4`) bits.
 
-**Priced against the frontier**, using the `k`-doubling slope measured on the
-canonical grid (`V = 4096`: `k = 32` → 64 costs 3.2 kB and buys 0.73 bits, so
-≈4.3 kB per bit):
+The same check at the canonical grid (`V = 4096`, `k = 32`, 4.02M identifiers,
+22.9M transitions) is **better**, not worse:
 
-| config | CQF bytes over CF | bits it buys | bits the same bytes buy elsewhere |
+| scheme | bits/identifier | vs flat | model bytes |
 |---|---:|---:|---:|
-| 4096, k=32, q=2 | +1.1 kB | ~0.22 | ~0.26 |
-| 4096, k=32, q=4 | +3.6 kB | ~0.36 | ~0.83 |
-| 4096, k=64, q=2 | +5.0 kB | ~0.22 | ~1.15 |
-| 4096, k=64, q=4 | +15.9 kB | ~0.36 | ~3.7 |
+| flat (yardstick) | **50.122** | — | 229,368 |
+| CF | 52.426 | +2.304 | 8,048 |
+| CQF `q = 2` | 51.615 | +1.493 | 9,192 |
+| CQF `q = 4` | 51.480 | +1.358 | 11,736 |
 
-So **CQF is a loss at `k = 64` and at best a draw at `k = 32`** — the one
-candidate left is `q = 2` at `k = 32`, and it needs the canonical accounting run
-(`quarter_accounting.py --dir work/tw4096ns --k 32 --qs 2,4`) to see whether the
-recovery fraction holds up where the penalty is smaller.  The gain column above
-is an extrapolation, not a measurement; the byte column is exact.
+| q | top stage | CF cluster step | increase | merges avoided | net | bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| 2 | 22.948 | 18.055 | +4.893 | 5.704 | **+0.811** | +1,144 |
+| 4 | 27.563 | 18.055 | +9.508 | 10.454 | **+0.946** | +3,688 |
+
+So CQF recovers **35% (`q = 2`) and 41% (`q = 4`)** of the flat → CF penalty
+here, against 18% and 30% at `V = 512, k = 16`.  The extrapolation in the earlier
+draft (which assumed the smaller fractions) is therefore too pessimistic: the
+word step is 66% of CF's cost (34.371 of 52.426) and the expensive in-cell merges
+are a larger share of it at the canonical grid.
+
+**Priced against the frontier**, using the slope measured two independent ways on
+the canonical grid — `k`: 32 → 64 at `V = 4096` costs 4,088 B and buys 0.733
+bits; `V`: 4,096 → 8,192 at `k = 64` costs 18,432 B and buys 3.34 bits — both
+give **≈5.5 kB per bit**:
+
+| config | CQF bytes over CF | bits it buys | bits the same bytes buy elsewhere | net |
+|---|---:|---:|---:|---:|
+| 4096, k=32, q=2 | +1.1 kB | **0.81** | 0.21 | **+0.60** |
+| 4096, k=32, q=4 | +3.6 kB | **0.95** | 0.67 | +0.28 |
+| 4096, k=64, q=2 | +5.0 kB | (unmeasured) | 0.91 | needs `q` accounting at `k = 64` |
+| 4096, k=64, q=4 | +15.9 kB | (unmeasured) | 2.89 | unlikely |
+
+So **CQF pays at `k = 32`: `q = 2` comfortably (+0.60 bits equivalent), `q = 4`
+marginally**.  `k = 64` is the open cell — the byte cost jumps 4x while the
+penalty it can eat into shrinks with `k`, so the expectation is a loss, but that
+is arithmetic on an unmeasured quantity (`quarter_accounting.py --dir
+work/tw4096ns --k 64 --qs 2,4` settles it).
+
+The next step is the measured-code experiment below (step 4): these numbers are
+Huffman costs on the *training* counts, so they are optimistic and they carry no
+fit rate.  The decision rule is stated in fit rates, so the codes have to be
+built and scored on held-out data before CQF is adopted.
 
 ### The experiment
 
