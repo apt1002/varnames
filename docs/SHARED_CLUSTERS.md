@@ -172,7 +172,7 @@ the constraint.
 ### Verdict
 
 **Adopt the shared assignment at the canonical grid** (one label as both `lcl`
-and `rcl`, `w = 1`), keeping the `k^2` block: `D` asymmetry is 0.9-1.4 in
+and `rcl`, `w = 1`), keeping the `k^2` block: `D` asymmetry is 0.5-1.4 in
 Frobenius ratio, so it cannot be halved.  It buys 15-17% of the model for
 0.19-0.52 bits, which is a *gain* on the bytes-for-fit frontier at every
 canonical point measured.  Two caveats to carry forward: the `k = 64` at
