@@ -43,10 +43,14 @@ labels (see `README.md`).
       `scripts/check_merge_delta.py`.
 - [x] **A7. Boundary words (`v\n`).** *Negative* — not worth it; not adopted.
       `docs/BOUNDARY_TRIGRAM.md`, `scripts/boundary_trigram.py`.
-- [ ] **A8. Rescan-based dictionary builder** (deferred): drop the position
-      index for a global per-merge rescan. Prototype `scripts/word_build_rescan.py`
-      gives an identical word list and is faster / lighter on the stride-20
-      sample; adopt only after a stride-0 timing.  `docs/TREE_WORDS.md`.
+- [x] **A8. Rescan-based dictionary builder.** *Done and adopted.*  The builder
+      and the bigram counter are now streaming and array-based in
+      `scripts/tree_words.py` (`read_corpus_array`, `build_dictionary_arr`,
+      `count_adjacency_stream`): the packed array replaces the position index,
+      and the adjacency count no longer materialises the corpus.  Output is
+      identical to the old path (checked by `scripts/word_build_rescan.py`), and
+      the full canonical-grid rebuild now fits in this box.  `docs/TREE_WORDS.md`
+      §11.
 - [x] **A9. No run words.** *Succeeded — a simplification at no cost.*
       Self-merge is forbidden outright: no `('run', …)` rule can be produced, so
       a doubled character is absorbed only through a pair word that also
@@ -260,7 +264,7 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `corpus/identifiers.multilang.txt`, then `work/raw/` and `work/camel/`
       (case-normalised variants + `merged_training.txt` /
       `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
-- [ ] **H5. Rebuild the model artefacts** (deferred, blocked on H4): the
+- [ ] **H5. Rebuild the model artefacts** (in progress, unblocked by A8): the
       dictionaries on the canonical grid (H7) and their `s0` twins
       (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), the case-ablation and
       break-open variants of the canonical `V`, `_ttw*` scratch dirs, the pair

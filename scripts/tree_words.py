@@ -29,6 +29,7 @@ Usage:
 """
 import argparse
 import heapq
+import time
 import json
 import os
 from collections import Counter
@@ -53,6 +54,69 @@ def read_lines(path, stride=0, limit=0):
                 if limit and len(lines) >= limit:
                     break
     return lines
+
+
+SEP = -1
+RADIX = 1 << 16          # pair key = a * RADIX + b; ids are < 2**16
+
+
+def _lut(chars):
+    """char -> id lookup table over the byte range (the corpus is ASCII).
+
+    `\\n` is left at `SEP` by construction, so mapping a byte buffer through
+    this table puts the separator in place in one vectorised step."""
+    tbl = np.full(256, SEP, dtype=np.int32)
+    for i, c in enumerate(chars):
+        tbl[ord(c)] = i
+    return tbl
+
+
+def read_corpus_array(path, stride=0, limit=0, chars=None):
+    """Stream a one-identifier-per-line corpus into one int32 id array with
+    `SEP` between identifiers.
+
+    One pass over the file into a byte buffer, then one table lookup.  This is
+    what makes the full-corpus (stride 0) build fit in memory: a Python list of
+    strings, or a list of lists of ids, is 10-100x bigger than the packed array.
+    Selection rules match `read_lines` (skip empty lines, `stride`, `limit`).
+    """
+    buf = bytearray()
+    kept = 0
+    with open(path, 'rb') as f:
+        for i, line in enumerate(f):
+            if stride and i % stride:
+                continue
+            s = line.rstrip(b'\n')
+            if not s:
+                continue
+            buf += s
+            buf += b'\n'
+            kept += 1
+            if limit and kept >= limit:
+                break
+    if chars is None:
+        chars = sorted(chr(c) for c in set(buf) if c != 10)
+    b = np.frombuffer(buf, dtype=np.uint8)
+    arr = _lut(chars)[b]
+    return chars, arr
+
+
+def _iter_line_chunks(path, chunk=50000, stride=0):
+    """Yield lists of at most `chunk` non-empty identifiers."""
+    buf = []
+    with open(path, 'r', encoding='ascii') as f:
+        for i, line in enumerate(f):
+            if stride and i % stride:
+                continue
+            s = line.rstrip('\n')
+            if not s:
+                continue
+            buf.append(s)
+            if len(buf) >= chunk:
+                yield buf
+                buf = []
+    if buf:
+        yield buf
 
 
 def _cyclic_arrays(seqs, nstop):
@@ -206,6 +270,124 @@ def build_dictionary(lines, num_pairs, verbose=False, trace=None):
             heapq.heapify(heap)
         if verbose and step % 500 == 0:
             print(f"  step {step} pair {sym[new]!r} vocab {len(sym)}", flush=True)
+    return chars, rules, sym
+
+
+def _counts_all(arr, chunk=2_000_000):
+    """Pair -> count over the whole array, excluding separator adjacencies.
+
+    Chunked so the peak stays at a couple of 2M-element integers instead of two
+    Python lists the length of the corpus."""
+    cnt = {}
+    n = arr.size
+    for s in range(0, max(n - 1, 0), chunk):
+        e = min(s + chunk, n - 1)
+        a = arr[s:e]
+        b = arr[s + 1:e + 1]
+        m = (a != SEP) & (b != SEP)
+        if not m.any():
+            continue
+        code = a[m].astype(np.int64) * RADIX + b[m]
+        u, c = np.unique(code, return_counts=True)
+        for k, v in zip(u.tolist(), c.tolist()):
+            key = (k // RADIX, k % RADIX)
+            cnt[key] = cnt.get(key, 0) + v
+    return cnt
+
+
+def build_dictionary_arr(chars, arr, num_pairs, verbose=False):
+    """`build_dictionary` on a packed id array, with no position index.
+
+    Same greedy rule and the same tie-breaking as `build_dictionary`, so the
+    word list is identical; the difference is that occurrences are found by a
+    numpy scan of the array at each merge instead of being tracked in a
+    `{(a, b): {(seq, pos), ...}}` dict.  That dict is what made the full-corpus
+    build need gigabytes; the scan is O(N) per merge but vectorised, and the
+    array is 10-100x smaller than the equivalent list of lists.
+
+    `arr` is consumed (mutated in place); do not reuse it afterwards.
+    """
+    nchars = len(chars)
+    sym = list(chars) + [STOP]
+    rules = []
+    next_id = nchars + 1
+    budget = num_pairs
+
+    cnt = _counts_all(arr)
+    heap = [(-c, p) for p, c in cnt.items() if c > 1 and p[0] != p[1]]
+    heapq.heapify(heap)
+
+    step = 0
+    while budget > 0:
+        p = None
+        while heap:
+            neg, pp = heapq.heappop(heap)
+            if cnt.get(pp, 0) == -neg and -neg > 1 and pp[0] != pp[1]:
+                p = pp
+                break
+        if p is None:
+            break
+        a, b = p
+
+        idx = np.flatnonzero((arr[:-1] == a) & (arr[1:] == b))
+        if idx.size == 0:
+            cnt[p] = 0
+            continue
+        new = next_id
+        next_id += 1
+        sym.append(sym[a] + sym[b])
+        rules.append(('pair', (a, b), new))
+
+        # Count diff, vectorised: only pairs touching a merged slot change.  In
+        # a chain of adjacent occurrences (.. a b a b ..) the pair *between* two
+        # merged tokens is (b, a) -- removed once, via the second's left -- and
+        # (new, new) -- created once, via the first's right -- so the left and
+        # right contributions are suppressed on the "inside" of a chain.
+        n = arr.size
+        isocc = np.zeros(n, dtype=bool)
+        isocc[idx] = True
+        L = idx - 1
+        Lm = np.maximum(L, 0)
+        Lvalid = (L >= 0) & (arr[Lm] != SEP)
+        Ltok = arr[Lm]
+        cl = np.maximum(idx - 2, 0)
+        chain_left = (idx - 2 >= 0) & isocc[cl]
+        R = idx + 2
+        Rm = np.minimum(R, n - 1)
+        Rin = R < n
+        Rvalid = Rin & (arr[Rm] != SEP)
+        Rtok = arr[Rm]
+        chain_right = Rin & isocc[Rm]
+
+        rem = Counter({(a, b): int(idx.size)})
+        for x in Ltok[Lvalid].tolist():
+            rem[(x, a)] += 1
+        for y in Rtok[Rvalid & ~chain_right].tolist():
+            rem[(b, y)] += 1
+        cre = Counter()
+        for y in np.where(chain_right, new, Rtok)[Rvalid].tolist():
+            cre[(new, y)] += 1
+        for x in Ltok[Lvalid & ~chain_left].tolist():
+            cre[(x, new)] += 1
+
+        d = Counter(cre)
+        d.subtract(rem)
+        for q, dc in d.items():
+            if dc:
+                cnt[q] = cnt.get(q, 0) + dc
+                if cnt[q] > 1 and q[0] != q[1]:
+                    heapq.heappush(heap, (-cnt[q], q))
+        cnt[p] = 0
+
+        arr[idx] = new
+        keep = np.ones(n, dtype=bool)
+        keep[idx + 1] = False
+        arr = arr[keep]
+        budget -= 1
+        step += 1
+        if verbose and step % 500 == 0:
+            print(f"  step {step} pair {sym[new]!r} vocab {len(sym)}",
+                  flush=True)
     return chars, rules, sym
 
 
@@ -499,28 +681,139 @@ def write_adj(outdir, big, uni, sym, name='adj'):
                         nvoc=np.array([nvoc]))
 
 
+def write_adj_arrays(outdir, rows, cols, data, uni, sym, name='adj'):
+    """`write_adj` for counts that are already arrays (the streaming path)."""
+    nvoc = len(sym)
+    uni_arr = np.zeros(nvoc, dtype=np.int64)
+    uni_arr[:] = np.asarray(uni, dtype=np.int64)
+    np.savez_compressed(os.path.join(outdir, name + '.npz'),
+                        rows=np.asarray(rows, dtype=np.int64),
+                        cols=np.asarray(cols, dtype=np.int64),
+                        data=np.asarray(data, dtype=np.float64),
+                        uni=uni_arr, nvoc=np.array([nvoc]))
+
+
+_C = {}
+
+
+def _init_code_worker(char_id, plan, nchars, nvoc=None):
+    _C['char_id'] = char_id
+    _C['plan'] = plan
+    _C['nchars'] = nchars
+    _C['nvoc'] = nvoc if nvoc else nchars + 1
+
+
+def _chunk_codes(lines):
+    """Tokenise a chunk and return (bigram codes, unigram counts).
+
+    Codes are `a*V + b`, which stays inside int32 for every vocabulary in the
+    grid (`V = 8192` gives `8191*8192 + 8191 < 2**31`)."""
+    char_id = _C['char_id']
+    plan = _C['plan']
+    nchars = _C['nchars']
+    V = _C['nvoc']
+    stop = nchars
+    seq = [stop]                       # the stop *before* the first identifier
+    for s in lines:
+        seq.extend(tokenize(s, char_id, plan, nchars))
+        seq.append(stop)
+    t = np.asarray(seq, dtype=np.int64)
+    u = np.bincount(t[1:], minlength=V).astype(np.int64)
+    c = (t[:-1] * V + t[1:]).astype(np.int32)
+    return c, u
+
+
+def count_adjacency_stream(path, char_id, plan, nchars, nvoc=None, chunk=50000,
+                           jobs=1, stride=0, verbose=False):
+    """Cyclic word-bigram counts over the whole file in bounded memory.
+
+    Each identifier is tokenised and bracketed by the stop token, so the adjacent
+    pairs of the concatenation are exactly the cyclic bigrams: `(t_i, t_i+1)`
+    inside an identifier, `(last, stop)` at its end, `(stop, first)` at its
+    start.  The stop *before* the first identifier is not counted as a unigram.
+    Per-chunk `np.unique` + a dict merge turns the codes into
+    `(rows, cols, counts)`.
+
+    This replaces `count_adjacency_parallel`, which needed the whole corpus as a
+    Python list of strings plus a bigram `Counter` of tuples.
+    """
+    if nvoc is None:
+        nvoc = nchars + 1
+    V = nvoc
+    uni = np.zeros(V, dtype=np.int64)
+    tot = {}
+    seen = 0
+
+    def take(pairs):
+        """Fold each chunk's `(codes, unigram counts)` into the running totals.
+
+        Per-chunk `np.unique` plus a dict merge keeps the peak at the size of
+        the distinct-bigram dict.  Concatenating every code first and calling
+        `np.unique` once would need two extra corpus-length int32 arrays."""
+        nonlocal seen
+        for c, u in pairs:
+            uni[:] += u
+            seen += int(u.sum())
+            if c.size:
+                v, n = np.unique(c, return_counts=True)
+                for k, cn in zip(v.tolist(), n.tolist()):
+                    tot[k] = tot.get(k, 0) + cn
+
+    if jobs <= 1:
+        _init_code_worker(char_id, plan, nchars, nvoc)
+        take(_chunk_codes(lines)
+             for lines in _iter_line_chunks(path, chunk, stride))
+    else:
+        import multiprocessing as mp
+        with mp.Pool(jobs, initializer=_init_code_worker,
+                     initargs=(char_id, plan, nchars, nvoc)) as pool:
+            take(pool.imap_unordered(_chunk_codes,
+                                     _iter_line_chunks(path, chunk, stride),
+                                     chunksize=1))
+    if not tot:
+        return (np.empty(0, np.int64), np.empty(0, np.int64),
+                np.empty(0, np.float64), uni)
+    u = np.fromiter(tot.keys(), dtype=np.int64, count=len(tot))
+    c = np.fromiter(tot.values(), dtype=np.int64, count=len(tot))
+    del tot
+    rows = (u // V).astype(np.int64)
+    cols = (u % V).astype(np.int64)
+    if verbose:
+        print(f"  {seen} tokens, {u.size} distinct bigrams", flush=True)
+    return rows, cols, c.astype(np.float64), uni
+
+
 def cmd_train(args):
     outdir = args.outdir or f'work/tw{args.num_pairs}'
     os.makedirs(outdir, exist_ok=True)
-    build = read_lines(args.corpus, stride=args.sample)
-    print(f"dictionary corpus {args.corpus}: {len(build)} lines "
-          f"(stride {args.sample or 1})", flush=True)
-    chars, rules, sym = build_dictionary(build, args.num_pairs, verbose=True)
-    print(f"dictionary: {len(rules)} rules, vocab {len(sym)}", flush=True)
+    t0 = time.time()
+    chars, arr = read_corpus_array(args.corpus, stride=args.sample)
+    nlines = int(np.count_nonzero(arr == SEP))
+    print(f"dictionary corpus {args.corpus}: {nlines} lines "
+          f"(stride {args.sample or 1}), {arr.size - nlines} chars, "
+          f"{arr.nbytes / 1e6:.0f} MB packed "
+          f"({time.time() - t0:.0f}s read)", flush=True)
+    chars, rules, sym = build_dictionary_arr(chars, arr, args.num_pairs,
+                                             verbose=True)
+    del arr
+    print(f"dictionary: {len(rules)} rules, vocab {len(sym)} "
+          f"({time.time() - t0:.0f}s)", flush=True)
     save_dictionary(outdir, chars, rules, sym)
     with open(os.path.join(outdir, 'meta.json'), 'w') as f:
         json.dump(dict(corpus=args.corpus, num_pairs=args.num_pairs,
-                       sample=args.sample, nlines=len(build)), f)
+                       sample=args.sample, nlines=nlines), f)
 
     char_id = {c: i for i, c in enumerate(chars)}
     plan = make_plan(rules, len(chars))
-    full = read_lines(args.corpus, stride=0)
-    print(f"tokenising {len(full)} lines", flush=True)
-    big, uni = count_adjacency_parallel(full, char_id, plan, len(chars),
-                                        jobs=args.jobs)
-    write_adj(outdir, big, uni, sym)
-    print(f"adjacency: {len(big)} distinct bigrams, "
-          f"N={sum(uni.values())}, N(stop)={uni[len(chars)]}", flush=True)
+    t = time.time()
+    print(f"counting cyclic bigrams over {args.corpus} "
+          f"(stride {args.stride or 1}, jobs {args.jobs})", flush=True)
+    rows, cols, data, uni = count_adjacency_stream(
+        args.corpus, char_id, plan, len(chars), len(sym), jobs=args.jobs,
+        stride=args.stride, verbose=True)
+    write_adj_arrays(outdir, rows, cols, data, uni, sym)
+    print(f"adjacency: {rows.size} distinct bigrams, N={int(uni.sum())}, "
+          f"N(stop)={int(uni[len(chars)])} ({time.time() - t:.0f}s)", flush=True)
     print(f"wrote {outdir}/adj.npz", flush=True)
 
 
@@ -570,13 +863,14 @@ def cmd_adj(args):
     chars, rules, sym = load_dictionary(args.dir)
     char_id = {c: i for i, c in enumerate(chars)}
     plan = make_plan(rules, len(chars))
-    full = read_lines(args.corpus, stride=args.stride)
-    print(f"tokenising {len(full)} lines (stride {args.stride or 1})", flush=True)
-    big, uni = count_adjacency_parallel(full, char_id, plan, len(chars),
-                                        jobs=args.jobs)
-    write_adj(args.dir, big, uni, sym)
-    print(f"adjacency: {len(big)} distinct bigrams, "
-          f"N={sum(uni.values())}, N(stop)={uni[len(chars)]}", flush=True)
+    print(f"counting cyclic bigrams over {args.corpus} "
+          f"(stride {args.stride or 1}, jobs {args.jobs})", flush=True)
+    rows, cols, data, uni = count_adjacency_stream(
+        args.corpus, char_id, plan, len(chars), len(sym), jobs=args.jobs,
+        stride=args.stride, verbose=True)
+    write_adj_arrays(args.dir, rows, cols, data, uni, sym)
+    print(f"adjacency: {rows.size} distinct bigrams, "
+          f"N={int(uni.sum())}, N(stop)={int(uni[len(chars)])}", flush=True)
     print(f"wrote {args.dir}/adj.npz", flush=True)
 
 
@@ -625,6 +919,8 @@ def main():
     tr.add_argument('--num-pairs', type=int, required=True)
     tr.add_argument('--sample', type=int, default=0,
                     help='stride for dictionary building (0 = all)')
+    tr.add_argument('--stride', type=int, default=0,
+                    help='stride for the adjacency count (0 = all)')
     tr.add_argument('--outdir', default=None)
     tr.add_argument('--jobs', type=int, default=1)
     tr.set_defaults(func=cmd_train)

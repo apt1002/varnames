@@ -502,6 +502,22 @@ this is moot.
   (`A`, `B`, `Q`).  Measured in `docs/DICTIONARY_RULES.md`: the `Δ` rule wins on
   structured synthetic data but barely on real identifiers, so the frequency
   proxy is kept.
+* **Implementation: rescan, not a position index.**  Nothing in §2 requires
+  knowing *where* the occurrences are between merges — only the step they are
+  merged at.  So the production builder (`scripts/tree_words.py`,
+  `build_dictionary_arr`) keeps the corpus as one packed `int32` array with a
+  `-1` separator between identifiers and, at each merge, finds the occurrences
+  with a single numpy scan `(arr[:-1]==u) & (arr[1:]==v)`, rewrites them, and
+  compacts.  The alternative — a `{(u,v): {(seq, pos), …}}` index plus a list of
+  lists of ids — is 10–100x the size of the packed array and is what made the
+  full-corpus (stride 0) build need gigabytes; the scan is O(N) per merge but
+  vectorised, so the whole `NUM_PAIRS` sweep is linear in the corpus with a small
+  constant.  The bigram matrix is counted the same way
+  (`count_adjacency_stream`): stream the corpus in chunks, tokenise, encode each
+  adjacent pair as `a·V + b`, and merge per-chunk `np.unique` results.  The two
+  paths are checked against the old implementation by
+  `scripts/word_build_rescan.py`; the word list and the matrix are identical,
+  including the cyclic row-sum invariant `sum_v N(u,v) = N(u)`.
 * **Tie-breaking.**  "Most common length-2 substring" needs a deterministic rule
   on ties (a canonical order over the words, or "lowest pair in creation
   order"); the regression scripts use smallest `(u,v)`.
