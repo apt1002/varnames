@@ -344,8 +344,13 @@ makes every cell non-zero, which is why Huffman is so efficient here.
 (`q = 4`) of the flat → CF penalty, and the amounts are exactly the expensive
 in-cell merges.  But the *fraction* is measured where the penalty is large: at
 `V = 512, k = 16` the penalty is 3.878 bits/identifier because 16 clusters is
-coarse.  At the canonical grid the flat → CF penalty is ~1.2 bits/identifier,
-so the same fractions recover only ~0.22 (`q = 2`) and ~0.36 (`q = 4`) bits.
+coarse.  An earlier draft guessed that the canonical-grid penalty would be
+~1.2 bits/identifier, so that the same fractions would recover only ~0.22
+(`q = 2`) and ~0.36 (`q = 4`) bits.  **That guess was wrong in both terms**, and
+it was wrong in a way that matters: at the canonical grid the penalty is
+*larger* (2.3 bits at `k = 32`, 3.0 at `k = 64`) and the recovered fraction is
+*larger* too (35–43%), because the in-cell merge mass is nearly independent of
+`k` while CF's cluster step is not.
 
 The same check at the canonical grid (`V = 4096`, `k = 32`, 4.02M identifiers,
 22.9M transitions) is **better**, not worse:
@@ -368,6 +373,36 @@ draft (which assumed the smaller fractions) is therefore too pessimistic: the
 word step is 66% of CF's cost (34.371 of 52.426) and the expensive in-cell merges
 are a larger share of it at the canonical grid.
 
+The `k = 64` cell (`V = 4096`, 4.02M identifiers) completes the picture:
+
+| scheme | bits/identifier | vs flat | model bytes |
+|---|---:|---:|---:|
+| flat (yardstick) | **49.328** | — | 458,736 |
+| CF | 52.306 | +2.979 | 11,232 |
+| CQF `q = 2` | 51.035 | +1.707 | 16,336 |
+| CQF `q = 4` | 50.806 | +1.478 | 27,568 |
+
+| q | top stage | CF cluster step | increase | merges avoided | net | bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| 2 | 25.851 | 21.421 | +4.430 | 5.702 | **+1.272** | +5,104 |
+| 4 | 30.171 | 21.421 | +8.751 | 10.251 | **+1.500** | +16,336 |
+
+Two things to note, both against the earlier expectation:
+
+* **The in-cell merges are `k`-independent** — 5.704 / 10.454 at `k = 32`,
+  5.702 / 10.251 at `k = 64`.  They are a property of the tail of each cell's
+  word distribution, not of how many cells there are.  So the recovery
+  *fraction* rises with `k` (35% → 43% for `q = 2`), because the penalty it is a
+  fraction of grows (CF's cluster step 18.055 → 21.421 while the word step only
+  falls 34.371 → 30.886).
+* **The top stage increase is `k`-*sub*linear**: 4.893 → 4.430 for `q = 2` even
+  though the top tree grows from 32 to 64 leaves.  It is charged as
+  `H(quarter | L) − H(cluster | L)`, and the extra quarter distinction bites
+  less once the cells are already fine.
+
+Against bytes, though, the story is unchanged: the top stage is `k x kq`, so the
+byte cost of the same 1.27 bits is 4.5x what it was at `k = 32`.
+
 **Priced against the frontier**, using the slope measured two independent ways on
 the canonical grid — `k`: 32 → 64 at `V = 4096` costs 4,088 B and buys 0.733
 bits; `V`: 4,096 → 8,192 at `k = 64` costs 18,432 B and buys 3.34 bits — both
@@ -377,14 +412,16 @@ give **≈5.5 kB per bit**:
 |---|---:|---:|---:|---:|
 | 4096, k=32, q=2 | +1.1 kB | **0.81** | 0.21 | **+0.60** |
 | 4096, k=32, q=4 | +3.6 kB | **0.95** | 0.67 | +0.28 |
-| 4096, k=64, q=2 | +5.0 kB | (unmeasured) | 0.91 | needs `q` accounting at `k = 64` |
-| 4096, k=64, q=4 | +15.9 kB | (unmeasured) | 2.89 | unlikely |
+| 4096, k=64, q=2 | +5.0 kB | **1.27** | 0.91 | **+0.36** |
+| 4096, k=64, q=4 | +16.0 kB | **1.50** | 2.89 | −1.39 |
 
-So **CQF pays at `k = 32`: `q = 2` comfortably (+0.60 bits equivalent), `q = 4`
-marginally**.  `k = 64` is the open cell — the byte cost jumps 4x while the
-penalty it can eat into shrinks with `k`, so the expectation is a loss, but that
-is arithmetic on an unmeasured quantity (`quarter_accounting.py --dir
-work/tw4096ns --k 64 --qs 2,4` settles it).
+So **CQF pays at `k = 32`**: `q = 2` comfortably (+0.60 bits equivalent), `q = 4`
+marginally (+0.28).  At `k = 64` both `q = 2` (+0.36) and `q = 4` (−1.39) get
+worse, but not for the reason guessed earlier: the bits it buys *grow* (1.27,
+1.50) and the bytes grow faster.  Per kilobyte the buy is 0.71 bits/kB at
+`k = 32, q = 2`, 0.25 at `k = 64, q = 2`, 0.09 at `k = 64, q = 4`, against a
+frontier of ~0.18.  So `q = 2` is above the frontier at both `k`, by 4x and by
+1.4x; `q = 4` is above it only at `k = 32`, by 1.5x.
 
 The next step is the measured-code experiment below (step 4): these numbers are
 Huffman costs on the *training* counts, so they are optimistic and they carry no

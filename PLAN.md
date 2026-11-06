@@ -178,16 +178,17 @@ labels (see `README.md`).
       pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
       case for the stop.  `docs/NEWLINE_CLUSTER.md`,
       `scripts/newline_cluster.py`.
-- [ ] **C28. Cluster quarters.** *Accounting done; pays at `k = 32`.*  The
-      mechanism is confirmed exactly (the identity closes to three decimals) and
-      at the canonical grid CQF recovers 35% (`q = 2`) / 41% (`q = 4`) of the
-      flat → CF penalty, i.e. 0.81 / 0.95 bits per identifier — better than the
-      18% / 30% seen at the testing point, because the word step is 66% of CF's
-      cost there.  Against a frontier of ≈5.5 kB/bit (measured two ways) `q = 2`
-      nets +0.60 bits and `q = 4` +0.28.  Open: `k = 64` accounting (expected
-      loss), and the measured-code run — the harness is written and verified at
-      `V = 512`, where held-out recovers what the accounting predicted; the
-      canonical cells need more RAM than this box has, so they are laptop jobs
+- [ ] **C28. Cluster quarters.** *Accounting closed; `q = 2` pays at both `k`,
+      `q = 4` only at `k = 32`.*  The mechanism is confirmed exactly (the identity
+      closes to three decimals) and at the canonical grid CQF recovers 35%
+      (`q = 2`) / 41% (`q = 4`) of the flat → CF penalty at `k = 32` (0.81 /
+      0.95 bits/identifier), 43% / 50% at `k = 64` (1.27 / 1.50).  Against a
+      frontier of ≈5.5 kB/bit the nets are +0.60 / +0.28 at `k = 32` and +0.36 /
+      −1.39 at `k = 64`: the bits bought grow with `k` (the avoided in-cell mass
+      is `k`-independent) but the `k x kq` top stage grows faster.  Open: the
+      measured-code run — harness written and verified at `V = 512`, where
+      held-out recovers what the accounting predicted; the canonical cells need
+      more RAM than this box has, so they are laptop jobs
       (`scripts/quarter_codes.py`).
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` — stop each
       right-cluster Huffman tree early at `q` trees and encode
