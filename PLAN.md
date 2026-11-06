@@ -173,10 +173,14 @@ labels (see `README.md`).
       cell gives for free, and at the canonical grid the boundary distribution
       *is* nearly the marginal (95% of tokens are startable).  The generative
       gain disappears with it.  The sample-0 dictionaries stay plain: no special
-      case for the stop.  One control outstanding (`--profile full`).  The
-      generative columns are weak evidence either way: the mid-word metrics are
-      only just better than the marginal baseline, and the "real identifier hit
-      rate" is a memorisation rate, not a success rate.
+      case for the stop.  The profile control is in and changes the reason: with
+      the stop kept in the clustering profiles the reservation is nearly free in
+      bits (+0.007 to +0.19) but inert or worse generationally, so most of the
+      earlier cost was the profile change, not the cell — and an exact `2V`
+      boundary table would recover only 0.21-0.42 bits at the canonical grid,
+      which 8 kB cannot pay for.  The generative columns are weak evidence in
+      general: the mid-word metrics are only just better than their marginal
+      baseline, and the "real identifier hit rate" is a memorisation rate.
       `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
 - [ ] **C28. Cluster quarters.** *Accounting done at the testing point* —
       `quarter_accounting.py` confirms the mechanism exactly: CQF recovers the

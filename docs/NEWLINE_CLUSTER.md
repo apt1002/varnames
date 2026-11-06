@@ -1,10 +1,12 @@
 # Reserving clusters for the stop token
 
-Status: **rejected at the canonical grid.**  The testing point (`V = 512`)
-looked favourable; at `V = 4096/8192` the reservation costs bits and makes the
-start boundary *worse*, because pooling the stop buys a shrinkage that the
-singleton cell throws away.  One control (`--profile full`) is still outstanding;
-see the last section.
+Status: **rejected — and the `--profile full` control, which was outstanding
+when the first canonical table was written, changes the *reason* rather than the
+verdict.**  With the profile control in place the reservation is nearly free in
+bits (0.007-0.19) and buys nothing generationally; the 0.3-0.44 bits the earlier
+table charged to the singleton cell were mostly the clustering-profile change.
+See "The profile control" below, which supersedes the attribution in the table
+above it.
 
 ## The question
 
@@ -303,6 +305,60 @@ signal is at least consistent: at the testing point `plain` is *worse* than
 chance (2.4% vs 0.6%) while `reserved` is perfect (0.0%).  So the rejection rests
 on the compression numbers, where there is no ambiguity; the generative columns
 are weak corroboration, not the case against the design.
+
+### The profile control: the cost was mostly the *profile*, not the cell
+
+`profile=full` keeps the stop's own row and column inside every word's clustering
+profile, so the only difference from `plain` is the singleton cell itself.
+10,567 held-out identifiers, 20,000 samples:
+
+| V, k | config | bits | fit<=64 | starts (chance) | ends (chance) | first KL | last KL | digit | exact table recovers |
+|---|---|---|---|---|---|---|---|---|---|
+| 4096, 32 | plain | 51.355 | 78.2% | 2.4% (8.1) | 1.8% (2.7) | 0.127 | 1.401 | 0.23% | 0.404 |
+| 4096, 32 | reserved full | 51.376 | 78.3% | 2.9% | 1.4% | 0.139 | 1.410 | 0.97% | 0.418 |
+| 4096, 64 | plain | **50.622** | **79.1%** | **1.8%** | 1.2% | **0.113** | **1.385** | 0.14% | 0.206 |
+| 4096, 64 | reserved full | 50.812 | 78.9% | 3.0% | 1.3% | 0.150 | 1.422 | 0.93% | 0.275 |
+| 8192, 64 | plain | 47.279 | 83.4% | 3.1% | 2.7% | 0.096 | 1.639 | 0.17% | 0.302 |
+| 8192, 64 | reserved full | **47.286** | 83.3% | 3.1% | 2.8% | **0.094** | 1.644 | 0.16% | 0.315 |
+
+(`plain(k-1)` sits between the two everywhere: 51.366 / 50.633 / 47.288.)
+
+Three conclusions, all different from the first pass:
+
+1. **The reservation is nearly free in bits** with the profile control:
+   +0.021 (4096/32), +0.190 (4096/64), **+0.007** (8192/64) — where the `sub`
+   runs charged +0.30/+0.44/+0.42.  So most of that charge was the *profile*
+   change (words clustered without the stop's row and column), not the singleton
+   cell.  The "shrinkage" explanation is therefore wrong as an account of the
+   cost: with the stop kept in the profiles, pooling gains almost nothing on
+   bits.
+2. **It still buys no generative improvement.**  At `V = 8192` it is a complete
+   no-op (starts 3.1% both, ends 2.7 vs 2.8, first KL 0.094 vs 0.096).  At
+   `V = 4096` it is *worse* on the two metrics the design targeted: mid-word
+   starts rise (1.8% -> 3.0% at `k = 64`) and the digit first-token mass rises
+   4-7x (0.14% -> 0.93%).  Only mid-word *ends* improve, slightly and only at
+   `V = 4096` (1.2% -> 1.3%, 1.8% -> 1.4%).
+3. **The exact boundary table is also dead.**  At the canonical grid an exact
+   `2V`-number stop row and column would recover only 0.21-0.42 bits/identifier
+   — not the 0.83 found at `V = 512`.  Eight kB (`V = 4096`) on a frontier worth
+   ~4.3 kB per bit is ~1.9 bits equivalent, so the table cannot pay for itself
+   either.
+
+So the verdict is **reject**, now on the clean ground that there is nothing to
+buy: the reservation is cheap but inert, and the mechanism it was supposed to
+exploit (an exact boundary row/column) is worth less at the canonical grid than
+the bytes it would take to store it.
+
+## Length: the model is ~13% short, and the prior explains it
+
+With the units bug fixed, every configuration generates identifiers slightly
+*shorter* than the corpus: 4.05-4.08 tokens against 5.06 at `V = 8192`, 4.69-4.72
+against 5.72 at `V = 4096`.  The `kappa` prior accounts for a known part of it:
+it adds `kappa*V/T = 0.128` of the stop column's mass at `V = 8192` (`T` is the
+transition count), i.e. it inflates `P(stop|.)` by ~13% and shortens the walk by
+~1/1.128.  That predicts 4.49 tokens where 4.07 is measured, so the rest is
+model error.  It is a *regularisation* effect with a knob (`kappa`), not a
+defect, and it is the opposite of the 3x over-generation I wrongly reported.
 
 ## Implementation
 
