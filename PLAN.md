@@ -256,12 +256,11 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
 - [ ] **H5. Rebuild the model artefacts** (dictionaries done for the whole
       canonical grid plus the `s0` twins; the remaining artefacts are): the
-      dictionaries on the canonical grid (H7, which now includes an
-      intermediate `V`) and their `s0` twins
-      (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), the case-ablation and
-      break-open variants of the canonical `V`, `_ttw*` scratch dirs, the pair
-      matrix (`work/*/pair_stats.txt`, `pair_factors_L*.npy` via
-      `scripts/pair_matrix.py`), and `work/occ/`.
+      case-ablation and break-open variants of the canonical `V`, `_ttw*`
+      scratch dirs, the pair matrix (`work/*/pair_stats.txt`,
+      `pair_factors_L*.npy` via `scripts/pair_matrix.py`), and `work/occ/`.  The grid is rebuilt by
+      `scripts/h5_build.sh` (dictionaries identical on rebuild; the adjacency
+      triplets' storage order depends on `--jobs`, the matrix does not).
 - [ ] **H6. Re-measure the corpus-dependent reports** (deferred, blocked on H5):
       the numbers (not the arguments) in `docs/CORPUS.md`, `CODE_LENGTHS.md`,
       `CASE_NORMALISATION.md`, `ADJACENCY_MATRIX.md` (κ choice),
