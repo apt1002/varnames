@@ -1,7 +1,10 @@
 # One cluster assignment for both sides
 
-Status: **measured at the testing point** (`V = 512`, `k = 16`): rejected there,
-by the decision rule below.  The canonical-grid confirmation is the open item.
+Status: **measured at the testing point and at the canonical grid.**  Rejected
+at `V = 512, k = 16`; **adopted at the canonical grid**, where it sits at or
+above the asymmetric frontier at matched total bytes.  The reading of the
+decision rule that produces the flip is spelled out below, because it is the
+part that changed.
 
 ## The question
 
@@ -115,6 +118,68 @@ meaningful claim.
 
 `D` asymmetry 1.2-1.4 (Frobenius ratio `||D - D^T|| / ||D||`) confirms the block
 is genuinely not symmetric, so the `k^2` table cannot be halved.
+
+## The canonical grid: measured, and it flips the verdict
+
+4,096: `k = 32, 64`; 8,192: `k = 64`.  10,567 held-out identifiers (stride 40),
+`kappa = 300`, seed 1; `scripts/shared_clusters.py --dir work/tw… --ks …`.
+
+| model | k | bits | fit<=64 | fit<=128 | bytes |
+|---|---|---|---|---|---|
+| 4096 asymmetric | 32 | 51.355 | 78.2% | 98.1% | 17,400 |
+| 4096 shared w=1/√2 | 32 | 51.571 | 78.0% | 98.1% | **14,840** |
+| 4096 **shared w=1** | 32 | 51.544 | 78.1% | 98.1% | **14,840** |
+| 4096 shared w=√2 | 32 | 51.744 | 77.8% | 98.0% | 14,840 |
+| 4096 asymmetric | 64 | **50.622** | **79.1%** | 98.2% | 21,488 |
+| 4096 **shared w=1** | 64 | 51.143 | 78.5% | 98.2% | **18,416** |
+| 4096 asymmetric | 128 | 49.996 | 79.8% | 98.3% | 34,784 |
+| 8192 asymmetric | 64 | **47.279** | **83.4%** | 98.8% | 39,920 |
+| 8192 **shared w=1** | 64 | 47.611 | 82.9% | 98.7% | **33,776** |
+| 8192 asymmetric | 128 | 46.948 | 83.6% | 98.8% | 54,240 |
+
+(`w = 1` is quoted for the shared rows because the weight sweep has no
+consistent winner — 0.707 at 4096/64, 1.0 at 4096/32, 1.414 at 8192/64, all
+within 0.2 bits.  Keep the 1:1 default; the concatenation is not a handicap.)
+
+### At matched `k` it loses; at matched bytes it wins
+
+At matched `k` the constraint costs 0.19 bits at `k = 32` and 0.33-0.52 bits at
+`k = 64`, with fit<=64 down 0.1, 0.6 and 0.5 points.  That reads as a rejection
+— and it is how the `V = 512` measurement was decided.  But the decision rule is
+about **matched total bytes**, and the asymmetric model does not exist at 14.8,
+18.4 or 33.8 kB.  Placing each shared point against the asymmetric frontier
+interpolated to the same size:
+
+| point | bytes | fit<=64 | frontier at that size | margin |
+|---|---:|---:|---:|---:|
+| 4096, `k = 32` | 14,840 | 78.1% | 77.6% (extrapolated below `k = 32`) | **+0.46 pt** |
+| 4096, `k = 64` | 18,416 | 78.5% | 78.4% (between `k = 32` and 64) | +0.08 pt |
+| 8192, `k = 64` | 33,776 | 82.9% | 82.0% (between `V = 4096` and 8192 at `k = 64`) | **+0.93 pt** |
+
+All three sit at or above the frontier, two comfortably and one at the
+noise boundary.  The rule's tolerance is +-0.3 pt, so all three pass: the shared
+point is *not below* the asymmetric frontier anywhere measured, and at `V = 8192`
+it is a clear 0.9 points above it.
+
+**Why the testing point said otherwise.**  The frontier is steep in bytes at
+`V = 512` — 892 B buys 1.9 points of fit<=64 (0.47 kB/pt) — so saving 256 B is
+worth almost nothing, while the constraint still costs 1.2 points.  At the
+canonical grid the frontier is 4,287-4,542 B/pt over the same kind of step: bytes
+are worth four to ten times more, and the membership saving is 2.5-6.1 kB rather
+than 256 B.  The `V = 512` verdict was a statement about a cheap model, not about
+the constraint.
+
+### Verdict
+
+**Adopt the shared assignment at the canonical grid** (one label as both `lcl`
+and `rcl`, `w = 1`), keeping the `k^2` block: `D` asymmetry is 0.9-1.4 in
+Frobenius ratio, so it cannot be halved.  It buys 15-17% of the model for
+0.19-0.52 bits, which is a *gain* on the bytes-for-fit frontier at every
+canonical point measured.  Two caveats to carry forward: the `k = 64` at
+`V = 4096` margin (+0.08 pt) is inside the noise, so that cell is "no worse"
+rather than "better"; and the two-clause rule should be stated as the frontier
+placement test used here, not as "fit at matched `k`", which reads as a rejection
+of a scheme that is in fact above the frontier.
 
 ## Implementation
 

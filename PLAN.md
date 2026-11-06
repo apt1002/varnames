@@ -157,12 +157,14 @@ labels (see `README.md`).
       cluster over the joint, not two.  `docs/CODING_OVERHEAD.md`,
       `scripts/words_per_identifier.py`.
 
-- [ ] **C26. One cluster assignment for both sides.** *Measured at the testing
-      point, rejected there* — the extra constraint costs 0.68 bits/identifier
-      and 1.2 points of fit<=64, against 256 B saved, i.e. ~0.47 bits on the
-      frontier slope: dominated at matched bytes.  Open: the canonical grid
-      (`V = 4096`, `k = 32/64`), where the membership saving is 2.5-3.0 kB.
-      `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
+- [ ] **C26. One cluster assignment for both sides.** *Adopted at the canonical
+      grid* — at matched total bytes the shared point sits at or above the
+      asymmetric frontier everywhere measured (+0.46 pt at 4096/32, +0.08 at
+      4096/64, +0.93 at 8192/64), buying 15-17% of the model for 0.19-0.52 bits.
+      The testing point rejected it because there the frontier is steep in bytes
+      (0.47 kB/pt against 4.3 kB/pt), so a 256 B saving was worth nothing.  Keep
+      `w = 1` and the `k^2` block.  `docs/SHARED_CLUSTERS.md`,
+      `scripts/shared_clusters.py`.
 - [ ] **C27. Reserved stop clusters.** *Rejected at the canonical grid.*  At
       the testing point (`V = 512`, `k = 16`) the reservation looked free and
       helpful; at `V = 4096/8192` it costs 0.30-0.44 bits and 0.4-0.6 pt of
