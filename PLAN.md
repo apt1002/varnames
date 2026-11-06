@@ -185,8 +185,10 @@ labels (see `README.md`).
       18% / 30% seen at the testing point, because the word step is 66% of CF's
       cost there.  Against a frontier of ≈5.5 kB/bit (measured two ways) `q = 2`
       nets +0.60 bits and `q = 4` +0.28.  Open: `k = 64` accounting (expected
-      loss), then the measured-code experiment, since these are training-count
-      Huffman numbers with no fit rate and the decision rule is in fit rates.
+      loss), and the measured-code run — the harness is written and verified at
+      `V = 512`, where held-out recovers what the accounting predicted; the
+      canonical cells need more RAM than this box has, so they are laptop jobs
+      (`scripts/quarter_codes.py`).
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` — stop each
       right-cluster Huffman tree early at `q` trees and encode
       `P(quarter | left cluster)` instead, buying back part of the two-tree
