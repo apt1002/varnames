@@ -157,12 +157,12 @@ labels (see `README.md`).
       cluster over the joint, not two.  `docs/CODING_OVERHEAD.md`,
       `scripts/words_per_identifier.py`.
 
-- [ ] **C26. One cluster assignment for both sides.** *Planned* — cluster the
-      concatenated row/column profiles of `√M` so that each word has a single
-      left-and-right label, halving the membership table; measure the held-out
-      cost of the extra constraint against the bytes saved, on the
-      matched-bytes frontier rather than at matched `k`.
-      `docs/SHARED_CLUSTERS.md`.
+- [ ] **C26. One cluster assignment for both sides.** *Measured at the testing
+      point, rejected there* — the extra constraint costs 0.68 bits/identifier
+      and 1.2 points of fit<=64, against 256 B saved, i.e. ~0.47 bits on the
+      frontier slope: dominated at matched bytes.  Open: the canonical grid
+      (`V = 4096`, `k = 32/64`), where the membership saving is 2.5-3.0 kB.
+      `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
 - [ ] **C27. Reserved stop clusters.** *Measured at the testing point* — the
       end boundary improves as designed, the start boundary does not (the
       within-right-cluster allocation is proportional to the unigram, so digits

@@ -1,7 +1,7 @@
 # One cluster assignment for both sides
 
-Status: **planned; not started.**  Design and decision rule only — no numbers
-below are measurements.
+Status: **measured at the testing point** (`V = 512`, `k = 16`): rejected there,
+by the decision rule below.  The canonical-grid confirmation is the open item.
 
 ## The question
 
@@ -79,6 +79,42 @@ unigram + membership + block), and the full-table reference bits.  Adopt if at
 (within ±0.3 pt, the run-to-run noise of the frontier), or if the matched-`k`
 CS loss is smaller than the bytes-equivalent loss on the `WORDLIST_BUDGET.md`
 frontier.
+
+## Measurement (`V = 512`, `k = 16`, `work/tw512ns`)
+
+4,227 held-out identifiers (stride 100), `kappa = 300`, seed 1;
+`scripts/shared_clusters.py --dir work/tw512ns --ks 16 --stride 100`.
+
+| model | k | bits | fit<=64 | fit<=128 | bytes | `D` asymmetry |
+|---|---|---|---|---|---|---|
+| full table | — | 53.134 | 77.0% | 97.8% | — | — |
+| `asymmetric` | 16 | 68.105 | 57.1% | 93.7% | 1,980 | 1.33 |
+| `shared`, `w = 1/√2` | 16 | 69.071 | 54.8% | 93.4% | 1,724 | 0.92 |
+| `shared`, `w = 1` | 16 | **68.784** | 55.9% | 93.5% | 1,724 | 1.20 |
+| `shared`, `w = √2` | 16 | 69.140 | 55.0% | 93.5% | 1,724 | 1.09 |
+| `asymmetric` | 32 | 66.480 | 59.0% | 94.2% | 2,872 | 1.37 |
+
+**The weight sweep vindicates the 1:1 default** — `w = 1` is the best of the
+three, so the concatenation's equal weighting is not a handicap.
+
+**The constraint costs 0.68 bits/identifier and 1.2 points of fit<=64**, in
+exchange for 256 B (13% of the model).  The frontier slope at this point is read
+off the `k`-doubling control: 892 B buys 1.63 bits, so 256 B is worth ~0.47 bits
+— the shared model loses 0.68 and saves 0.47.  **Dominated at matched bytes**,
+so the decision rule says do not adopt, and the margin (1.2 pt) is four times
+the +-0.3 pt noise band.
+
+Note that the saving here is the *smallest* case in the design note's table
+(13% at `V = 512`, `k = 16` against 12-15% at the canonical grid), and the
+frontier slope is what scales with it, so the verdict is not obviously a
+small-`V` artefact — but it is one point, and at `k = 16` the memberships are
+cheap.  Confirm at `V = 4096, k = 32/64` before closing it: that is where the
+membership saving is 2.5-3.0 kB against a 21 kB model and where the clustering
+has enough clusters for "the same kind of token from either side" to be a
+meaningful claim.
+
+`D` asymmetry 1.2-1.4 (Frobenius ratio `||D - D^T|| / ||D||`) confirms the block
+is genuinely not symmetric, so the `k^2` table cannot be halved.
 
 ## Implementation
 
