@@ -165,23 +165,19 @@ labels (see `README.md`).
       (0.47 kB/pt against 4.3 kB/pt), so a 256 B saving was worth nothing.  Keep
       `w = 1` and the `k^2` block.  `docs/SHARED_CLUSTERS.md`,
       `scripts/shared_clusters.py`.
-- [ ] **C27. Reserved stop clusters.** *Rejected at the canonical grid.*  At
-      the testing point (`V = 512`, `k = 16`) the reservation looked free and
-      helpful; at `V = 4096/8192` it costs 0.30-0.44 bits and 0.4-0.6 pt of
-      fit<=64, and the deficit sits in the *boundary* transitions — the
-      singleton cell removes a shrinkage towards the marginal that the pooled
-      cell gives for free, and at the canonical grid the boundary distribution
-      *is* nearly the marginal (95% of tokens are startable).  The generative
-      gain disappears with it.  The sample-0 dictionaries stay plain: no special
-      case for the stop.  The profile control is in and changes the reason: with
-      the stop kept in the clustering profiles the reservation is nearly free in
-      bits (+0.007 to +0.19) but inert or worse generationally, so most of the
-      earlier cost was the profile change, not the cell — and an exact `2V`
-      boundary table would recover only 0.21-0.42 bits at the canonical grid,
-      which 8 kB cannot pay for.  The generative columns are weak evidence in
-      general: the mid-word metrics are only just better than their marginal
-      baseline, and the "real identifier hit rate" is a memorisation rate.
-      `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
+- [ ] **C27. Reserved stop clusters.** *Rejected at the canonical grid,
+      cleanly.*  With the profile control in (`profile=full`, so the only
+      difference from `plain` is the singleton cell) the reservation costs
+      +0.021 / +0.190 / +0.007 bits at 4096/32, 4096/64 and 8192/64 — nearly free
+      — but buys nothing: at `V = 8192` it is a no-op on every generative metric,
+      and at `V = 4096` mid-word starts and the digit first-token mass get worse
+      (0.14% -> 0.93%).  Most of the 0.30-0.44 bits the earlier `profile=sub`
+      runs charged was the clustering-profile change, not the cell, so the
+      shrinkage explanation in the first canonical table is withdrawn.  An exact
+      `2V` boundary table would recover only 0.21-0.42 bits, which 8 kB cannot
+      pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
+      case for the stop.  `docs/NEWLINE_CLUSTER.md`,
+      `scripts/newline_cluster.py`.
 - [ ] **C28. Cluster quarters.** *Accounting done at the testing point* —
       `quarter_accounting.py` confirms the mechanism exactly: CQF recovers the
       expensive in-cell merges (18% of the flat → CF penalty at `q = 2`, 30% at
