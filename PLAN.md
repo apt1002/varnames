@@ -311,3 +311,18 @@ these can be rebuilt in any order, later, without losing the old numbers.
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
       H6 re-measures at it.  Testing at `V = 512` uses `k = 16` only; anything
       measured there is labelled testing-only.
+
+## Build-directory key (`work/` is gitignored, so the key lives here)
+
+Model artefacts are `work/tw<V><flag>/` (`dict.txt`, `sym.npy`, `adj.npz`,
+`meta.json`), with `V = NUM_PAIRS + 64`.
+
+| flag | dictionary | adjacency | note |
+|---|---|---|---|
+| *(none)* | `--sample 20` | all lines | legacy: pre-split corpus (2.07M lines), no new work |
+| `ns` | `--sample 20` | `--stride 0` | the H5 set; "ns" = *no stride* for the adjacency |
+| `s0` | `--sample 0` | `--stride 0` | never-sampled twin: proves the dictionary does not depend on the 1-in-20 sample |
+
+`ns` is not "no sampling" — the dictionary is still built from every 20th line,
+which is what makes the build affordable.  `p` = pruned word list, `raw` =
+pre-case-normalisation corpus, `_ttw*` = scratch.
