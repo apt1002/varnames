@@ -261,18 +261,24 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `pair_factors_L*.npy` via `scripts/pair_matrix.py`), and `work/occ/`.  The grid is rebuilt by
       `scripts/h5_build.sh` (dictionaries identical on rebuild; the adjacency
       triplets' storage order depends on `--jobs`, the matrix does not).
-- [ ] **H6. Re-measure the corpus-dependent reports** (deferred, blocked on H5):
-      the numbers (not the arguments) in `docs/CORPUS.md`, `CODE_LENGTHS.md`,
-      `CASE_NORMALISATION.md`, `ADJACENCY_MATRIX.md` (κ choice),
-      `TREE_WORDS.md`, `DICTIONARY_RULES.md`, `RUN_LENGTHS.md`,
-      `WORD_COMPRESSIBILITY.md`, `BOUNDARY_TRIGRAM.md`,
-      `CLUSTER_SIZE_STUDY.md`, `CLUSTER_WORDS.md`, `CLUSTER_LOSS.md`,
-      `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`, `BREAK_OPEN_PRIOR.md`,
-      `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`, `MODEL_BUDGET.md`,
-      `BUDGET64_STUDY.md`, the measurements in `SHARED_CLUSTERS.md`,
-      `NEWLINE_CLUSTER.md` and `ENCODING.md`, the testing-point numbers in
-      `SMALL_DICT.md` (which exist only to exercise scripts), and the headline
-      figures in `README.md`/`PLAN.md`.
+- [~] **H6. Re-measure the corpus-dependent reports.** *In progress.*
+      **Pass 1 — corpus-level reports, done:** `README.md`, `docs/CORPUS.md`,
+      `docs/CASE_NORMALISATION.md` and `docs/RUN_LENGTHS.md` describe the
+      10-ecosystem union (per-ecosystem composition and shape, union statistics,
+      common-substring thresholds, character and word-level runs, and the case
+      ablation re-run at `V = 4096`).
+      **Pass 2 — model reports, to do:** the numbers (not the arguments) in
+      `docs/CODE_LENGTHS.md`, `ADJACENCY_MATRIX.md` (κ choice),
+      `TREE_WORDS.md`, `DICTIONARY_RULES.md`, `WORD_COMPRESSIBILITY.md`,
+      `BOUNDARY_TRIGRAM.md`, `CLUSTER_SIZE_STUDY.md`, `CLUSTER_WORDS.md`,
+      `CLUSTER_LOSS.md`, `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`,
+      `BREAK_OPEN_PRIOR.md`, `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`,
+      `MODEL_BUDGET.md`, `BUDGET64_STUDY.md`, the measurements in
+      `SHARED_CLUSTERS.md`, `NEWLINE_CLUSTER.md` and `ENCODING.md`, and the
+      testing-point numbers in `SMALL_DICT.md` (which exist only to exercise
+      scripts).
+      *Then:* re-measure C28 with the 10× larger held-out set and settle C26's
+      `+0.08` pt at `V = 4096`, `k = 64`.
 - [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
       `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
       pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28

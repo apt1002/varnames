@@ -28,8 +28,8 @@ bijection is reachable at all. This is research, not a finished codec.
 
 | File | Distinct identifiers | Description |
 |---|---|---|
-| `corpus/identifiers.multilang.txt` | **2,365,468** | **Recommended.** Union across 6 ecosystems, sorted, unique, lexically scrubbed. |
-| `corpus/by_language/*.txt` | — | Per-ecosystem lists: `ruby`, `rust`, `python`, `go`, `javascript`, `perl`. |
+| `corpus/identifiers.multilang.txt` | **4,441,974** | **Recommended.** Union across 10 ecosystems, sorted, unique, lexically scrubbed. |
+| `corpus/by_language/*.txt` | — | Per-ecosystem lists: `ruby`, `rust`, `ocaml`, `haskell`, `java`, `python`, `go`, `lua`, `perl`, `javascript`. |
 
 Statistics and full reproduction instructions: [`docs/CORPUS.md`](docs/CORPUS.md).
 (The old Ruby-only `corpus/identifiers.txt` was byte-identical with
@@ -40,13 +40,17 @@ used; all three have been removed.)
 
 | Language | Distinct IDs | Mean len | Median len | How obtained |
 |---|---:|---:|---:|---|
-| Ruby | 710,477 | 17.8 | 15 | RubyGems: 8,423 unpacked gems, 226,878 files |
-| Rust | 1,290,194 | 18.8 | 17 | crates.io: 2,500 crates, 64,650 `.rs` files |
-| Python | 363,927 | 15.5 | 14 | local CPython 3.13 stdlib + dist-packages, 13,710 files |
-| Go | 154,229 | 13.5 | 11 | local Go 1.24 standard library, 7,115 files |
-| JavaScript | 10,049 | 8.6 | 8 | local `/usr/share/javascript`, 2,786 files |
-| Perl | 17,304 | 10.0 | 9 | local Perl 5 module tree, 752 files |
-| **union** | **2,365,468** | | | 180,712 overlaps removed |
+| Rust | 1,290,194 | 18.77 | 17 | crates.io: 2,500 crates, 64,650 `.rs` files |
+| OCaml | 1,019,741 | 15.39 | 14 | opam: sources of packages ranked by reverse dependencies |
+| Haskell | 886,251 | 13.44 | 12 | Hackage: sources of packages ranked by reverse dependencies |
+| Ruby | 710,173 | 17.82 | 15 | RubyGems: 8,423 unpacked gems, 226,878 files |
+| Java | 403,427 | 17.17 | 16 | Maven Central: `org/apache/**` `-sources.jar` |
+| Python | 364,165 | 15.46 | 14 | local CPython 3.13 stdlib + dist-packages, 13,710 files |
+| Go | 154,229 | 13.53 | 11 | local Go 1.24 standard library, 7,115 files |
+| Lua | 139,816 | 14.75 | 13 | LuaRocks: all packages, ranked by published versions |
+| Perl | 17,196 | 10.06 | 9 | local Perl 5 module tree, 752 files |
+| JavaScript | 10,049 | 8.60 | 8 | local `/usr/share/javascript`, 2,786 files |
+| **union** | **4,441,974** | **16.99** | **15** | 553,267 overlaps removed (per-language sum 4,995,241) |
 
 How each ecosystem was harvested, the lexing rules, and what the corpus
 does and does not contain are documented in [`docs/CORPUS.md`](docs/CORPUS.md).
@@ -56,9 +60,10 @@ does and does not contain are documented in [`docs/CORPUS.md`](docs/CORPUS.md).
 ```
 varnames/
 ├── corpus/
-│   ├── identifiers.multilang.txt        # union of all 6 ecosystems (2,365,468)
+│   ├── identifiers.multilang.txt        # union of all 10 ecosystems (4,441,974)
 │   └── by_language/
-│       ├── ruby.txt  rust.txt  python.txt  go.txt  javascript.txt  perl.txt
+│       ├── ruby.txt  rust.txt  ocaml.txt  haskell.txt  java.txt
+│       ├── python.txt  go.txt  lua.txt  perl.txt  javascript.txt
 ├── PLAN.md                              # index of the research lines (+ long-term productisation horizon)
 ├── docs/
 │   ├── CORPUS.md                        # corpus statistics + reproduction
@@ -197,15 +202,15 @@ The successor and adjacency models are built on a **case-normalised** copy of
 the corpus and on its **common substrings**. `scripts/run_camel_pipeline.sh`
 derives both from `corpus/identifiers.multilang.txt` in four steps — classify,
 camelize, merge, and enumerate the substrings occurring at least *T* times.
-On the current union (2,365,468 identifiers → 2,295,340 after normalisation and
+On the current union (4,441,974 identifiers → 4,226,707 after normalisation and
 de-duplication) the common-substring set grows quickly as the threshold falls:
 
 | threshold T | common substrings | max length |
 |---:|---:|---:|
-| 100000 | 159 | 5 |
-| 10000 | 2,102 | 9 |
-| 2000 | 11,758 | 14 |
-| 500 | 46,346 | 33 |
+| 100000 | 278 | 5 |
+| 10000 | 3,935 | 13 |
+| 2000 | 20,198 | 15 |
+| 500 | 80,869 | 44 |
 
 The empty string, `^`, `$` and all 65 single characters (`a-z`, `A-Z`, `0-9`,
 `_`, `^`, `$`) are common at every threshold. Full details, the exact

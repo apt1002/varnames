@@ -20,13 +20,17 @@ instructions. Narrative background lives in the top-level `README.md`.
 
 | File | Distinct identifiers | Description |
 |---|---|---|
-| `corpus/identifiers.multilang.txt` | **2,365,468** | **Recommended.** Union across 6 ecosystems, sorted, unique, lexically scrubbed. |
-| `corpus/by_language/ruby.txt` | 710,477 | RubyGems harvest. |
+| `corpus/identifiers.multilang.txt` | **4,441,974** | **Recommended.** Union across 10 ecosystems, sorted, unique, lexically scrubbed. |
+| `corpus/by_language/ruby.txt` | 710,173 | RubyGems harvest. |
 | `corpus/by_language/rust.txt` | 1,290,194 | crates.io harvest. |
-| `corpus/by_language/python.txt` | 363,927 | Local CPython 3.13 stdlib + dist-packages. |
+| `corpus/by_language/ocaml.txt` | 1,019,741 | opam harvest. |
+| `corpus/by_language/haskell.txt` | 886,251 | Hackage harvest. |
+| `corpus/by_language/java.txt` | 403,427 | Maven Central harvest. |
+| `corpus/by_language/python.txt` | 364,165 | Local CPython 3.13 stdlib + dist-packages. |
 | `corpus/by_language/go.txt` | 154,229 | Local Go 1.24 standard library. |
+| `corpus/by_language/lua.txt` | 139,816 | LuaRocks harvest. |
+| `corpus/by_language/perl.txt` | 17,196 | Local Perl 5 module tree. |
 | `corpus/by_language/javascript.txt` | 10,049 | Local `/usr/share/javascript`. |
-| `corpus/by_language/perl.txt` | 17,304 | Local Perl 5 module tree. |
 
 The union is derived from `by_language/` with `LC_ALL=C sort -m -u`, so there
 are no duplicate per-language copies. The old Ruby-only `identifiers.txt` was
@@ -38,116 +42,137 @@ consumer.
 
 | Language | Distinct IDs | Mean len | Median len | How obtained |
 |---|---:|---:|---:|---|
-| Ruby | 710,477 | 17.8 | 15 | RubyGems: 8,423 unpacked gems, 226,878 files |
-| Rust | 1,290,194 | 18.8 | 17 | crates.io: 2,500 crates, 64,650 `.rs` files |
-| Python | 363,927 | 15.5 | 14 | local CPython 3.13 stdlib + dist-packages, 13,710 files |
-| Go | 154,229 | 13.5 | 11 | local Go 1.24 standard library, 7,115 files |
-| JavaScript | 10,049 | 8.6 | 8 | local `/usr/share/javascript`, 2,786 files |
-| Perl | 17,304 | 10.0 | 9 | local Perl 5 module tree, 752 files |
-| **union** | **2,365,468** | | | 180,712 overlaps removed (per-language sum 2,546,180) |
+| Ruby | 710,173 | 17.82 | 15 | RubyGems: 8,423 unpacked gems, 226,878 files |
+| Rust | 1,290,194 | 18.77 | 17 | crates.io: 2,500 crates, 64,650 `.rs` files |
+| OCaml | 1,019,741 | 15.39 | 14 | opam: sources of packages ranked by reverse dependencies |
+| Haskell | 886,251 | 13.44 | 12 | Hackage: sources of packages ranked by reverse dependencies |
+| Java | 403,427 | 17.17 | 16 | Maven Central: `org/apache/**` `-sources.jar` |
+| Python | 364,165 | 15.46 | 14 | local CPython 3.13 stdlib + dist-packages, 13,710 files |
+| Go | 154,229 | 13.53 | 11 | local Go 1.24 standard library, 7,115 files |
+| Lua | 139,816 | 14.75 | 13 | LuaRocks: all packages, ranked by published versions |
+| Perl | 17,196 | 10.06 | 9 | local Perl 5 module tree, 752 files |
+| JavaScript | 10,049 | 8.60 | 8 | local `/usr/share/javascript`, 2,786 files |
+| **union** | **4,441,974** | **16.99** | **15** | 553,267 overlaps removed (per-language sum 4,995,241) |
+
+### The packaged harvests
+
+The four packaged ecosystems are harvested from ecosystem indexes by
+`scripts/harvest_packages.py`, which writes a `(package, URL)` plan per language
+and then downloads, extracts and discards each archive:
+
+| Ecosystem | Index | Ranking rule | Archive |
+|---|---|---|---|
+| Haskell | Hackage `index.tar.gz` | reverse dependencies (`build-depends`) | per-package tarball |
+| OCaml | opam `index.tar.gz` | reverse dependencies (`depends:`) | per-package tarball |
+| Lua | LuaRocks `manifest` | number of published versions | `.src.rock` |
+| Java | Maven Central | none — all `org/apache/**` artifacts with a `-sources.jar` | sources jar |
+
+None of those indexes publishes download counts, so the ranking is a
+popularity *proxy*, not a download measure. File counts for these four are not
+retained: the trees are deleted after extraction (`scripts/harvest_packages.py`
+is resumable, so a re-run rebuilds them), while the six original ecosystems'
+trees were kept long enough to be audited (see "Hardening").
 
 ## Union statistics
 
 <!-- The block below is the output of
      python3 scripts/stats.py corpus/identifiers.multilang.txt --title 'multi-language union'
-     (verified current). -->
+     with the title line removed and the headings demoted (verified current). -->
 
 | Metric | Value |
 |---|---|
-| Distinct identifiers | 2,365,468 |
-| Total characters | 42,896,750 |
-| Mean length | 18.13 |
-| Median length | 16 |
+| Distinct identifiers | 4,441,974 |
+| Total characters | 75,462,935 |
+| Mean length | 16.99 |
+| Median length | 15 |
 | Min length | 1 |
-| Max length | 264 |
+| Max length | 306 |
 | Distinct characters | 63 |
-| Starts with `_` | 86,482 (3.66%) |
-| Contains `_` | 1,582,262 (66.89%) |
-| Ends with a digit | 168,310 (7.12%) |
-| Contains a digit | 298,954 (12.64%) |
-| ALL_CAPS style | 365,316 (15.44%) |
-| Contains inner capitals (camel/Pascal) | 1,040,061 (43.97%) |
+| Starts with `_` | 137,872 (3.10%) |
+| Contains `_` | 2,423,657 (54.56%) |
+| Ends with a digit | 304,691 (6.86%) |
+| Contains a digit | 512,493 (11.54%) |
+| ALL_CAPS style | 451,766 (10.17%) |
+| Contains inner capitals (camel/Pascal) | 2,336,504 (52.60%) |
 
 ### Length distribution
 
 | Percentile | Length (chars) |
 |---|---|
-| p10 | 8 |
-| p25 | 11 |
-| p50 | 16 |
-| p75 | 23 |
-| p90 | 31 |
-| p95 | 37 |
-| p99 | 55 |
-| p99.9 | 87 |
-| p99.99 | 133 |
-| max | 264 |
+| p10 | 7 |
+| p25 | 10 |
+| p50 | 15 |
+| p75 | 21 |
+| p90 | 29 |
+| p95 | 35 |
+| p99 | 51 |
+| p99.9 | 79 |
+| p99.99 | 122 |
+| max | 306 |
 
 ### Length histogram
 
 | Length | Count | % of corpus |
 |---|---|---|
-| 9-16 | 961,255 | 40.64% |
-| 17-24 | 630,969 | 26.67% |
-| 25-32 | 278,140 | 11.76% |
-| 33-48 | 159,148 | 6.73% |
-| 49-64 | 30,078 | 1.27% |
-| 65-96 | 9,005 | 0.38% |
-| 97-128 | 1,251 | 0.05% |
-| 129-256 | 287 | 0.01% |
-| >256 | 2 | 0.00% |
+| 9-16 | 1,879,192 | 42.31% |
+| 17-24 | 1,127,157 | 25.38% |
+| 25-32 | 453,306 | 10.21% |
+| 33-48 | 241,840 | 5.44% |
+| 49-64 | 42,120 | 0.95% |
+| 65-96 | 12,459 | 0.28% |
+| 97-128 | 1,304 | 0.03% |
+| 129-256 | 293 | 0.01% |
+| >256 | 3 | 0.00% |
 
 ### Character frequency (top 20)
 
 | Char | Occurrences | % of all chars |
 |---|---|---|
-| `e` | 3,937,382 | 9.18% |
-| `_` | 3,521,774 | 8.21% |
-| `t` | 2,950,150 | 6.88% |
-| `r` | 2,188,632 | 5.10% |
-| `a` | 2,187,341 | 5.10% |
-| `i` | 2,060,074 | 4.80% |
-| `s` | 2,053,976 | 4.79% |
-| `o` | 1,958,982 | 4.57% |
-| `n` | 1,931,051 | 4.50% |
-| `l` | 1,378,410 | 3.21% |
-| `c` | 1,257,573 | 2.93% |
-| `d` | 1,171,307 | 2.73% |
-| `p` | 1,023,667 | 2.39% |
-| `u` | 926,838 | 2.16% |
-| `m` | 865,363 | 2.02% |
-| `E` | 844,834 | 1.97% |
-| `S` | 687,075 | 1.60% |
-| `T` | 680,759 | 1.59% |
-| `I` | 637,926 | 1.49% |
-| `A` | 624,959 | 1.46% |
+| `e` | 7,346,422 | 9.74% |
+| `t` | 5,450,400 | 7.22% |
+| `_` | 5,103,535 | 6.76% |
+| `a` | 4,149,495 | 5.50% |
+| `r` | 4,064,163 | 5.39% |
+| `i` | 3,838,499 | 5.09% |
+| `s` | 3,744,404 | 4.96% |
+| `o` | 3,729,425 | 4.94% |
+| `n` | 3,677,773 | 4.87% |
+| `l` | 2,589,144 | 3.43% |
+| `c` | 2,340,742 | 3.10% |
+| `d` | 2,143,061 | 2.84% |
+| `p` | 1,950,515 | 2.58% |
+| `u` | 1,729,833 | 2.29% |
+| `m` | 1,602,519 | 2.12% |
+| `g` | 1,207,117 | 1.60% |
+| `E` | 1,172,232 | 1.55% |
+| `S` | 1,107,817 | 1.47% |
+| `T` | 1,042,059 | 1.38% |
+| `f` | 988,365 | 1.31% |
 
 ### Leading character (top 15)
 
 | Char | Identifiers | % of corpus |
 |---|---|---|
-| `t` | 170,384 | 7.20% |
-| `s` | 135,101 | 5.71% |
-| `c` | 111,772 | 4.73% |
-| `p` | 96,356 | 4.07% |
-| `S` | 91,039 | 3.85% |
-| `_` | 86,482 | 3.66% |
-| `r` | 83,265 | 3.52% |
-| `I` | 80,892 | 3.42% |
-| `D` | 73,352 | 3.10% |
-| `a` | 71,960 | 3.04% |
-| `C` | 70,505 | 2.98% |
-| `d` | 68,673 | 2.90% |
-| `i` | 67,985 | 2.87% |
-| `g` | 66,589 | 2.82% |
-| `P` | 59,571 | 2.52% |
+| `s` | 291,670 | 6.57% |
+| `t` | 272,502 | 6.13% |
+| `c` | 255,528 | 5.75% |
+| `p` | 204,572 | 4.61% |
+| `a` | 187,593 | 4.22% |
+| `r` | 175,234 | 3.94% |
+| `g` | 160,381 | 3.61% |
+| `i` | 150,375 | 3.39% |
+| `d` | 140,812 | 3.17% |
+| `_` | 137,872 | 3.10% |
+| `S` | 137,046 | 3.09% |
+| `m` | 132,124 | 2.97% |
+| `f` | 122,470 | 2.76% |
+| `C` | 115,670 | 2.60% |
+| `e` | 114,180 | 2.57% |
 
 ### Notes
 
-- 289 identifiers exceed 128 characters; the longest is 264 chars and is almost
-  certainly an embedded blob (base64 font/source-map data) rather than a real
-  identifier.
-- Longest token begins: `abcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabcdefghijkabc…`
+- 296 identifiers exceed 128 characters; the longest is 306 chars and is almost certainly an embedded blob (base64 font/source-map data) rather than a real identifier.
+- Longest token begins: `GTTCTACAACGTCCAGATCGGAAGCAAGTTCGAAGGAGAGGTCTTGATAACACCAAGCACGAGGTTACCTTCACTCTCAA...`
 
 ## Method
 
@@ -234,7 +259,7 @@ with the hardened scrubber:
 | Go | 7,115 | 154,229 | 154,229 | — |
 | Perl | 752 | 17,304 | 17,196 | −108 (182 prose out, 74 code in) |
 | JavaScript | 2,786 | 10,049 | 10,049 | — |
-| **union** | | **2,365,468** | **2,365,354** | **−114** |
+| **union of those six** | | **2,365,468** | **2,365,354** | **−114** |
 
 Perl is the clearest illustration: the tokens it loses are English (`Adding`,
 `Briefly`, `It`, `For`) and the tokens it gains are identifiers the parity error
@@ -279,21 +304,27 @@ Per-language files, checked with `grep -cE '^$'` (empty lines) and
 
 | File | Lines | Empty | Violations |
 |---|---:|---:|---:|
-| `corpus/by_language/ruby.txt` | 710,477 | 0 | 0 |
 | `corpus/by_language/rust.txt` | 1,290,194 | 0 | 0 |
-| `corpus/by_language/python.txt` | 363,927 | 0 | 0 |
+| `corpus/by_language/ocaml.txt` | 1,019,741 | 0 | 0 |
+| `corpus/by_language/haskell.txt` | 886,251 | 0 | 0 |
+| `corpus/by_language/ruby.txt` | 710,173 | 0 | 0 |
+| `corpus/by_language/java.txt` | 403,427 | 0 | 0 |
+| `corpus/by_language/python.txt` | 364,165 | 0 | 0 |
 | `corpus/by_language/go.txt` | 154,229 | 0 | 0 |
+| `corpus/by_language/lua.txt` | 139,816 | 0 | 0 |
+| `corpus/by_language/perl.txt` | 17,196 | 0 | 0 |
 | `corpus/by_language/javascript.txt` | 10,049 | 0 | 0 |
-| `corpus/by_language/perl.txt` | 17,304 | 0 | 0 |
 
 Union checks:
 
 ```
-cat corpus/by_language/*.txt | wc -l                              # 2,546,180 (sum)
-cat corpus/by_language/*.txt | LC_ALL=C sort -u | wc -l          # 2,365,468 (union)
+cat corpus/by_language/*.txt | wc -l                              # 4,995,241 (sum)
+cat corpus/by_language/*.txt | LC_ALL=C sort -u | wc -l          # 4,441,974 (union)
 ```
 
-The offline subset (Go + Python + JavaScript + Perl) unions to 527,316:
+The offline subset (Go + Python + JavaScript + Perl) unions to 527,454, and the
+six original ecosystems (Ruby + Rust + Python + Go + JavaScript + Perl) to
+2,365,354:
 
 ```
 cat corpus/by_language/go.txt corpus/by_language/python.txt \
@@ -310,19 +341,19 @@ ASCII-only content and known artefacts.
 
 | Metric | Value |
 |---|---|
-| Distinct identifiers | 710,477 |
-| Total characters | 12,657,587 |
+| Distinct identifiers | 710,173 |
+| Total characters | 12,653,610 |
 | Mean length | 17.82 |
 | Median length | 15 |
 | Min length | 1 |
 | Max length | 264 |
 | Distinct characters | 63 |
-| Starts with `_` | 7,318 (1.03%) |
-| Contains `_` | 477,991 (67.28%) |
-| Ends with a digit | 17,273 (2.43%) |
-| Contains a digit | 36,172 (5.09%) |
-| ALL_CAPS style | 57,213 (8.05%) |
-| Contains inner capitals (camel/Pascal) | 231,408 (32.57%) |
+| Starts with `_` | 7,311 (1.03%) |
+| Contains `_` | 477,914 (67.30%) |
+| Ends with a digit | 17,237 (2.43%) |
+| Contains a digit | 36,126 (5.09%) |
+| ALL_CAPS style | 57,115 (8.04%) |
+| Contains inner capitals (camel/Pascal) | 231,234 (32.56%) |
 
 Length percentiles: p10 8, p25 11, p50 15, p75 21, p90 30, p95 37, p99 62,
 p99.9 107, p99.99 148, max 264. 241 identifiers exceed 128 characters; the
@@ -357,14 +388,42 @@ Failures/skips: the parallel download batch initially missed one crate
 unpacked with a top-level `Cargo.toml`. `find` located 64,651 `.rs` files; the
 tokeniser scanned 64,650 (1 skipped for containing NUL bytes).
 
+### Packaged harvests (Java, Haskell, OCaml, Lua)
+
+Four ecosystems added for language diversity — Java for verbose CamelCase, Haskell
+and OCaml for module-qualified lower-case names, Lua for short snake_case.  All
+four are harvested by `scripts/harvest_packages.py` (index → plan → download →
+extract); see "The packaged harvests" for the indexes and ranking rules.
+
+| Metric | Java | Haskell | OCaml | Lua |
+|---|---:|---:|---:|---:|
+| Distinct identifiers | 403,427 | 886,251 | 1,019,741 | 139,816 |
+| Total characters | 6,926,709 | 11,914,728 | 15,693,605 | 2,062,853 |
+| Mean length | 17.17 | 13.44 | 15.39 | 14.75 |
+| Median length | 16 | 12 | 14 | 13 |
+| Max length | 119 | 306 | 223 | 99 |
+| Starts with `_` | 1.11% | 2.23% | 2.85% | 2.58% |
+| Contains `_` | 17.32% | 21.22% | 62.68% | 45.11% |
+| Ends with a digit | 3.62% | 10.04% | 5.09% | 3.12% |
+| ALL_CAPS style | 11.51% | 3.17% | 2.79% | 7.02% |
+| Contains inner capitals | 92.62% | 80.28% | 29.52% | 48.03% |
+
+The shape of each ecosystem shows through: Java is 93% CamelCase with almost no
+underscores; Haskell's 10% digit-final rate and its 306-character longest token
+are GHC-mangled names; OCaml is two-thirds underscore-separated; Lua is short and
+mixed.  That spread is the point: 85% of the six-ecosystem union was Rust and
+Ruby, both long (18.8 and 17.8 mean length) and underscore-heavy (67%), whereas
+the four packaged lists are shorter (13.4–17.2 mean length), much less
+underscore-heavy (17–63% of identifiers) and far more CamelCase-dense (30–93%).
+
 ### Local offline harvest (Go, Python, JavaScript, Perl)
 
 | Language | Source roots | Files scanned | Distinct identifiers | Violations |
 |---|---|---:|---:|---:|
 | Go | `/usr/share/go-1.24/src` | 7,115 | 154,229 | 0 |
-| Python | `/usr/lib/python3.13`, `/usr/lib/python3/dist-packages` | 13,710 | 363,927 | 0 |
+| Python | `/usr/lib/python3.13`, `/usr/lib/python3/dist-packages` | 13,710 | 364,165 | 0 |
 | JavaScript | `/usr/share/javascript` | 2,786 | 10,049 | 0 |
-| Perl | `/usr/share/perl5`, `/usr/lib/aarch64-linux-gnu/perl5` | 752 | 17,304 | 0 |
+| Perl | `/usr/share/perl5`, `/usr/lib/aarch64-linux-gnu/perl5` | 752 | 17,196 | 0 |
 
 Per-language extension sets: Go `.go`; Python `.py,.pyi,.pyx`; JavaScript
 `.js,.mjs,.jsx`; Perl `.pl,.pm`. All requested roots existed and were scanned;
@@ -414,13 +473,39 @@ LC_ALL=C sort -m -u corpus/by_language/*.txt > corpus/identifiers.multilang.txt
 python3 scripts/stats.py corpus/identifiers.multilang.txt --title 'multi-language union'
 ```
 
+### Packaged ecosystems (network)
+
+```bash
+# rank by the ecosystem's own proxy, then fetch and unpack (resumable)
+python3 scripts/harvest_packages.py plan  haskell --limit 2000
+python3 scripts/harvest_packages.py fetch haskell --limit 2000 --jobs 8
+python3 scripts/harvest_packages.py plan  ocaml   --limit 2000
+python3 scripts/harvest_packages.py fetch ocaml   --limit 2000 --jobs 8
+python3 scripts/harvest_packages.py plan  lua     --limit 2000
+python3 scripts/harvest_packages.py fetch lua     --limit 2000 --jobs 8
+python3 scripts/harvest_packages.py plan  java    --limit 2000
+python3 scripts/harvest_packages.py fetch java    --limit 2000 --jobs 8
+
+python3 scripts/extract.py work/clean_ids/haskell.shards work/haskell_src --exts .hs,.lhs --threshold 400000
+python3 scripts/extract.py work/clean_ids/ocaml.shards   work/ocaml_src   --exts .ml,.mli --threshold 400000
+python3 scripts/extract.py work/clean_ids/lua.shards     work/lua_src     --exts .lua      --threshold 400000
+python3 scripts/extract.py work/clean_ids/java.shards    work/java_src    --exts .java     --threshold 400000
+for f in work/clean_ids/*.shards; do
+    LC_ALL=C sort -u "$f" > "corpus/by_language/$(basename "$f" .shards).txt"
+done
+```
+
+`plan` writes `work/plans/<lang>.tsv`, so the exact package set behind a corpus
+version is recoverable from that file.
+
 ## Extending the corpus
 
 `scripts/extract.py` is language-agnostic and whitelists a broad set of
-namespace-rich file types. Good next targets: npm/Packagist (JS/PHP), Maven
-source jars (Java), PyPI wheels for packages not installed locally, and more
-Rust/Java generated-code ecosystems. Add a language by running the three stages
-(fetch → unpack → extract) and dropping the result in `corpus/by_language/`.
+namespace-rich file types. Good next targets: npm and TypeScript, Packagist
+(PHP), PyPI wheels for packages not installed locally, and NuGet. Add a language
+by running the three stages (fetch → unpack → extract) and dropping the result in
+`corpus/by_language/`; an index-driven ecosystem additionally needs a planner in
+`scripts/harvest_packages.py` (one function returning `(package, URL)` rows).
 
 ## Licensing & provenance
 

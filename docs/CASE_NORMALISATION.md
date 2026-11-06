@@ -21,8 +21,10 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 
 `scripts/classify_identifiers.py` and `scripts/camelize_identifiers.py` do steps
 1–2; `scripts/merge_identifiers.py` does step 3. On the current union
-(2,365,468 identifiers) the merged, normalised corpus has **2,295,340**
-identifiers.
+(4,441,974 identifiers) the three classes are **1,976,554** lower_case,
+**451,766** UPPER_CASE and **2,013,654** CamelCase, and the merged, normalised
+corpus has **4,226,707** identifiers — 215,267 collapsed (4.85%) where two
+classes normalise to the same string.
 
 The pipeline writes the case-normalisation artefacts (`lower_case.txt`,
 `upper_case.txt`, `camel_case.txt`, `camel_from_lower.txt`,
@@ -38,19 +40,20 @@ definition. The artefacts land in `work/common<T>`.
 
 | T | common substrings | max length |
 |---:|---:|---:|
-| 100000 | 159 | 5 |
-| 50000 | 316 | 5 |
-| 20000 | 911 | 7 |
-| 10000 | 2,102 | 9 |
-| 5000 | 4,478 | 13 |
-| 2000 | 11,758 | 14 |
-| 1000 | 23,284 | 25 |
-| 500 | 46,346 | 33 |
+| 100000 | 278 | 5 |
+| 50000 | 613 | 6 |
+| 20000 | 1,788 | 9 |
+| 10000 | 3,935 | 13 |
+| 5000 | 8,038 | 14 |
+| 2000 | 20,198 | 15 |
+| 1000 | 40,168 | 30 |
+| 500 | 80,869 | 44 |
 
-At the default threshold *T* = 10000 the set contains 2,102 substrings; the
-longest are 9 characters (`Attribute`, `Response$`). The empty string, `^`, `$`
-and all 65 single characters (`a-z`, `A-Z`, `0-9`, `_`, `^`, `$`) occur at least
-10000 times.
+Rows count the empty string. At the default threshold *T* = 10000 the set
+contains 3,935 substrings; the longest are 13 characters (`Configuration`). The
+empty string, `^`, `$` and all 65 single characters (`a-z`, `A-Z`, `0-9`, `_`,
+`^`, `$`) occur at least 10000 times. Below *T* = 2000 the maximum length is set
+by padding runs of generated code (`ooo…o`), not by any shared word.
 
 ## Running it
 
@@ -72,54 +75,56 @@ mkdir -p work/raw
 python3 scripts/split_corpus.py corpus/identifiers.multilang.txt \
         work/raw/merged_training.txt work/raw/merged_validation.txt --every 10
 python3 scripts/tree_words.py train --corpus work/raw/merged_training.txt \
-        --num-pairs 2040 --sample 20 --outdir work/tw2040raw
-python3 scripts/case_ablation.py work/tw2040 work/tw2040raw
+        --num-pairs 4032 --sample 20 --stride 0 --outdir work/tw4096raw
+python3 scripts/case_ablation.py work/tw4096ns work/tw4096raw
 ```
 
 Two corpora were built from the same raw union (`corpus/identifiers.multilang.txt`,
-2,365,468 identifiers, already sorted-unique) and split 9:1 identically
-(interleaved, `scripts/split_corpus.py --every 10`):
+4,441,974 identifiers, already sorted-unique) and split 9:1 identically
+(interleaved, `scripts/split_corpus.py --every 10`: 3,997,776 training /
+444,198 validation):
 
 * **normalised** — `classify`/`camelize`/`merge` → `work/camel/merged.txt`, the
   existing pipeline (`merged_training` / `merged_validation`);
 * **raw** — the union as-is → `work/raw/merged_training` / `merged_validation`.
 
-The same word model is fitted to each (NUM_PAIRS = 2040, dictionary on a
-stride-20 sample, adjacency on the full training corpus), and each is scored on
-its own held-out set (stride 20, `kappa = 300`):
+The same word model is fitted to each (V = 4096, dictionary on a stride-20
+sample, adjacency on the full training corpus), and each is scored on its own
+held-out set (stride 40, `kappa = 300`):
 
-| target ids | model trained on | full table | cluster `k = 105` (`assoc`) |
+| target ids | model trained on | full table | cluster `k = 32` (`assoc`) |
 |---|---|---:|---:|
-| canonical (normalised split) | normalised | **45.77** | **55.35** |
-| raw (raw split) | raw | 50.30 | 62.91 |
+| canonical (normalised split) | normalised | **42.20** | **51.36** |
+| raw (raw split) | raw | 45.36 | 57.74 |
 
 The two test sets differ, so this alone is not decisive.  The clean **paired**
 test scores identifiers that normalisation leaves *unchanged* — the CamelCase
-subset of the raw held-out set (3,598 of 11,828), which is the *same string* in
-both corpora:
+subset of the raw held-out set (10,117 of 22,210 at stride 20), which is the
+*same string* in both corpora:
 
-| model trained on | bits on the 3,598 CamelCase ids |
+| model trained on | bits on the 10,117 CamelCase ids |
 |---|---:|
-| normalised | **48.01** |
-| raw | 53.42 |
+| normalised | **41.83** |
+| raw | 45.37 |
 
 Training on the case-normalised corpus makes even the untouched CamelCase
-identifiers **5.4 bits shorter**: normalisation consolidates the three casing
-conventions (`foo_bar`, `FOO_BAR`, `fooBar`) so each word's counts — and hence the
-word-bigram statistics — are estimated from more evidence.  It must be applied
+identifiers **3.5 bits shorter**: normalisation consolidates the three casing
+conventions (`foo_bar`, `FOO_BAR`, `fooBar`) so each word's counts — and hence
+the word-bigram statistics — are estimated from more evidence.  It must be applied
 consistently: a normalised-trained model scored on *raw* identifiers costs
-64.62 bits (a mismatch penalty of ~14 bits), so the encoder must normalise its
-input the same way the corpus was normalised.
+52.84 bits against the raw model's 45.12 on the same identifiers (a mismatch
+penalty of 7.7 bits), so the encoder must normalise its input the same way the
+corpus was normalised.
 
 **Caveat — reversibility costs only the class label.**  Normalisation is
 **injective within a case class**: `to_camel` has an exact inverse
 `from_camel(s, cls)`, and `camelize_identifiers.py --check` round-trips all
-1,649,738 non-CamelCase identifiers with **0 failures** — so the original
+2,428,320 non-CamelCase identifiers with **0 failures** — so the original
 identifier is recovered from its canonical form **plus its class**.  The two
 classes (`lower`, `upper`) are the ones `to_camel` rewrites; CamelCase is the
 identity.  All the "lossiness" is that the class is dropped: `merge_identifiers.py`
-de-duplicates *across* the three lists, collapsing 70,128 of 2,365,468
-identifiers (3.0 %).  **Every collapse is cross-class** — e.g. `_abc` (lower),
+de-duplicates *across* the three lists, collapsing 215,267 of 4,441,974
+identifiers (4.85 %).  **Every collapse is cross-class** — e.g. `_abc` (lower),
 `_ABC` (upper) and `Abc` (CamelCase) all normalise to `Abc`; `_a` (lower) and
 `_A` (upper) both give `A`; `_a_id` (lower) and `AId` (CamelCase) both give
 `AId` — and the class label disambiguates them.  So exact recovery needs only
