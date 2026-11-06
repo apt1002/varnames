@@ -132,15 +132,15 @@ slope into a curve — at two vocabularies.
 | 64 | 50.527 | 78.9 % | 98.3 % | 21,488 |
 | 96 | 50.203 | 79.3 % | 98.3 % | 27,199 |
 
-`V = 8192`, stride 100 (`n = 4,227`, so the fit column carries ±0.9 pt):
+`V = 8192`, stride 10 (`n = 42,268`):
 
 | `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
 |---:|---:|---:|---:|---:|
-| 16 | 47.507 | 83.5 % | 98.6 % | 31,996 |
-| 24 | 47.319 | 83.7 % | 98.6 % | 33,512 |
-| 32 | 47.256 | 83.7 % | 98.6 % | 34,808 |
-| 48 | 47.180 | 83.9 % | 98.6 % | 37,282 |
-| 64 | 47.053 | 84.1 % | 98.7 % | 39,920 |
+| 16 | 47.727 | 82.5 % | 98.8 % | 31,996 |
+| 24 | 47.535 | 82.7 % | 98.8 % | 33,512 |
+| 32 | 47.481 | 82.8 % | 98.8 % | 34,808 |
+| 48 | 47.399 | 82.9 % | 98.8 % | 37,282 |
+| 64 | 47.285 | 83.1 % | 98.8 % | 39,920 |
 
 | step | Δbits | Δbytes | kB/bit | Δ fit ≤64 | kB per point |
 |---|---:|---:|---:|---:|---:|
@@ -149,18 +149,19 @@ slope into a curve — at two vocabularies.
 | 4096: 32→48 | −0.356 | +1,875 | 5.3 | +0.4 | 4.6 |
 | 4096: 48→64 | −0.362 | +2,213 | 6.1 | +0.4 | 5.4 |
 | 4096: 64→96 | −0.325 | +5,711 | 17.6 | +0.4 | **14.8** |
-| 8192: 16→24 | −0.188 | +1,516 | 8.1 | +0.2 | 8.0 |
-| 8192: 24→32 | −0.063 | +1,296 | 20.6 | +0.0 | 27 |
-| 8192: 32→48 | −0.076 | +2,474 | 32.6 | +0.2 | 12 |
-| 8192: 48→64 | −0.127 | +2,638 | 20.8 | +0.1 | 19 |
+| 8192: 16→24 | −0.191 | +1,516 | 7.9 | +0.2 | 6.2 |
+| 8192: 24→32 | −0.054 | +1,296 | 23.9 | +0.1 | 21 |
+| 8192: 32→48 | −0.082 | +2,474 | 30.2 | +0.1 | 17 |
+| 8192: 48→64 | −0.114 | +2,638 | 23.1 | +0.2 | 16 |
 
 Four things follow.
 
 * **`k` is weak at 4096 and nearly dead at 8192.**  The middle of the 4096 sweep
-  costs 4.6–6.8 kB per fit point; at 8192 the same steps cost 8–27 kB/pt and the
-  whole `k = 16 → 64` range buys 0.45 bits for 7.9 kB.  Fit increments at 8192
-  are 0.0–0.2 pt — inside the sample's own noise.  At that vocabulary, raising
-  `k` buys almost nothing at any price.
+  costs 4.6–6.8 kB per fit point; at 8192 the same steps cost 6.2–21 kB/pt and
+  the whole `k = 16 → 64` range buys 0.44 bits and 0.6 fit points for 7.9 kB
+  (13 kB/pt end to end).  The fit increments are `+0.2, +0.1, +0.1, +0.2` at
+  `n = 42,268`: real, but tiny.  At that vocabulary, raising `k` buys almost
+  nothing at any price.
 * **The apparent cheap segment was noise.**  At `n = 4,227` the 32→48 step
   looked like 2.8 kB/pt, which invited a story about a cheap stretch of the
   curve; at `n = 42,268` it is 4.6, in line with its neighbours.  The 10x
@@ -176,14 +177,16 @@ Four things follow.
   64-bit trade.
 
 **`V` versus `k` at matched bytes — a staircase.**  The comparison the record
-never had is now measurable: `V = 8192, k = 16` is 32.0 kB / 83.5 %, while
-`V = 4096` tops out at 27.2 kB / 79.3 % (`k = 96`).  So the last ~5 kB spent
-crossing from 4096 to 8192 buys ≈4.2 points (≈1.2 kB/pt, ±0.5 for the mixed
-stride), whereas the next 8 kB spent *inside* 8192 — `k = 16 → 64` — buys
-0.6 points (13 kB/pt).  On matched `k` the `V` step is 3.1–3.5 kB/pt
-(`4096/32 → 8192/32`: +17.4 kB for +5.6 pt), against 4.6–27 kB/pt for `k`.
-So the frontier is not a curve through `(bytes, fit)` that `k` can walk along;
-it is a staircase in `V` with a flat tread in `k`.
+never had is now measurable, on the same held-out set: `V = 8192, k = 16` is
+32.0 kB / 82.5 %, while `V = 4096` tops out at 27.2 kB / 79.3 % (`k = 96`).  So
+the last ~4.8 kB spent crossing from 4096 to 8192 buys ≈3.2 points
+(≈1.5 kB/pt), whereas the next 7.9 kB spent *inside* 8192 — `k = 16 → 64` —
+buys 0.6 points (13 kB/pt).  On matched `k` the `V` step is 3.5–3.7 kB/pt
+(`4096/16 → 8192/16`: +16.4 kB for +4.7 pt; `4096/32 → 8192/32`: +17.4 kB for
++4.7 pt), against 4.6–21 kB/pt for `k`.  So `V` is 2.5–3x cheaper per fit point
+than `k` on matched `k`, and 8x cheaper at the point where the two curves meet.
+The frontier is not a curve through `(bytes, fit)` that `k` can walk along; it is
+a staircase in `V` with a flat tread in `k`.
 
 Two consequences for the operating point:
 
