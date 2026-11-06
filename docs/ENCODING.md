@@ -423,13 +423,14 @@ repeated "merge the cheapest pair" loops:
 * Huffman's key is the merged mass; summed over merges it *is* the expected code
   length.  This is Huffman with `k = 1`.
 * Hellinger/Ward `k`-means' key is the increase in within-cell distortion,
-  which for centroids is `w_A w_B / (w_A + w_B) · H²(θ_A, θ_B)`.  This is the
-  same loop with the code term switched off and `k` fixed.
+  which for centroids is `w_A w_B / (w_A + w_B) · ‖θ_A − θ_B‖²`, and
+  `‖√p − √q‖² = 2H²`.  This is the same loop with the code term switched off
+  and `k` fixed.
 
 So the codesign is a single merge loop that starts at `k = V` (each word its own
 cell) and merges until it stops, with one compound key:
 
-    Δ(A,B) =  λ_fit · [ w_A w_B / (w_A + w_B) ] · H²(θ_A, θ_B)     (block fit worsens)
+    Δ(A,B) =  λ_fit · [ w_A w_B / (w_A + w_B) ] · 2H²(θ_A, θ_B)    (block fit worsens)
             + λ_code · [ code length of A∪B  −  A  −  B ]           (one tree, not two)
             − [ model bits freed by one fewer cell ]                (≈ V log₂(k/(k−1)) + 3k)
 
@@ -500,11 +501,13 @@ Two results are worth keeping, whichever way the design goes:
   tree built inside each cluster is the Huffman tree for that cluster.  That is
   the necessary condition, and it holds.
 * **The fit term can only override close mass ratios.**  As bits per occurrence
-  of `t`, `Δ_CS/a = (1 − h₂(θ))/θ`, while the Hellinger term is at most 2 bits
-  (`2H² ≤ 2`).  Break-even mass ratios: 1.4:1 for a 0.05-bit fit, 2:1 for 0.25,
-  4.9:1 even at the maximum.  So the fit decides only between partners of
-  similar mass and the resulting clusters are **mass-stratified** — they overlap
-  in Hellinger space by construction.
+  of `t`, `Δ_CS/a = (1 − h₂(θ))/θ`.  The fit term as proposed is `N(t)·(2H)²`
+  (the metric that approximates the KL, §"Calibration" below), which saturates
+  at 4 — 5.8 bits — when the supports are disjoint.  Break-even mass ratios:
+  1.4:1 for a 0.05-bit fit, 2:1 for 0.25 bits, 9.5:1 even for maximally
+  dissimilar clusters.  So the fit decides only between partners of similar
+  mass and the resulting clusters are **mass-stratified** — they overlap in
+  Hellinger space by construction.
 
   That is not automatically fatal: a *quarter* is a code-only refinement (the
   block `D` stays `k × k`), so quarters may overlap almost perfectly and cost
@@ -513,10 +516,17 @@ Two results are worth keeping, whichever way the design goes:
   the factorisation penalty itself — the 1.2 bits/identifier between the flat
   and two-tree codes — and any fit damage larger than that is a net loss.
 
-Calibration caveat: `2H² ≈ KL/2` in the small-distance limit (measured ratio
-~2.9 on typical perturbations), so as written the fit is underweighted about
-twofold against a code cost in true bits.  Either double it or calibrate it
-against measured block-model bits.
+Calibration, which is where the factor of two lives: `(2H)² ≈ KL` **in nats**.
+For `p ≈ q` the second-order expansion gives `KL(nats) ≈ ½Σ(p−q)²/q`,
+`2H² = ‖√p − √q‖² ≈ ¼Σ(p−q)²/q` and `(2H)² ≈ ½Σ(p−q)²/q`, so `(2H)²` is the KL
+in nats and `2H²` is exactly half of it.  In **bits**, `KL ≈ (2H)²/ln 2 =
+1.4427·(2H)²`.  So a fit term written as `(2H)²` and a code term in bits are
+not in the same units: multiply the fit by 1.4427, or — better — calibrate it
+against measured block-model bits, since the proxy is only exact for nearby
+distributions.  (The `2H²` used for the *geometry* — the Ward key and the
+`k`-means centroid — is the squared embedding distance, a different quantity,
+exactly half of `(2H)²`; the constant does not matter there because it does not
+move an argmin.)
 
 Open: no descent proof between passes (phase 2 assigns trees greedily in mass
 order, so the previous partition is only reproducible at a fixed point), and a

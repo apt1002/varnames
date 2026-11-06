@@ -46,10 +46,11 @@ conditional `p(b|a)` never needs to be built.  Everything below is scored by the
 SVD minimises squared L2 error; the model is scored by KL.  For probability
 vectors the square-root map is an isometry,
 
-    ‖√p − √q‖² = 2 H²(p, q) ≈ 2 KL(p ‖ q)   for p ≈ q,
+    ‖√p − √q‖² = 2 H²(p, q) ≈ ½ KL(p ‖ q)   for p ≈ q  (KL in nats),
 
 so factorise the Hellinger embedding `√M` of the **count** matrix and square the
-reconstruction back:
+reconstruction back (the factor is `½` in nats, or `0.347` for a KL scored in
+bits; being a constant it changes no ranking, which is all this uses):
 
     sqrtcnt:   √M ≈ (U Σ Vᵀ)_L ,    M̂ = (U Σ Vᵀ)_L² .
 
