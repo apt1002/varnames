@@ -43,6 +43,7 @@ import hfactor_words as hf
 import cluster_words as cw
 import model_fit_rates as mfr
 from quarter_accounting import huffman
+from newline_cluster import model_from
 
 
 def reference_matrix(M, alpha, block=512):
@@ -183,6 +184,12 @@ def main():
     del G, Gc
 
     bits = score(seqs, codes, M_ref, rowsum)
+    # The arithmetic cost of the *same* factorisation: the two trees are built
+    # to approximate P_assoc, so this is the floor the Huffman code is trying to
+    # reach and the ceiling of anything CQF can recover.
+    m_assoc = model_from(M_ref, lcl, rcl, k)
+    bits['assoc'] = mfr.bits_assoc(seqs, m_assoc['logc'], m_assoc['logD'],
+                                   m_assoc['logden'], lcl, rcl)
 
     # ---- model bytes, ENCODING.md section 5 --------------------------------
     def bytes_for(kk):
@@ -208,14 +215,15 @@ def main():
     print(f"{'scheme':<16} {'bits/id':>8} {'vs flat':>8} {'fit<=64':>8} "
           f"{'fit<=128':>9} {'bytes':>9}")
 
-    order = ['flat', 'CF'] + ['CQF q=%d' % q for q in qs] + ['ref']
+    order = ['flat', 'CF', 'assoc'] + ['CQF q=%d' % q for q in qs] + ['ref']
     base = bits['flat'].mean()
     rows = {}
     for name in order:
         b = bits[name]
         if name == 'flat':
             by = vw
-        elif name == 'CF':
+        elif name in ('CF', 'assoc'):
+            # same tables, Huffman-coded or decoded arithmetically
             by = vb
         elif name.startswith('CQF'):
             q = int(name.split('=')[1])

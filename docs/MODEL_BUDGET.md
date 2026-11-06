@@ -113,6 +113,50 @@ The full tables are far larger and their fit rates are the ceilings:
 [`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) repeats them at stride 10 and the two
 largest move up by under a point (77.8 % and 83.2 %).
 
+### The local slope, `k` swept at fixed `V`
+
+The frontier above is a set of points at different `V`; anything priced against
+it (C26's shared clusters, C27's reservation, C28's quarters) was compared with
+a *slope* obtained from two of those points.  `scripts/k_frontier.py` sweeps `k`
+at fixed `V` with the same accounting and the same held-out set, which turns the
+slope into a curve.  `V = 4096`, stride 100 (`n = 4,227`):
+
+| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+|---:|---:|---:|---:|---:|
+| 16 | 51.294 | 78.5 % | 97.9 % | 15,612 |
+| 24 | 51.191 | 78.5 % | 98.1 % | 16,529 |
+| 32 | 51.071 | 78.7 % | 98.0 % | 17,400 |
+| 48 | 50.708 | 79.3 % | 98.1 % | 19,275 |
+| 64 | 50.337 | 79.8 % | 98.1 % | 21,488 |
+| 96 | 50.043 | 80.4 % | 98.2 % | 27,199 |
+
+| step | Δbits | Δbytes | kB/bit | Δ fit ≤64 | kB per point |
+|---|---:|---:|---:|---:|---:|
+| 16→24 | −0.103 | +917 | 8.9 | +0.0 | — |
+| 24→32 | −0.120 | +871 | 7.2 | +0.2 | 5.3 |
+| 32→48 | −0.363 | +1,875 | 5.2 | +0.7 | **2.8** |
+| 48→64 | −0.371 | +2,213 | 6.0 | +0.5 | 4.7 |
+| 64→96 | −0.294 | +5,711 | 19.4 | +0.6 | 9.3 |
+
+Three things follow.
+
+* **The curve is not straight.** The marginal cost per fit point ranges from
+  2.8 kB (32→48) to 9.3 kB (64→96), a factor of 3.3.  The average over
+  `k = 32..64` is 3.4 kB/pt, which *understates* the last step by 2.7x and
+  overstates the cheapest step by 1.2x.  Since every pricing decision uses a
+  local slope, the neighbouring segment has to be quoted, not the average.
+* **The knee is at `k ≈ 64`**, where the `k²` cluster-pair table starts to
+  dominate: bytes per step go 871 → 1,875 → 2,213 → 5,711 while the bit gain
+  stays flat at ≈0.3–0.37 per step.  Buying `k` beyond 64 is the worst
+  available use of bytes on this grid.
+* **Fit ≤128 is saturated** (97.9–98.2 % across the whole sweep), so every
+  trade here is a 64-bit trade.  A byte spent for a 128-bit gain is worth
+  nothing.
+
+The earlier two-point estimates (4.5–5.8 kB/pt for `k = 32 → 64`, 3.9 kB/pt for
+`V = 4096 → 8192`) sit inside this range and are consistent with it; the sweep's
+value is not that they were wrong but that the *sign* of the error is now known.
+
 ## What it shows
 
 * **Cheaper coding moves the whole frontier, and it is the word list that
