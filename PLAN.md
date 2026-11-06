@@ -123,10 +123,9 @@ labels (see `README.md`).
       pipeline-matched null — it is largely a low-rank reconstruction artefact.
       `scripts/factor_cloud.py`, `docs/HELLINGER_FACTORISATION.md`.
 - [x] **C21. Where the co-clustering loss lives.** *Closed* — the loss is spread
-      across the whole low-mass tail (mean ~3.5 bits/bigram everywhere past the
-      top cells, ~1 bit in the heaviest), not concentrated in a few bad cells;
-      the junk clusters carry nothing; and on a quarter of bigrams the block
-      model *beats* the table.  `docs/CLUSTER_LOSS.md`,
+      across the whole low-mass tail rather than concentrated in a few bad
+      cells, the junk clusters carry nothing, and on part of the bigrams the
+      block model *beats* the table.  `docs/CLUSTER_LOSS.md`,
       `scripts/cluster_loss_attribution.py`.
 - [x] **C22. Structure of a high-loss cluster-pair block.** *Closed, negative for
       per-block corrections* — the loss is the within-left-cluster heterogeneity
@@ -147,65 +146,32 @@ labels (see `README.md`).
       size, that costs the 64-bit fit.  `docs/MODEL_BUDGET.md`,
       `scripts/model_budget.py`, `scripts/model_fit_rates.py`.
 
-- [x] **C25. Words per identifier; Huffman vs arithmetic.** *Closed* — a mean of
-      5.7 words per identifier (6.7 coded tokens with the stop), but the Huffman
-      penalty is only ~0.2 bits/identifier (0.35 %), and Huffman is *shorter* on
-      40 % of identifiers, so the 64-bit fit rises slightly.  The coding choice
-      is not a size argument.  Also checked the factored reading (separate
-      cluster-step and word-step trees): its two roundings add up and cost ~7×
-      the flat code, so a small-model Huffman coder should use one tree per left
-      cluster over the joint, not two.  `docs/CODING_OVERHEAD.md`,
-      `scripts/words_per_identifier.py`.
+- [x] **C25. Words per identifier; Huffman vs arithmetic.** *Closed* — the
+      Huffman penalty is small and is not a size argument; a two-stage code
+      costs more than a joint one per left cluster.  The joint tree is
+      unaffordable at the canonical vocabularies, which is what C28 is for.
+      `docs/CODING_OVERHEAD.md`, `scripts/words_per_identifier.py`.
 
-- [ ] **C26. One cluster assignment for both sides.** *Adopted at the canonical
-      grid* — at matched total bytes the shared point sits at or above the
-      asymmetric frontier everywhere measured (+0.46 pt at 4096/32, +0.08 at
-      4096/64, +0.93 at 8192/64), buying 15-17% of the model for 0.19-0.52 bits.
-      The testing point rejected it because there the frontier is steep in bytes
-      (0.47 kB/pt against 4.3 kB/pt), so a 256 B saving was worth nothing.  Keep
-      `w = 1` and the `k^2` block.  `docs/SHARED_CLUSTERS.md`,
+- [x] **C26. One cluster assignment for both sides.** *Adopted at the canonical
+      grid; rejected at the testing point, where the byte frontier is too cheap
+      for the saving to be worth a fit point.* `docs/SHARED_CLUSTERS.md`,
       `scripts/shared_clusters.py`.
-- [ ] **C27. Reserved stop clusters.** *Rejected at the canonical grid,
-      cleanly.*  With the profile control in (`profile=full`, so the only
-      difference from `plain` is the singleton cell) the reservation costs
-      +0.021 / +0.190 / +0.007 bits at 4096/32, 4096/64 and 8192/64 — nearly free
-      — but buys nothing: at `V = 8192` it is a no-op on every generative metric,
-      and at `V = 4096` mid-word starts and the digit first-token mass get worse
-      (0.14% -> 0.93%).  Most of the 0.30-0.44 bits the earlier `profile=sub`
-      runs charged was the clustering-profile change, not the cell, so the
-      shrinkage explanation in the first canonical table is withdrawn.  An exact
-      `2V` boundary table would recover only 0.21-0.42 bits, which 8 kB cannot
-      pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
-      case for the stop.  `docs/NEWLINE_CLUSTER.md`,
+- [x] **C27. Reserved stop clusters.** *Rejected — cheap but inert; the exact
+      boundary table it would replace cannot pay for itself.  The sample-0
+      dictionaries stay plain.* `docs/NEWLINE_CLUSTER.md`,
       `scripts/newline_cluster.py`.
-- [x] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.*  The
-      mechanism is confirmed exactly (the identity closes to three decimals) and
-      the held-out codes recover what the accounting predicted (35% / 40% of the
-      flat → CF penalty at `k = 32`, 42% / 50% at `k = 64`) with no sign that the
-      training-count numbers were optimistic.  Priced in fit rates at matched
-      bytes, `q = 2` is cheaper than doubling `k` on both canonical vocabularies
-      and 4–6x cheaper than the frontier at `k = 32`; `q = 4` is dominated there
-      and inside the noise at `k = 64`.  The `k = 32` margins are `+1.3 ± 0.2`
-      fit points and `−0.868 ± 0.023` bits paired, so the claim is not a sampling
-      artefact.  Against the *free* alternative (arithmetic decoding of the same
-      tables) the margin is `+0.9 pt` at `k = 32` and nil at `k = 64`, so CQF is
-      a Huffman-product optimisation: it wins on the threshold, not on the mean.
-      At the measured operating point (`V = 8192, k = 16`) it costs 252 B and
-      buys 0.9 pt over CF, 0.3 pt over arithmetic decoding — the cheapest fit
-      point in the study.  Remaining follow-up: re-measure at H6.
-      `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` (pricing),
-      `scripts/quarter_codes.py` (held-out scoring) — stop each
-      right-cluster Huffman tree early at `q` trees and encode
-      `P(quarter | left cluster)` instead, buying back part of the two-tree
-      factorisation penalty at `O(k² log k)` extra model bytes; price it against
-      spending the same bytes on more words or more clusters.
-- [ ] **C29. Codesign the assignment and the code.** *Planned* — collapse
-      clustering and Huffman building into one greedy merge loop over cells,
-      keyed on `λ_fit·(fit loss)` + `λ_code·(code-length increase)` − (model
-      bytes freed), so that `k` falls out of the trade instead of being swept.
-      Walk it: first measure the existing assignment's code against the code-only
-      optimum at the same `k`; separately measure a balance constraint on the
-      quarters (CQF's early stop leaves unequal-massed subtrees).  `docs/ENCODING.md` §6.
+- [x] **C28. Cluster quarters.** *Adopted at `q = 2`, rejected at `q = 4`.*  It
+      is a Huffman-only optimisation: it wins on the 64-bit threshold, not on
+      mean bits, and its value is largest at a coarse `k`.  Open follow-up:
+      re-measure with the rest at H6. `docs/ENCODING.md` §5,
+      `scripts/quarter_accounting.py`, `scripts/quarter_codes.py`.
+- [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped* —
+      collapse clustering and Huffman building into one greedy merge loop over
+      cells, keyed on the fit loss, the code-length increase and the model bytes
+      freed, so that `k` falls out of the trade instead of being swept.  The
+      target is the *model* term: the code side is now measured as exhausted
+      (C28), while the gap to the exact conditional is large and unimplemented.
+      `docs/ENCODING.md` §6.
 
 ## D. Corpus preprocessing
 
@@ -290,8 +256,10 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `corpus/identifiers.multilang.txt`, then `work/raw/` and `work/camel/`
       (case-normalised variants + `merged_training.txt` /
       `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
-- [ ] **H5. Rebuild the model artefacts** (in progress, unblocked by A8): the
-      dictionaries on the canonical grid (H7) and their `s0` twins
+- [ ] **H5. Rebuild the model artefacts** (dictionaries done for the whole
+      canonical grid plus the `s0` twins; the remaining artefacts are): the
+      dictionaries on the canonical grid (H7, which now includes an
+      intermediate `V`) and their `s0` twins
       (`dict.txt`, `sym.npy`, `adj.npz`, `meta.json`), the case-ablation and
       break-open variants of the canonical `V`, `_ttw*` scratch dirs, the pair
       matrix (`work/*/pair_stats.txt`, `pair_factors_L*.npy` via
@@ -307,9 +275,16 @@ these can be rebuilt in any order, later, without losing the old numbers.
       `BUDGET64_STUDY.md`, the measurements in `SHARED_CLUSTERS.md`,
       `NEWLINE_CLUSTER.md` and `ENCODING.md`, and the headline figures in
       `README.md`/`PLAN.md`.
-- [ ] **H7. Rationalise the `(V, k)` grid.** *Planned* — the canonical grid is
-      `V ∈ {512, 4096, 8192}` (`NUM_PAIRS` 448, 4032, 8128; 512 is for testing
-      only) and `k ∈ {32, 64}`.  The old sweep (`V` 96/2040/4414/11694, `k`
+- [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
+      `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
+      pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
+      comparisons still quote code-side bytes.  The verdicts are unaffected
+      (they are within-`V`), but any cross-`V` price must carry the term.
+      `docs/MODEL_BUDGET.md` ("What the byte numbers include").
+- [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done* — the grid is now
+      `V ∈ {512, 4096, 6144, 8192}` (`NUM_PAIRS` 448, 4032, 6080, 8128; 512 is
+      for testing only), and the measured operating points replace the old
+      `k ∈ {32, 64}` default; see `docs/MODEL_BUDGET.md` for the frontier.  The old sweep (`V` 96/2040/4414/11694, `k`
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
       H6 re-measures at it.  Testing at `V = 512` uses `k = 16` only; anything
       measured there is labelled testing-only.
