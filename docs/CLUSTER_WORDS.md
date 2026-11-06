@@ -3,8 +3,9 @@
 Status: **succeeded (as a compressor).**  A two-sided K-means co-clustering of
 the word × word matrix, stored as a `k × k` block matrix plus the per-word
 linear tables, codes held-out identifiers *better than the Hellinger rank-`L`
-factorisation of equal storage* at every size tested.  Both are far behind the
-full table, but co-clustering is the better way to shrink the largest table.
+factorisation of equal storage* at all three grid vocabularies.  Both are far
+behind the full table, but co-clustering is the better way to shrink the largest
+table.
 
 ## Model
 
@@ -40,7 +41,9 @@ Storage: **assoc** is `k² + 2V` numbers; **1-sided** is `k·V`.  The Hellinger
 factorisation of [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md) is
 `2VL`.  All models are fit to the same `kappa = 300` reference `M_ref`, and the
 held-out mean bits use a stride-`40` sample of `work/camel/merged_validation.txt`
-(`n = 5 739`).
+(`n = 10,567` identifiers).  The vocabularies are the grid builds
+`work/tw4096ns`, `work/tw6144ns`, `work/tw8192ns`
+(`--sample 20 --stride 0`); `scripts/cluster_words.py`.
 
 ### What the 1-sided model tests
 
@@ -64,193 +67,192 @@ identity literal:
 So the 1-sided column asks the question directly: *does `P(right word | left
 cluster)` factor as "pick a right cluster given the left cluster, then draw the
 word from that right cluster's own marginal"?*  The held-out gap between the two
-columns is the cost of imposing the factorisation — a few bits, i.e. the
+columns is the cost of imposing the factorisation — 1–2 bits, i.e. the
 factorisation is good but not free.
 
 ## Results
 
-`k/N = 20` is `k = V/20` (`CLUSTER_SIZE_STUDY.md`'s ratio).  `store` counts
-model numbers; the "matched" `sqrtcnt` column is the Hellinger factorisation
-with `L = round(store / 2V)`; `loss` is `assoc − 1-sided`, the held-out cost of
-the factorisation (see above).
+`store` counts model numbers; the "matched" `sqrtcnt` column is the Hellinger
+factorisation with `L = round(store / 2V)`; `loss` is `assoc − 1-sided`, the
+held-out cost of the factorisation (see above); `drop` counts the pair words
+whose cluster labels are implied by their operands' (see "The removable-word
+refinement").
 
-**tw96 (V = 160), full table 65.029 bits**
+**`V = 4,096`** (`tw4096ns`), full table **42.202 bits**
 
-| `k` | store (assoc) | assoc bits | 1-sided bits | loss | drop | `sqrtcnt` L / store / bits |
-|---:|---:|---:|---:|---:|---:|---|
-| 8 | 384 | 79.94 | 77.59 | 2.35 | 22/95 | L=1 / 320 / 84.73 |
-| 20 | 720 | 77.32 | 73.92 | 3.39 | 14/95 | L=2 / 640 / 82.06 |
-| 40 | 1920 | 74.18 | 70.83 | 3.35 | 9/95 | L=6 / 1920 / 76.47 |
+| `k` | store | % of `V²` | assoc | 1-sided | loss | 1-sided store | drop | `sqrtcnt` L / store / bits |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 16 | 8,448 | 0.050 % | 51.580 | 50.208 | 1.372 | 65,536 | 470/4,032 | L=1 / 8,192 / 55.623 |
+| 32 | 9,216 | 0.055 % | 51.355 | 49.533 | 1.822 | 131,072 | 274/4,032 | L=1 / 8,192 / 55.623 |
+| 64 | 12,288 | 0.073 % | 50.623 | 48.649 | 1.974 | 262,144 | 194/4,032 | L=2 / 16,384 / 53.710 |
 
-**tw512 (V = 576), full table 54.205 bits**
+**`V = 6,144`** (`tw6144ns`), full table **40.800 bits**
 
-| `k` | store (assoc) | assoc bits | 1-sided bits | loss | drop | `sqrtcnt` L / store / bits |
-|---:|---:|---:|---:|---:|---:|---|
-| 14 | 1348 | 69.69 | 66.65 | 3.05 | 16/492 | L=1 / 1152 / 75.47 |
-| 29 | 1993 | 68.03 | 64.27 | 3.76 | 8/492 | L=2 / 2304 / 72.86 |
-| 58 | 4516 | 65.68 | 61.73 | 3.95 | 2/492 | L=4 / 4608 / 69.60 |
+| `k` | store | % of `V²` | assoc | 1-sided | loss | 1-sided store | drop | `sqrtcnt` L / store / bits |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 16 | 12,544 | 0.033 % | 49.388 | 48.385 | 1.003 | 98,304 | 817/6,080 | L=1 / 12,288 / 52.864 |
+| 32 | 13,312 | 0.035 % | 49.020 | 47.767 | 1.253 | 196,608 | 536/6,080 | L=1 / 12,288 / 52.864 |
+| 64 | 16,384 | 0.043 % | 48.688 | 47.170 | 1.518 | 393,216 | 348/6,080 | L=1 / 12,288 / 52.864 |
 
-**tw2040 (V = 2104), full table 45.861 bits**
+**`V = 8,192`** (`tw8192ns`), full table **39.930 bits**
 
-| `k` | store (assoc) | assoc bits | 1-sided bits | loss | drop | `sqrtcnt` L / store / bits |
-|---:|---:|---:|---:|---:|---:|---|
-| 26 | 4884 | 57.43 | 55.02 | 2.41 | 18/2012 | L=1 / 4208 / 62.77 |
-| 52 | 6912 | 56.72 | 53.80 | 2.92 | 6/2012 | L=2 / 8416 / 60.68 |
-| 105 | 15233 | 55.48 | 52.27 | 3.21 | 2/2012 | L=4 / 16832 / 58.53 |
+| `k` | store | % of `V²` | assoc | 1-sided | loss | 1-sided store | drop | `sqrtcnt` L / store / bits |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 16 | 16,640 | 0.025 % | 47.713 | 46.783 | 0.930 | 131,072 | 741/8,128 | L=1 / 16,384 / 51.222 |
+| 32 | 17,408 | 0.026 % | 47.479 | 46.329 | 1.150 | 262,144 | 514/8,128 | L=1 / 16,384 / 51.222 |
+| 64 | 20,480 | 0.031 % | 47.279 | 45.959 | 1.320 | 524,288 | 407/8,128 | L=1 / 16,384 / 51.222 |
 
 ## What it shows
 
 * **At equal storage the co-clustering beats the Hellinger factorisation
-  everywhere.**  At `V/20` on `tw2040`, a `105 × 105` block model (15.2k
-  numbers, 0.35% of the `V²` cells) codes 55.48 bits against the factorisation's
-  58.53 at the same size — 3 bits better.  The margin is similar at `tw512`
-  (65.68 vs 69.60) and `tw96` (74.18 vs 76.47).
-* **The 1-sided table survives the factorisation to within a few bits.**  The
-  `loss` column (the held-out cost of replacing `P(right word | left cluster)`
-  by `P(right cluster | left cluster)·P(right word | right cluster)`) is
-  2.4–4.0 bits across the three dictionaries — so the factorisation the `assoc`
-  model embodies is a good one, just not free.
+  everywhere.**  At `V = 4,096`, `k = 16` a `16 × 16` block model (8,448
+  numbers, 0.05 % of the `V²` cells) codes 51.580 bits against the
+  factorisation's 55.623 at *slightly larger* storage (8,192, i.e. already the
+  smallest `L = 1` it has) — 4.0 bits better.  The margin is 4.0 bits at
+  `V = 4,096`, 3.5 at `V = 6,144` and 3.5 at `V = 8,192`.
+* **The 1-sided table survives the factorisation to within a couple of bits.**
+  The `loss` column (the held-out cost of replacing `P(right word | left
+  cluster)` by `P(right cluster | left cluster)·P(right word | right cluster)`)
+  is 0.93–1.97 bits across the nine grid points — smaller than the 2.4–4.0 bits
+  measured on the small pre-expansion vocabularies, because with 4–8 k words the
+  within-right-cluster marginal `P(b|rc)` is a much better approximation.  The
+  factorisation the `assoc` model embodies is a good one, and it costs less the
+  larger the word list.
 * **The one-sided model is competitive only because its table is much larger**
-  (`k·V`, not `k² + 2V`): at `tw2040` `k = 105` it stores 221k numbers for 52.27
-  bits, versus 15.2k numbers for 55.48 — it wins by 3.2 bits for ~14× the
-  storage, a different point on the frontier.
-* **Aggressive compression is still lossy.**  At `k/N = 20` (`k = V/20`) the
-  co-cluster model costs 9.6 bits (`tw2040`), 13.8 bits (`tw512`) and 14.9 bits
-  (`tw96`) against the full table.  The block structure of the word matrix is
-  real but weak: coarser than a few hundred clusters, the block approximation
-  loses a lot.
+  (`k·V`, not `k² + 2V`): at `V = 4,096`, `k = 16` it stores 65,536 numbers for
+  50.208 bits, versus 8,448 numbers for 51.580 — it wins by 1.37 bits for 7.8×
+  the storage, a worse exchange rate than either `k` or `V` offers elsewhere on
+  the frontier.
+* **Aggressive compression is still lossy.**  At these `k` the block model costs
+  8.4–9.4 bits (`V = 4,096`), 7.9–8.6 (`V = 6,144`) and 7.3–7.8 (`V = 8,192`)
+  against the full table.  The block structure of the word matrix is real but
+  weak: a few thousand blocks, 0.03–0.07 % of the cells, loses most of the
+  detail.
 
 ## How the loss scales with `k`
 
 The question behind this sweep: the loss from the full `V×V` table to the
-`k×k` block model is large (~10 bits at `k = V/20`), but is it *fundamental* to
+`k×k` block model is large (~9 bits at `V = 4,096`), but is it *fundamental* to
 the block-constant restriction, or does it close if we simply allow more
-clusters?  Sweeping `k` up to `V/2` (same harness, `kappa = 300`) answers it.
+clusters?  Sweeping `k` upward at `V = 4,096` (same harness, `kappa = 300`,
+`store = k² + 2V`):
 
-**`tw2040`** (V = 2104, full table 45.765 bits; `store = k² + 2V`):
+| `k` | store | % of `V²` | assoc | Δ vs full |
+|---:|---:|---:|---:|---:|
+| 16 | 8,448 | 0.05 % | 51.580 | +9.38 |
+| 32 | 9,216 | 0.06 % | 51.355 | +9.15 |
+| 64 | 12,288 | 0.07 % | 50.623 | +8.42 |
+| 128 | 24,576 | 0.15 % | 49.996 | +7.80 |
+| 256 | 73,728 | 0.44 % | 48.958 | +6.76 |
 
-| `k` | store | % of `V²` | assoc | Δ vs full | 1-sided | Δ vs full |
-|---:|---:|---:|---:|---:|---:|---:|
-| 26 | 4,884 | 0.11 % | 57.33 | +11.57 | 54.90 | +9.14 |
-| 52 | 6,912 | 0.16 % | 56.58 | +10.82 | 53.69 | +7.92 |
-| 105 | 15,233 | 0.35 % | 55.35 | +9.59 | 52.16 | +6.39 |
-| 210 | 48,308 | 1.09 % | 53.43 | +7.67 | 50.61 | +4.84 |
-| 420 | 180,608 | 4.1 % | 50.98 | +5.21 | 48.68 | +2.92 |
-| 840 | 709,808 | 16.0 % | 48.58 | +2.82 | 47.24 | +1.48 |
-| 1052 | 1,110,912 | 25.1 % | 47.78 | +2.01 | 46.80 | +1.04 |
+What the curve says:
 
-**`tw512`** (V = 576, full table 54.164 bits):
-
-| `k` | store | % of `V²` | assoc | Δ vs full | 1-sided | Δ vs full |
-|---:|---:|---:|---:|---:|---:|---:|
-| 14 | 1,348 | 0.41 % | 69.68 | +15.52 | 66.61 | +12.44 |
-| 29 | 1,993 | 0.60 % | 68.00 | +13.83 | 64.23 | +10.07 |
-| 58 | 4,516 | 1.4 % | 65.64 | +11.47 | 61.67 | +7.50 |
-| 115 | 14,377 | 4.3 % | 61.77 | +7.61 | 58.61 | +4.44 |
-| 230 | 54,052 | 16.3 % | 57.62 | +3.46 | 55.98 | +1.82 |
-| 288 | 84,096 | 25.3 % | 56.33 | +2.16 | 55.30 | +1.13 |
-| 432 | 187,776 | 56.6 % | 54.67 | +0.51 | 54.43 | +0.26 |
-
-What the curves say:
-
-* **The loss closes smoothly, with no knee.**  Each doubling of `k` buys roughly
-  2–3 bits low down and 1–1.5 bits high up; there is no cluster count at which
-  the block model suddenly becomes near-lossless.
+* **The loss closes smoothly, with no knee.**  Each doubling of `k` buys 0.2
+  bits low down (16 → 32 costs almost nothing in bits, because 256 blocks are
+  already all used: 237 of 256 cells at `k = 16`) and 0.7–1.0 bits higher up,
+  but there is no cluster count at which the block model suddenly becomes
+  near-lossless.
 * **"Low loss" means storing a large fraction of the matrix.**  To get within
   ~1 bit of the full table needs `k ≈ V/2`, i.e. `store ≈ V²/4` (25 % of the
-  cells).  At the practical operating point `k = V/20` (0.3–0.6 % of `V²`) the
-  loss is 9.6 bits (`tw2040`) / 13.8 bits (`tw512`).
+  cells) — the pre-expansion sweep below reaches that corner and finds +2.0
+  bits at 25 % of the cells, not +1.  At the practical operating point
+  (0.03–0.4 % of `V²`) the loss is 6.8–9.4 bits.
 * **So the loss is essentially unavoidable for the block-constant model.**  It is
   not the choice of `k` that hurts; it is the restriction itself.  Clustering
   cannot be both small and accurate, which is the case for compressing the
   matrix *directly* (sparse residual from a low-rank/`M_mar` fit) rather than
   approximating it by blocks.
-* **The factorisation penalty shrinks with `k`.**  `assoc − 1-sided` falls from
-  ~2.4 bits at `k = 26` to ~0.4 bits at `k = 1052` (as clusters become small,
-  `P(right word | right cluster)` carries almost all the information).
-* **At large store, even the low-rank model overtakes clustering.**  At matched
-  storage the `sqrtcnt` factorisation is worse than `assoc` up to `k ≈ 420`
-  (51.84 vs 50.98) but better beyond it (`k = 840`: 47.96 vs 48.58;
-  `k = 1052`: 47.05 vs 47.78).  Neither reaches the full table: at ~25 % storage
-  both sit 1–2 bits above it.
+* **The factorisation penalty is already small at the operating point** and does
+  not fall further with `k` in the range swept (1.4 → 2.0 bits from `k = 16` to
+  64 at `V = 4,096`), so a finer table buys its bits in the block values, not by
+  making the factorisation exact.
+
+Pre-expansion record (legacy `tw2040`, `V = 2,104`, full table 45.765): `k = 26
+→ 1,052` covers 0.11 % → 25.1 % of `V²`, with assoc 57.33 → 47.78 (+11.57 →
++2.01) and 1-sided 54.90 → 46.80.  That is where the "≈V/2 for ~2 bits"
+statement comes from; the grid sweep reaches only 0.44 % of `V²`, so the
+large-storage end of the curve is still the small-vocabulary measurement.  The
+same table shows `sqrtcnt` overtaking `assoc` only beyond `k ≈ 420` (51.84 vs
+50.98 at 420; 47.96 vs 48.58 at 840; 47.05 vs 47.78 at 1,052) — both still
+1–2 bits above the full table at ~25 % storage.
 
 ## Word-list size vs cluster-matrix budget
 
-Everything above holds the word list fixed (`V = 2104`) and varies the table.  The
-other budget knob is the word list itself: a larger `V` gives longer words, hence
+Everything above holds the word list fixed and varies the table.  The other
+budget knob is the word list itself: a larger `V` gives longer words, hence
 fewer tokens per identifier, at the cost of a bigger matrix.  `store = k² + 2V`
 is the same either way, so the question is where to put the budget.
 
-`scripts/wordlist_budget.py` sweeps three word lists (built with `tree_words.py
-train`, `num_pairs = V − 64`): `V = 2 104 / 4 478 / 11 758`, `k ∈
-{52,105,210,420,840}`, `kappa = 300`, stride-40 validation.  Held-out bits are
-**per identifier**, so they compare across `V`:
+`scripts/wordlist_budget.py` sweeps the three grid word lists with
+`k ∈ {16, 32, 64}` plus `k = 128, 256` at `V = 4,096`, `kappa = 300`, stride-40
+validation.  Held-out bits are **per identifier**, so they compare across `V`:
 
-| `V` | full table | `k=52` | `k=105` | `k=210` | `k=420` | `k=840` |
-|---:|---:|---:|---:|---:|---:|---:|
-| 2 104 | 45.86 | 56.72 | 55.48 | 53.56 | 51.09 | 48.70 |
-| 4 478 | 42.32 | 51.75 | 51.10 | 50.44 | 49.00 | 47.19 |
-| 11 758 | 39.31 | 47.21 | 46.90 | 46.60 | 46.12 | 45.39 |
+| `V` | full table | `k=16` | `k=32` | `k=64` | store |
+|---:|---:|---:|---:|---:|---|
+| 4,096 | 42.20 | 51.58 | 51.36 | 50.62 | 8,448 / 9,216 / 12,288 |
+| 6,144 | 40.80 | 49.39 | 49.02 | 48.69 | 12,544 / 13,312 / 16,384 |
+| 8,192 | 39.93 | 47.71 | 47.48 | 47.28 | 16,640 / 17,408 / 20,480 |
 
-* **The word list is the dominant lever.**  Merely moving from `V = 2 104` to
-  `V = 11 758` drops the *full* table from 45.86 to 39.31 bits/identifier
-  (−6.6), and the clustered model at fixed `k = 52` from 56.72 to 47.21 (−9.5).
-  This dwarfs anything `k` buys.
+(The `V = 4,096` list continues to 50.00 at `k = 128`, store 24,576, and 48.96
+at `k = 256`, store 73,728 — see the scaling table above.)
+
+* **The word list is the dominant lever.**  Merely moving from `V = 4,096` to
+  `V = 8,192` drops the *full* table from 42.20 to 39.93 bits/identifier
+  (−2.27), and the clustered model at fixed `k = 16` from 51.58 to 47.71
+  (−3.87).  This dwarfs anything `k` buys at a fixed word list.
 * **At matched store, pick the largest word list that fits.**  With
   `store = k² + 2V` the per-list floor is `2V`, so the frontier is "biggest `V`
-  whose floor fits, then spend the rest on `k`": e.g. at store ≈ 26 k the best
-  point is `V = 11 758, k = 52` (47.21), beating `V = 4 478, k = 105` (51.10) and
-  `V = 2 104, k = 210` (53.56).
-* **The clustering penalty shrinks with `V`** — at `k = 52` the `assoc − full`
-  gap falls from 10.85 (`V = 2 104`) to 7.91 (`V = 11 758`) — but it is still
-  ≥ 6 bits everywhere, so the block model remains the weak part even with a big
-  word list.
+  whose floor fits, then spend the rest on `k`": at store ≈ 17 k the best point
+  is `V = 8,192, k = 16` (47.71, store 16,640), beating `V = 6,144, k = 64`
+  (48.69, store 16,384) by 1.0 bit and `V = 4,096, k = 64` (50.62, store 12,288)
+  by 2.9 bits — for 1.02× and 1.35× the storage respectively.
+* **The clustering penalty shrinks with `V`** — at `k = 16` the `assoc − full`
+  gap falls from 9.38 (`V = 4,096`) to 8.59 (`V = 6,144`) to 7.78
+  (`V = 8,192`) — but it is still ≥ 7 bits everywhere, so the block model
+  remains the weak part even with a big word list.
 * **Charging for the dictionary does not change the ordering.**  `store = k²+2V`
-  ignores the tree dictionary (~`2(V−64)` integers); adding it
-  (`k² + 4V`) moves every point right but the frontier still picks the largest
-  `V` at every budget (e.g. at ~50 k, `V = 11 758, k = 52` still wins by ~3 bits).
+  ignores the tree dictionary (~`2(V−64)` integers, charged as bytes in
+  [`MODEL_BUDGET.md`](MODEL_BUDGET.md)); adding it (`k² + 4V`) moves every point
+  right but the frontier still picks the largest `V` at every budget.
 
 So the budget sweep confirms the direction the other two results pointed to:
 **buy words first, clusters last.**  The residual table loss is the part still
 worth attacking (the loss-attribution and block-structure experiments) or
 accepting.
 
-Repeating the sweep on dictionaries built on the **full corpus** (`--sample 0`
-instead of the 5 % stride sample, `work/c23_budget_s0.csv`) changes every cell by
-under 0.35 bits with no systematic sign — the largest vocabulary is still the
-frontier winner at every budget — so the conclusion is robust to how the
-dictionary is sampled.`scripts/wordlist_budget.py`, `work/c23_budget.csv`.
-
 ## The removable-word refinement
 
 The plan suggested also dropping pair words `(uv)` whose left cluster equals
 `v`'s and whose right cluster equals `u`'s (their cluster labels are implied by
-their operands').  The `drop` column shows how many such words there are: only
-**2 of 2012** pair words at `V/20` on `tw2040` (18 at `k = 26`).  The refinement
-saves a negligible number of labels and was not pursued.
+their operands').  The `drop` column shows how many such words there are: at
+`k = 16` that is **470 of 4,032** pair words at `V = 4,096` (11.7 %), 817 of
+6,080 at `V = 6,144` (13.4 %) and 741 of 8,128 at `V = 8,192` (9.1 %); at
+`k = 64` it falls to 194 / 348 / 407 (4.8 % / 5.7 % / 5.0 %).  Much more than the
+2 of 2,012 seen at `k = 52` on `tw2040` — a small `k` makes pair words share
+their operands' cells far more often.  Even so the saving is 5–13 % of the
+existing *pair* words (0.5 % of `V` at `k = 16`), and re-coding them would make
+their labels implicit rather than free; the refinement was not pursued.
 
 ## Conclusion
 
 K-means co-clustering is the better way to compress the word × word matrix:
 stored as a `k × k` block matrix plus linear tables it dominates the Hellinger
-factorisation of equal storage, and at `k/N = 20` it shrinks the matrix to ~0.3%
-of its cells for ~10 bits/identifier.  But that loss is not avoidable by adding
-clusters: it falls smoothly and only reaches ~1 bit at `k ≈ V/2`, i.e. ~25 % of
-the matrix.  For a compact standard, the block model alone will not do.
+factorisation of equal storage (by 3.5–4.0 bits at the grid), and at `k = 16–64`
+it shrinks the matrix to 0.03–0.07 % of its cells for 7–9 bits/identifier.  But
+that loss is not avoidable by adding clusters: it falls smoothly and needs
+~25 % of the matrix to approach the full table.  For a compact standard, the
+block model alone will not do.
 The direct alternative — storing the matrix itself with codewords over a
 low-rank/`M_mar` fit — fares no better: the residual is not sparse, and top-`N`
-cells over the independence prior stays within ~1 bit only at `N ≈ 300K`
-(~15× smaller than
-`V²`).  Read the other way, at *matched store* a top-`N` table is competitive
-with the `k = 105` block model (54.24 vs 55.35 bits at store 15 233) — a genuine
-tie in the "count stored numbers" convention, but one that reverses once the
-top-`N` scheme is charged for *which* cells it codes (subset entropy
-`≈ N·log₂V²`, ~10× the cluster labels), after which co-clustering wins by
-~1.3–4 bits.  Neither route alone gives a compact, near-lossless table.  See
+cells over the independence prior stays within ~1 bit of the full table only at
+`N ≈ 300K` cells (1/56 of `V²` at `V = 4,096`).  Read the other way, at *matched
+store* the block model now beats a top-`N` table outright: at store 9,216 the
+`k = 32` block model codes 51.36 against 52.74 for top-`N` at `N = 10,000`
+(store 10,000) and 56.46 at `N = 1,000` — a 1.4-bit win at *smaller* store, a
+reversal of the pre-expansion tie.  See
 [`MATRIX_COMPRESSION.md`](MATRIX_COMPRESSION.md).
-`scripts/cluster_words.py`.
 
 The dominant budget knob is not the table at all but the **word list**: at
-matched model size, the largest `V` that fits beats a finer `k`, by ~3–5 bits in
-the size range tested (`V = 2 104 → 11 758`).  Buy words first, clusters last;
-the table's residual 6–8 bit loss is what remains to attack.
+matched model size, the largest `V` that fits beats a finer `k`, by 1–3 bits in
+the size range tested (`V = 4,096 → 8,192`).  Buy words first, clusters last;
+the table's residual 7–9 bit loss is what remains to attack.
