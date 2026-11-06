@@ -186,8 +186,15 @@ def main():
 
     # ---- model bytes, ENCODING.md section 5 --------------------------------
     def bytes_for(kk):
+        """CF's accounting: `kk` left clusters, `kk` leaves in the top tree."""
         return (kk * (2 * (kk - 1) + kk * np.log2(kk))
                 + (2 * (V - kk) + V * np.log2(V))) / 8.0
+
+    def bytes_cqf(kk, q):
+        """CQF's: still `kk` left clusters, but `kk*q` leaves above them."""
+        kq = kk * q
+        return (kk * (2 * (kq - 1) + kq * np.log2(kq))
+                + (2 * (V - kq) + V * np.log2(V))) / 8.0
 
     vb = bytes_for(k)
     vw = k * (2 * (V - 1) + V * np.log2(V)) / 8.0
@@ -212,7 +219,7 @@ def main():
             by = vb
         elif name.startswith('CQF'):
             q = int(name.split('=')[1])
-            by = bytes_for(k * q)
+            by = bytes_cqf(k, q)
         else:
             by = ref_bytes
         rows[name] = (b.mean(), (b <= 64).mean(), (b <= 128).mean(), by,
@@ -234,6 +241,21 @@ def main():
               f"+{rows[name][3] - vb:.0f} B")
         print(f"  training-count accounting said the merges avoided are "
               f"{av:.3f} bits/id; held-out recovers {gain:+.3f}")
+    # ---- paired comparisons against CF --------------------------------------
+    # The fit rates are proportions on the same held-out identifiers, so the
+    # unpaired binomial error (0.6 pt here) is the wrong yardstick: compare the
+    # per-identifier indicators instead.
+    print()
+    thr = 64
+    print(f"paired against CF (n={len(seqs)}):")
+    for name in order:
+        db = bits[name] - bits['CF']
+        df = ((bits[name] <= thr).astype(float)
+              - (bits['CF'] <= thr).astype(float))
+        print(f"  {name:<12} {db.mean():+8.3f} +- {db.std(ddof=1) / np.sqrt(len(db)):.3f} bits"
+              f"   fit<={thr} {100 * df.mean():+6.1f} +- "
+              f"{100 * df.std(ddof=1) / np.sqrt(len(df)):.1f} pt")
+    print()
     print(f"flat is a yardstick: {k} trees of {V} leaves, {vw:.0f} B")
     print(f"ref is the arithmetic bound at exact P(v|u), {ref_bytes:.0f} B")
 

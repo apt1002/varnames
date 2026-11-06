@@ -302,12 +302,15 @@ Two notes on the accounting:
 
 With the stated formulas:
 
-| `V` | `k` | CF | CQF (`q=2`) | CQF (`q=4`) | W |
+| `V` | `k` | CF | CQF (`q = 2`) | CQF (`q = 4`) | W |
 |---:|---:|---:|---:|---:|---:|
-| 4,096 | 32 | 7.9 kB | 9.0 kB | 11.5 kB | 224 kB |
-| 4,096 | 64 | 11.0 kB | 16.0 kB | 26.9 kB | 448 kB |
-| 8,192 | 32 | 15.9 kB | 17.0 kB | 19.5 kB | 480 kB |
-| 8,192 | 64 | 19.0 kB | 24.0 kB | 34.9 kB | 960 kB |
+| 4,096 | 32 | 8,048 | 9,192 | 11,736 | 229,368 |
+| 4,096 | 64 | 11,232 | 16,336 | 27,568 | 458,736 |
+| 8,192 | 32 | 16,240 | 17,384 | 19,928 | 491,512 |
+| 8,192 | 64 | 19,424 | 24,528 | 35,760 | 983,024 |
+
+(bytes, exact; the earlier draft of this table quoted rounded kB and was off
+by up to 0.8 kB in the CQF columns)
 
 So the honest description is "`O(k² log k)` larger than CF", and at `k = 64`
 that is a doubling of the model — not "barely bigger".  The comparison that
@@ -423,10 +426,105 @@ worse, but not for the reason guessed earlier: the bits it buys *grow* (1.27,
 frontier of ~0.18.  So `q = 2` is above the frontier at both `k`, by 4x and by
 1.4x; `q = 4` is above it only at `k = 32`, by 1.5x.
 
-The next step is the measured-code experiment below (step 4): these numbers are
-Huffman costs on the *training* counts, so they are optimistic and they carry no
-fit rate.  The decision rule is stated in fit rates, so the codes have to be
-built and scored on held-out data before CQF is adopted.
+These are Huffman costs on the *training* counts, so they are optimistic and
+they carry no fit rate.  The decision rule is stated in fit rates, so the codes
+were built and scored on held-out identifiers — that is the next section.
+
+### The measured codes, held-out
+
+`scripts/quarter_codes.py` constructs the three codes from the training counts
+and scores them on `merged_validation.txt` (4,227 identifiers at stride 100,
+mean 4.70 tokens against 5.70 in the corpus — held-out identifiers are shorter,
+so bits/identifier are not comparable *across* corpora, but every comparison
+inside a cell is paired on the same identifiers).
+
+`V = 4096, k = 32`:
+
+| scheme | bits/id | vs flat | fit<=64 | fit<=128 | model bytes |
+|---|---:|---:|---:|---:|---:|
+| flat (yardstick) | **49.489** | — | 81.3% | 98.4% | 229,368 |
+| CF | 51.936 | +2.448 | 78.2% | 98.1% | 8,048 |
+| CQF `q = 2` | 51.069 | +1.580 | **79.5%** | 98.2% | 9,192 |
+| CQF `q = 4` | 50.962 | +1.473 | 79.3% | 98.2% | 11,736 |
+| `ref` (exact `P(v\|u)`) | 42.135 | −7.354 | 90.5% | 99.5% | 2,102,784 |
+
+`V = 4096, k = 64`:
+
+| scheme | bits/identifier | vs flat | fit<=64 | fit<=128 | model bytes |
+|---|---:|---:|---:|---:|---:|
+| flat | 48.624 | — | 82.7% | 98.6% | 458,736 |
+| CF | 51.749 | +3.125 | 78.9% | 98.0% | 11,232 |
+| CQF `q = 2` | 50.432 | +1.808 | 80.0% | 98.3% | 16,336 |
+| CQF `q = 4` | 50.196 | +1.573 | **80.5%** | 98.2% | 27,568 |
+| `ref` | 42.135 | −6.489 | 90.5% | 99.5% | 2,102,784 |
+
+`V = 8192, k = 64`:
+
+| scheme | bits/identifier | vs flat | fit<=64 | fit<=128 | bytes |
+|---|---:|---:|---:|---:|---:|
+| flat | 45.949 | — | 85.8% | 98.9% | 983,024 |
+| CF | 48.370 | +2.420 | 83.6% | 98.6% | 19,424 |
+| CQF `q = 2` | 47.255 | +1.306 | 84.1% | 98.7% | 24,528 |
+| CQF `q = 4` | 47.137 | +1.188 | **84.4%** | 98.7% | 35,760 |
+| `ref` | 39.986 | −5.963 | 92.6% | 99.6% | 8,400,896 |
+
+Three readings:
+
+* **The codes generalise and the accounting was honest.** Held-out is within
+  ~0.5 bits of the training-count Huffman cost in every cell (CF 51.936 vs
+  52.426 at `k = 32`), and the recovered fraction is the predicted one: 35% and
+  40% at `k = 32` against the accounting's 35% / 41%; 42% / 50% at `k = 64`
+  against 43% / 50%.  Nothing here is a training artefact.
+* **Mean bits and the 64-bit threshold disagree, and the threshold wins.** At
+  `4096, k = 32` `q = 4` has *fewer* mean bits than `q = 2` (50.962 vs 51.069)
+  but *worse* fit (79.3% vs 79.5%) at 3.2x the bytes; at 8192 the ordering is
+  the other way (84.4% vs 84.1%).  The differences are small, which is the
+  point: a 0.1-bit mean gain does not reliably move a threshold count, so the
+  choice between `q = 2` and `q = 4` should be made on fit rates per byte and
+  then defaulted to the cheaper code.
+* **The arithmetic bound is far away.** `ref` is 7.35 bits below flat at
+  `V = 4096`, for a `V x V` table of 2.1 MB.  The flat → CF penalty CQF attacks
+  (2.4–3.1 bits) is therefore only a fraction of what the factorisation loses
+  overall; the rest is within-cluster resolution on both sides, which is a `k`
+  question and not a quarters question.  CQF recovers most of *the CF penalty*,
+  not most of the gap to optimal.
+
+**Priced in fit rates** (CQF's byte delta over CF is the code-only accounting of
+the tables above; the local frontier slope is the best measured neighbour in the
+same accounting):
+
+| config | fit<=64 | vs CF | bytes over CF | kB per point | local frontier |
+|---|---:|---:|---:|---:|---:|
+| 4096, k=32, q=2 | 79.5% | **+1.3** | +1,144 | **0.9** | 5.8 (k), 3.9 (V) |
+| 4096, k=32, q=4 | 79.3% | +1.1 | +3,688 | 3.4 | |
+| 4096, k=64, q=2 | 80.0% | +1.1 | +5,104 | 4.6 | 14.8 (k 64→128) |
+| 4096, k=64, q=4 | 80.5% | +1.6 | +16,336 | 10.2 | |
+| 8192, k=64, q=2 | 84.1% | +0.5 | +5,104 | 10.2 | 14.8 (k 64→128) |
+| 8192, k=64, q=4 | 84.4% | +0.8 | +16,336 | 20.4 | |
+
+The decision rule of step 6 is "adopt only if, at matched total bytes, it beats
+the best CF configuration on the fit rates by more than the frontier's noise".
+Stated as domination, which avoids the interpolation entirely:
+
+| pair | CQF option | CF option | winner |
+|---|---|---|---|
+| `V = 4096` | `k = 32, q = 2`: **79.5%** at 18,544 B | `k = 64`: 78.9% at 21,488 B | CQF, by 0.6 pt and 2.9 kB |
+| `V = 4096` | `k = 64, q = 2`: **80.0%** at 26,592 B | `k = 128`: 79.8% at 34,784 B | CQF, by 0.2 pt and 8.2 kB |
+| `V = 8192` | `k = 64, q = 2`: **84.1%** at 45,024 B | `k = 128`: 83.6% at 54,240 B | CQF, by 0.5 pt and 9.2 kB |
+
+So CQF `q = 2` is **adopted**: it buys a fit point more cheaply than doubling
+`k`, at both canonical vocabularies, and at `k = 32` it is 4–6x cheaper than the
+frontier.  `q = 4` is **rejected**: at `k = 32` it is dominated by `q = 2` (less
+fit, 3.2x the bytes), and at `k = 64` it costs 10–20 kB/pt against a 15 kB/pt
+frontier — inside the noise, at 3.2x the price.
+
+One caveat to close: the fit-rate deltas above are proportions over 4,227
+identifiers, and the paired standard error has not been measured for the
+canonical cells.  At `V = 512, k = 16` the paired gain is `−0.677 ± 0.056` bits
+but only `+0.6 ± 0.5` fit points — the bits gain is certain and the threshold
+gain is not, which is why the adoption rests on the domination table (0.2–0.6 pt
+gaps) rather than on the `k = 32` margin alone.  `quarter_codes.py` now prints
+the paired errors; one rerun of the `k = 32` cell pins them down.
 
 ### The experiment
 

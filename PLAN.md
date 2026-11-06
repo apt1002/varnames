@@ -178,19 +178,17 @@ labels (see `README.md`).
       pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
       case for the stop.  `docs/NEWLINE_CLUSTER.md`,
       `scripts/newline_cluster.py`.
-- [ ] **C28. Cluster quarters.** *Accounting closed; `q = 2` pays at both `k`,
-      `q = 4` only at `k = 32`.*  The mechanism is confirmed exactly (the identity
-      closes to three decimals) and at the canonical grid CQF recovers 35%
-      (`q = 2`) / 41% (`q = 4`) of the flat → CF penalty at `k = 32` (0.81 /
-      0.95 bits/identifier), 43% / 50% at `k = 64` (1.27 / 1.50).  Against a
-      frontier of ≈5.5 kB/bit the nets are +0.60 / +0.28 at `k = 32` and +0.36 /
-      −1.39 at `k = 64`: the bits bought grow with `k` (the avoided in-cell mass
-      is `k`-independent) but the `k x kq` top stage grows faster.  Open: the
-      measured-code run — harness written and verified at `V = 512`, where
-      held-out recovers what the accounting predicted; the canonical cells need
-      more RAM than this box has, so they are laptop jobs
-      (`scripts/quarter_codes.py`).
-      `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` — stop each
+- [ ] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.*  The
+      mechanism is confirmed exactly (the identity closes to three decimals) and
+      the held-out codes recover what the accounting predicted (35% / 40% of the
+      flat → CF penalty at `k = 32`, 42% / 50% at `k = 64`) with no sign that the
+      training-count numbers were optimistic.  Priced in fit rates at matched
+      bytes, `q = 2` is cheaper than doubling `k` on both canonical vocabularies
+      and 4–6x cheaper than the frontier at `k = 32`; `q = 4` is dominated there
+      and inside the noise at `k = 64`.  Open: paired standard errors for the
+      canonical cells (the harness prints them now; one rerun of `k = 32`).
+      `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` (pricing),
+      `scripts/quarter_codes.py` (held-out scoring) — stop each
       right-cluster Huffman tree early at `q` trees and encode
       `P(quarter | left cluster)` instead, buying back part of the two-tree
       factorisation penalty at `O(k² log k)` extra model bytes; price it against
