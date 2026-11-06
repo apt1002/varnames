@@ -35,29 +35,29 @@ L(id) = sum_j  -log2 P(c_j | longest common substring that is a suffix of
 
 which is the number of bits a coder based on the model would spend. The
 **static success rate** is the percentage of distinct identifiers in
-`work/camel/merged.txt` (2,295,340 after normalisation) with `L(id) <= budget`.
+`work/camel/merged.txt` (4,226,707 after normalisation) with `L(id) <= budget`.
 
 ## Results: success rate vs threshold
 
 | T | common substrings | max len | mean bits | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|
-| 100000 | 159 | 5 | 71.45 | 52.3% | 92.8% |
-| 50000 | 316 | 5 | 67.03 | 57.8% | 94.5% |
-| 20000 | 911 | 7 | 60.17 | 66.4% | 96.5% |
-| 10000 | 2,102 | 9 | 55.19 | 72.6% | 97.6% |
-| 5000 | 4,478 | 13 | 51.35 | 77.4% | 98.3% |
-| 2000 | 11,758 | 14 | 49.21 | 79.8% | 98.6% |
-| 1000 | 23,284 | 25 | 44.55 | 86.0% | 99.3% |
-| 500 | 46,346 | 33 | 42.51 | 88.7% | 99.5% |
+| 100000 | 278 | 5 | 65.53 | 60.0% | 95.0% |
+| 50000 | 613 | 6 | 60.96 | 66.1% | 96.3% |
+| 20000 | 1,788 | 9 | 54.63 | 74.3% | 97.7% |
+| 10000 | 3,935 | 13 | 50.75 | 79.1% | 98.4% |
+| 5000 | 8,038 | 14 | 47.64 | 82.8% | 98.9% |
+| 2000 | 20,198 | 15 | 44.42 | 86.8% | 99.3% |
+| 1000 | 40,168 | 30 | 42.61 | 89.0% | 99.5% |
+| 500 | 80,869 | 44 | 40.95 | 91.1% | 99.6% |
 
 Observations:
 
 * **More contexts keep helping, with diminishing returns.** Each halving of the
   threshold buys a few more points of static coverage; 500→100000 spans
-  88.7%→52.3%. The gain is concentrated in the *long tail*: the common, short
+  91.1%→60.0%. The gain is concentrated in the *long tail*: the common, short
   identifiers are already cheap at every threshold.
-* **A 128-bit budget captures almost everything** (92.8% at the crudest model,
-  99.5% at the finest). The 64-bit budget is the interesting, discriminating
+* **A 128-bit budget captures almost everything** (95.0% at the crudest model,
+  99.6% at the finest). The 64-bit budget is the interesting, discriminating
   regime; 128 bits is effectively "all but the generated long tail".
 * These are *model-based* numbers. A real coder also needs to spend bits on
   choosing the model, on the fact that the model is fixed, and so on; treat them
@@ -88,6 +88,7 @@ python3 scripts/successor_distributions.py work/camel/merged.txt \
         work/common10000/common_substrings.txt --outdir work/common10000
 python3 scripts/code_lengths.py work/camel/merged.txt \
         work/common10000/common_substrings.txt --outdir work/common10000
+# code_lengths.tsv holds one row per identifier: id, bits
 ```
 
 `scripts/run_sweep.sh` runs this over a list of thresholds.
