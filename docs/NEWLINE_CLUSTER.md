@@ -1,6 +1,7 @@
 # Reserving clusters for the stop token
 
-Status: **planned; not started.**  Design and decision rule only.
+Status: **measured at the testing point** (`V = 512`, `k = 16`); the canonical
+grid and the start-boundary defect below are the open work.
 
 ## The question
 
@@ -91,6 +92,59 @@ ideally more), with no regression in the length distribution.  If (a) fails
 slightly but (b) is strong, the trade is still likely worth it — say so
 explicitly rather than hiding it behind a single number, because the generative
 property is what the product sells.
+
+## First measurement (`V = 512`, `k = 16`, `work/tw512ns`)
+
+Held-out: 2,114 validation identifiers (stride 200), `kappa = 300`; generation:
+2,000 samples.  `scripts/newline_cluster.py --dir work/tw512ns --k 16
+--stride 200`.
+
+| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | len mean | real |
+|---|---|---|---|---|---|---|---|---|---|
+| `plain(k)` | 67.725 | 57.1% | 93.7% | 3.0% | 2.2% | 0.300 | 1.170 | 16.66 | 1.45% |
+| `plain(k-1)` | 67.766 | 57.3% | 93.7% | 3.0% | 2.1% | 0.292 | 1.161 | 16.32 | 1.75% |
+| `reserved(k)`, `profile=sub` | 67.617 | 57.7% | 93.9% | 2.9% | **0.1%** | 0.488 | 1.195 | 16.05 | 2.45% |
+| `reserved(k)`, `profile=full` | 67.703 | 57.2% | 93.8% | **2.1%** | **0.0%** | 0.311 | **1.096** | 16.82 | 2.40% |
+
+(The corpus values for the same held-out set: mean length 9.14 tokens, digit
+first-token mass 0.00%, last-token digit mass 5.58%.)
+
+**Compression is neutral-to-better**, as predicted: the reservation costs no
+model bytes (`k` cells either way) and the boundary transitions are only ~15% of
+the bits.
+
+**The end boundary behaves exactly as designed** — "ends mid-word" falls from
+2.2% to 0.1% (`profile=sub`) or 0.0% (`profile=full`) and the last-token KL
+improves.  Mechanism: the stop's **column** is allocated through `rcl[\n]`,
+which is now a singleton, so `P(\n | a)` is exact at left-cluster resolution.
+
+**The start boundary does not, and the asymmetry is structural.**  `P(b | \n)`
+is allocated through `lcl[\n]`: the *row* of `D` is exact, but the within-row
+allocation inside each right cluster is proportional to the unigram `c[b]`.  A
+token's "start-ness" cannot be expressed, so tokens that are frequent in the
+interior and never start an identifier — the digits above all, corpus first-token
+digit mass 0.00% — are over-produced: 0.45% (`plain`) vs 2.45% (`sub`) vs 1.91%
+(`full`) of first tokens are digits.  Pooling `\n` into a cell hides this,
+because the cell average happens to shrink the row towards words with compatible
+successor statistics; that is an accident, not a guarantee.
+
+`profile=full` (keep the stop's row and column inside each word's clustering
+profile) is the fix that costs nothing: it recovers the start boundary to parity
+as well (2.1% mid-word starts, first-token KL 0.311 vs `plain`'s 0.300) while
+keeping the end-boundary win, and it is the better configuration on every other
+metric too.  **Adopt `profile=full` as the reservation's definition.**
+
+What is left is the within-cluster allocation.  Options, in increasing cost:
+more right clusters (the digits may separate on their own — untested);
+a start-ness factor `s[b]` stored per word (`V` numbers, i.e. as many as `c`);
+or the exact stop row as a `V`-number boundary table.  The last two both break
+"the stop is ordinary" in the table layout, so the first question is whether the
+defect survives at `k = 64`.
+
+Two things that are *not* C27 effects but are visible here and matter later:
+the sampled length distribution is ~1.8x too long in every configuration
+(16.7 vs 9.1 tokens), and the real-identifier hit rate is 1.5-2.5% — both are
+properties of the sampler/model as it stands (`docs/BUDGET64_STUDY.md`).
 
 ## Implementation
 

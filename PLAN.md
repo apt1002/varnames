@@ -163,11 +163,13 @@ labels (see `README.md`).
       cost of the extra constraint against the bytes saved, on the
       matched-bytes frontier rather than at matched `k`.
       `docs/SHARED_CLUSTERS.md`.
-- [ ] **C27. Reserved stop clusters.** *Planned* — give `\n` a singleton left
-      cell and a singleton right cell so the start and end distributions are
-      exact up to the block; measure the (expected small) compressibility change
-      and the (expected large) drop in generated identifiers that start or end
-      mid-word.  `docs/NEWLINE_CLUSTER.md`.
+- [ ] **C27. Reserved stop clusters.** *Measured at the testing point* — the
+      end boundary improves as designed, the start boundary does not (the
+      within-right-cluster allocation is proportional to the unigram, so digits
+      leak into first position); `profile=full` recovers it to parity and is
+      adopted as the reservation's definition.  Open: the same three-way
+      comparison at the canonical grid, and whether the start defect survives
+      `k = 64`.  `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
 - [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
       early at `q` trees and encode `P(quarter | left cluster)` instead, buying
       back part of the two-tree factorisation penalty at `O(k² log k)` extra
