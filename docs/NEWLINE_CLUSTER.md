@@ -1,8 +1,10 @@
 # Reserving clusters for the stop token
 
-Status: **measured at the testing point** (`V = 512`); recommended for
-adoption with `profile=full`, on the trade stated below.  The canonical grid is
-the open confirmation.
+Status: **rejected at the canonical grid.**  The testing point (`V = 512`)
+looked favourable; at `V = 4096/8192` the reservation costs bits and makes the
+start boundary *worse*, because pooling the stop buys a shrinkage that the
+singleton cell throws away.  One control (`--profile full`) is still outstanding;
+see the last section.
 
 ## The question
 
@@ -199,6 +201,92 @@ Two things that are *not* C27 effects but are visible here and matter later:
 the sampled length distribution is ~1.8x too long in every configuration
 (16.7 vs 9.1 tokens), and the real-identifier hit rate is 1.5-2.5% — both are
 properties of the sampler/model as it stands (`docs/BUDGET64_STUDY.md`).
+
+## The canonical grid reverses it
+
+`V = 4096, k = 32/64` and `V = 8192, k = 64`, 10,567 held-out identifiers
+(stride 40), 20,000 samples, `profile=sub` (the pre-`full` command; see the
+control note below):
+
+| model | bits | fit<=64 | starts mid | ends mid | first-tok KL | last-tok KL | boundary share |
+|---|---|---|---|---|---|---|---|
+| 4096, plain(32) | **51.355** | **78.2%** | 2.4% | 1.8% | **0.127** | **1.401** | 23.5% |
+| 4096, plain(31) | 51.366 | 78.3% | 2.4% | 1.9% | 0.127 | 1.403 | 23.4% |
+| 4096, reserved(32) | 51.653 | 77.9% | 2.5% | 1.3% | 0.391 | 1.560 | 24.1% |
+| 4096, plain(64) | **50.622** | **79.1%** | **1.8%** | **1.2%** | **0.113** | **1.385** | 23.7% |
+| 4096, plain(63) | 50.633 | 79.1% | 1.6% | 1.1% | 0.116 | 1.395 | 23.7% |
+| 4096, reserved(64) | 51.061 | 78.7% | 2.4% | 1.3% | 0.361 | 1.473 | 24.2% |
+| 8192, plain(64) | **47.279** | **83.4%** | **3.1%** | **2.7%** | **0.096** | **1.639** | 26.9% |
+| 8192, plain(63) | 47.288 | 83.3% | 3.0% | 2.7% | 0.096 | 1.641 | 26.9% |
+| 8192, reserved(64) | 47.699 | 82.8% | 5.0% | 3.0% | 0.295 | 1.696 | 27.4% |
+
+Three things are unambiguous:
+
+1. **The reservation costs 0.30-0.44 bits (0.6-0.9%) and 0.4-0.6 points of
+   fit<=64**, and it does so *in the boundary transitions*: 12.711 -> 13.072 at
+   `V = 8192` (the interior moves by 0.06).  The design's premise is that the
+   singleton cell makes the boundaries exact *up to the block*; in fact it makes
+   the boundary **more expensive**, because it removes a useful pooling.
+2. **`plain(k)` and `plain(k-1)` are indistinguishable** (0.01 bits, same fit),
+   so the cost is not "one cluster fewer for the words" — it is the stop being
+   alone.
+3. **The generative gain does not appear**: mid-word starts get *worse* at
+   `V = 8192` (3.1% -> 5.0%), mid-word ends do not improve (2.7% -> 3.0%), and
+   both boundary KLs worsen by 3x.
+
+### Why the testing point misled us
+
+At `V = 4096/8192` almost every token can both start and end an identifier
+(7,484 of 8,192 ever start, 7,806 ever end), so `P(first | .)` and `P(last | .)`
+are nearly the **unigram restricted to startable/lastable words**.  When the
+target is close to the marginal, the best estimator is heavily shrunk towards it
+— and a pooled cell provides exactly that shrinkage for free: the block row is an
+average over neighbouring words, which pulls it to the marginal.  The singleton
+cell is unbiased at block resolution but noisier, and loses.  This is a
+bias-variance effect, not an exactness effect, and it is invisible at `k = 16`,
+where the singleton cell is *finer* than the pooled cell rather than merely
+different.
+
+The rule for when pooling wins is therefore: **pool whenever the boundary
+distribution is close to the marginal over words** — i.e. whenever the token
+set is nearly uniformly "startable".  At `V = 512`, `k = 16` that was false
+(482 of 512 startable, and the stop's cell was dominated by words with genuinely
+different dynamics); at the canonical grid it is true.
+
+### The outstanding control
+
+The three canonical runs used `profile=sub`.  `profile=full` was adopted at the
+testing point because it recovers the *start* boundary there (first-token KL
+0.488 -> 0.311, mid-word starts 2.9% -> 2.1%); it keeps the stop's row and column
+inside each word's clustering profile.  Until that control is run the verdict is
+"rejected, with one configuration of the design untested" — but note that it
+cannot explain a deficit that sits in the *boundary transitions* while the
+clustering only changes which words share a cell.  Expect it to narrow the gap,
+not to reverse it.
+
+## A generative defect that is not C27's fault (and is much larger)
+
+Every configuration in the table above generates identifiers about **3x too
+long**: 16.2-16.6 tokens against a corpus mean of 5.06 (`V = 8192`) / 5.72
+(`V = 4096`).  It is not the sampler and it is not the reservation — `plain` has
+it too, and it is flat in `k` (at `V = 512`: 16.7 at `k = 16`, 15.7 at `k = 32`,
+16.4 at `k = 64`).  The decisive check: with **identity** labelling (`k = V`,
+i.e. the full table, no factorisation) the sampler gives mean length **8.33**
+against the corpus's 9.18 — nearly right.
+
+So the blow-up belongs to the **assoc factorisation**, not to the clustering
+resolution: `P(b|a) = c[b] D[lcl(a), rcl(b)] / sum_j D[lcl(a), j] C[j]` is not
+the row of `M`, and the chain it defines is no longer stationary with respect to
+the unigram (`M`'s cyclic counts make `r = c`, so the *exact* chain is).  The
+drift compounds along a sample: a token drawn with a low stop probability keeps
+the walk going, and the tokens that *do* end identifiers are not favoured by the
+factored rows, so the length overshoots and keeps overshooting.
+
+This matters beyond C27: it is why the "real identifier hit rate" is ~2% at every
+`V` (the samples are seldom the right length to *be* a real identifier), so every
+generative metric in this note, in `BUDGET64_STUDY.md` and in the related
+reports is measured on a model that overshoots length 3x.  It should be
+diagnosed before any more generative comparisons are believed.
 
 ## Implementation
 

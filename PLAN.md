@@ -163,15 +163,25 @@ labels (see `README.md`).
       frontier slope: dominated at matched bytes.  Open: the canonical grid
       (`V = 4096`, `k = 32/64`), where the membership saving is 2.5-3.0 kB.
       `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
-- [ ] **C27. Reserved stop clusters.** *Measured at the testing point,
-      recommended for adoption with `profile=full`* — at `k = 16` the
-      reservation is free and fixes the end boundary; the apparent start-side
-      defect (digits leaking into first position) is a resolution artefact that
-      vanishes by `k = 32`, so no extra boundary table is needed.  At `k = 64` it
-      costs 0.40 bits (0.6%) and 0.7 pt of fit<=64 for 8x fewer mid-word starts,
-      4x fewer mid-word ends and the elimination of the digit leak.  Open: the
-      three-way comparison at the canonical grid.
+- [ ] **C27. Reserved stop clusters.** *Rejected at the canonical grid.*  At
+      the testing point (`V = 512`, `k = 16`) the reservation looked free and
+      helpful; at `V = 4096/8192` it costs 0.30-0.44 bits and 0.4-0.6 pt of
+      fit<=64, and the deficit sits in the *boundary* transitions — the
+      singleton cell removes a shrinkage towards the marginal that the pooled
+      cell gives for free, and at the canonical grid the boundary distribution
+      *is* nearly the marginal (95% of tokens are startable).  The generative
+      gain disappears with it.  The sample-0 dictionaries stay plain: no special
+      case for the stop.  One control outstanding (`--profile full`).
       `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
+- [ ] **C30. The factorised model over-generates length 3x.** *Diagnosed, not
+      fixed* — every configuration generates ~16 tokens against a corpus mean of
+      5.1, while identity labelling (`k = V`, the full table) generates 8.33
+      against 9.18.  So the drift belongs to the assoc factorisation, not to the
+      sampler or the clustering resolution (it is flat in `k`), and it is why the
+      real-identifier hit rate is ~2% at every `V`.  Every generative metric in
+      `BUDGET64_STUDY.md`, `NEWLINE_CLUSTER.md` and `SHARED_CLUSTERS.md` is
+      measured on it, so it outranks the remaining C experiments.
+      `docs/NEWLINE_CLUSTER.md` (last section).
 - [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
       early at `q` trees and encode `P(quarter | left cluster)` instead, buying
       back part of the two-tree factorisation penalty at `O(k² log k)` extra
