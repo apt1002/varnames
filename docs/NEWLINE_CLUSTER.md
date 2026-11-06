@@ -134,12 +134,27 @@ as well (2.1% mid-word starts, first-token KL 0.311 vs `plain`'s 0.300) while
 keeping the end-boundary win, and it is the better configuration on every other
 metric too.  **Adopt `profile=full` as the reservation's definition.**
 
-What is left is the within-cluster allocation.  Options, in increasing cost:
-more right clusters (the digits may separate on their own — untested);
-a start-ness factor `s[b]` stored per word (`V` numbers, i.e. as many as `c`);
-or the exact stop row as a `V`-number boundary table.  The last two both break
-"the stop is ordinary" in the table layout, so the first question is whether the
-defect survives at `k = 64`.
+What is left is the within-cluster allocation.  The **cost of the defect in
+bits** is measurable without committing to a fix: the two boundary transitions
+(first token out of the stop, last token into it) cost 15.742 bits/identifier
+under `reserved(k)` and 15.676 under `plain(k)`, against **14.912** if the stop's
+own row and column were stored exactly — so an exact `2V`-number boundary table
+would recover 0.76–0.83 bits/identifier (`exact_boundary_gap` in the script).
+
+At `V = 512` that table is 1,024 B, i.e. ~1.9 bits on the frontier slope read
+off the `k`-doubling control in `SHARED_CLUSTERS.md` — so the exact table is
+**not** worth its bytes there.  The options, in increasing cost:
+
+1. more right clusters — the digits may separate on their own, since "preceded
+   by the stop" is literally the first entry of a word's column profile and
+   `profile=full` puts it in the clustering metric (untested: needs `k = 64`);
+2. a start-ability bitmap — `V/8` bytes of "this word ever starts an
+   identifier", which kills the digit leak but not the bit deficit; the same
+   kind of structural knowledge as `STRUCTURAL_ZEROS.md`;
+3. the exact stop row as a `V`-number table (or row and column, `2V`).
+
+Options 2 and 3 both break "the stop is ordinary" in the table layout, so the
+first question remains whether the defect survives at `k = 64`.
 
 Two things that are *not* C27 effects but are visible here and matter later:
 the sampled length distribution is ~1.8x too long in every configuration

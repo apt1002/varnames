@@ -138,7 +138,34 @@ def boundary_kl(m, M_raw, stop, side):
     return float(np.sum(p[ok] * np.log2(p[ok] / q[ok])))
 
 
-def report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus):
+def exact_boundary_gap(seqs, m, M_ref, stop):
+    """Held-out bits of the first/last-token transitions under the block model
+    and under an exact (one-row/one-column) boundary table.
+
+    The difference is the *most* that could be recovered by storing the stop's
+    own row and column as `V`-number tables instead of reading them off `D` at
+    cluster resolution -- the price of that table being `2V` numbers."""
+    lcl, rcl, logc, logD, logden = (m['lcl'], m['rcl'], m['logc'], m['logD'],
+                                    m['logden'])
+    row = M_ref[stop] / M_ref[stop].sum()
+    col = M_ref[:, stop] / M_ref[:, stop].sum()
+    lrow = np.log2(np.maximum(row, 1e-300))
+    lcol = np.log2(np.maximum(col, 1e-300))
+    blk = exc = 0.0
+    for seq in seqs:
+        a = np.asarray(seq, dtype=np.int64)
+        b = np.roll(a, -1)
+        A = lcl[a]
+        bits = logden[A] - logc[b] - logD[A, rcl[b]]
+        first = int(a[0])
+        last = int(a[-2]) if len(a) > 1 else int(a[0])
+        blk += bits[0] + bits[-1]
+        exc += -lrow[first] - lcol[last]
+    n = len(seqs)
+    return blk / n, exc / n
+
+
+def report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus, M_ref):
     stop = nchars
     bits, bnd = bits_split(seqs, m, stop)
     print(f"\n=== {name} (k={m['k']}) ===")
@@ -148,6 +175,10 @@ def report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus):
     print(f"  of which boundary transitions {bnd.mean():.3f} bits "
           f"({100 * bnd.mean() / bits.mean():.1f}%), "
           f"interior {bits.mean() - bnd.mean():.3f}")
+    blk, exc = exact_boundary_gap(seqs, m, M_ref, stop)
+    print(f"  first+last transition bits: block {blk:.3f}, exact table "
+          f"{exc:.3f} (a `2V`-number boundary table would recover "
+          f"{blk - exc:.3f} bits/identifier)")
 
     # ---- generation -----------------------------------------------------
     gen = b64.sample(m, stop, args.samples, rng)
@@ -221,7 +252,7 @@ def main():
         k = int(max(lcl.max(), rcl.max())) + 1
         m = model_from(M_ref, lcl, rcl, k)
         rng = np.random.default_rng(args.seed + 7)
-        report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus)
+        report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus, M_ref)
 
     print("\nmodel bytes: identical in the three configurations "
           "(k*k pair table + 2V word numbers), so the comparison is free.")
