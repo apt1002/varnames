@@ -102,15 +102,17 @@ Held-out: 2,114 validation identifiers (stride 200), `kappa = 300`; generation:
 2,000 samples.  `scripts/newline_cluster.py --dir work/tw512ns --k 16
 --stride 200`.
 
-| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | len mean | real |
+| config | bits | fit<=64 | fit<=128 | starts mid | ends mid | first-tok KL | last-tok KL | len (chars) | "real" |
 |---|---|---|---|---|---|---|---|---|---|
 | `plain(k)` | 67.725 | 57.1% | 93.7% | 3.0% | 2.2% | 0.300 | 1.170 | 16.66 | 1.45% |
 | `plain(k-1)` | 67.766 | 57.3% | 93.7% | 3.0% | 2.1% | 0.292 | 1.161 | 16.32 | 1.75% |
 | `reserved(k)`, `profile=sub` | 67.617 | 57.7% | 93.9% | 2.9% | **0.1%** | 0.488 | 1.195 | 16.05 | 2.45% |
 | `reserved(k)`, `profile=full` | 67.703 | 57.2% | 93.8% | **2.1%** | **0.0%** | 0.311 | **1.096** | 16.82 | 2.40% |
 
-(The corpus values for the same held-out set: mean length 9.14 tokens, digit
-first-token mass 0.00%, last-token digit mass 5.58%.)
+(The corpus values for the same held-out set: 9.14 tokens / 16.26 characters,
+digit first-token mass 0.00%, last-token digit mass 5.58%, chance mid-word
+5.9% starts / 0.6% ends.  The `"real"` column is a memorisation rate, not a
+success rate — see the correction below.)
 
 **Compression is neutral-to-better**, as predicted: the reservation costs no
 model bytes (`k` cells either way) and the boundary transitions are only ~15% of
@@ -264,29 +266,43 @@ cannot explain a deficit that sits in the *boundary transitions* while the
 clustering only changes which words share a cell.  Expect it to narrow the gap,
 not to reverse it.
 
-## A generative defect that is not C27's fault (and is much larger)
+## Correction: the length numbers were a units bug
 
-Every configuration in the table above generates identifiers about **3x too
-long**: 16.2-16.6 tokens against a corpus mean of 5.06 (`V = 8192`) / 5.72
-(`V = 4096`).  It is not the sampler and it is not the reservation — `plain` has
-it too, and it is flat in `k` (at `V = 512`: 16.7 at `k = 16`, 15.7 at `k = 32`,
-16.4 at `k = 64`).  The decisive check: with **identity** labelling (`k = V`,
-i.e. the full table, no factorisation) the sampler gives mean length **8.33**
-against the corpus's 9.18 — nearly right.
+An earlier revision of this note reported the model as generating identifiers
+"3x too long".  That was wrong, and the fault was in
+`newline_cluster.py`: the generated length was the length of the *string* in
+characters while the corpus length was the number of *tokens*.  Matched units
+(`V = 512`, `k = 16`, 3,000 samples):
 
-So the blow-up belongs to the **assoc factorisation**, not to the clustering
-resolution: `P(b|a) = c[b] D[lcl(a), rcl(b)] / sum_j D[lcl(a), j] C[j]` is not
-the row of `M`, and the chain it defines is no longer stationary with respect to
-the unigram (`M`'s cyclic counts make `r = c`, so the *exact* chain is).  The
-drift compounds along a sample: a token drawn with a low stop probability keeps
-the walk going, and the tokens that *do* end identifiers are not favoured by the
-factored rows, so the length overshoots and keeps overshooting.
+| config | tokens (corpus 9.14) | chars (corpus 16.26) |
+|---|---|---|
+| `plain(k)` | 8.37 | 16.61 |
+| `plain(k-1)` | 8.14 | 16.23 |
+| `reserved(k)`, `profile=full` | 8.38 | 16.67 |
 
-This matters beyond C27: it is why the "real identifier hit rate" is ~2% at every
-`V` (the samples are seldom the right length to *be* a real identifier), so every
-generative metric in this note, in `BUDGET64_STUDY.md` and in the related
-reports is measured on a model that overshoots length 3x.  It should be
-diagnosed before any more generative comparisons are believed.
+The length distribution is in fact reproduced well — 2% long in characters, 8%
+short in tokens, with the 95th percentile slightly heavy (24 vs 18 tokens).  The
+penalty of the factorisation is 8% on the token mean, not a factor of three.
+
+The same correction applies to every "real identifier hit rate" figure quoted
+here.  That number is **not** a success metric: a model that generalises is
+*supposed* to emit identifiers that are not in the corpus, so the rate cannot be
+required to be high.  What it does measure is **memorisation** — at 2% of 20,000
+samples against a 3.8M-identifier corpus, the model is reproducing literally
+several hundred corpus members, which is a high rate, not a low one.  It should
+be reported under that name or not at all.
+
+Of the generative numbers, only the mid-word metrics actually discriminate, and
+they need the marginal baseline: a token drawn from the unigram is "mid-word"
+with probability `1 - (startable / V)`, which is 5.9% at `V = 512` and 8.6% at
+`V = 8192`.  Against that, every configuration is *better* than chance on
+starts, so the metric discriminates weakly and the reservation's advantage at the
+testing point (2.1% vs `plain`'s 3.3%, chance 5.9%) is real but small.  At the
+canonical grid the ordering reverses (5.0% vs 3.1% at `V = 8192`).  On ends the
+signal is at least consistent: at the testing point `plain` is *worse* than
+chance (2.4% vs 0.6%) while `reserved` is perfect (0.0%).  So the rejection rests
+on the compression numbers, where there is no ambiguity; the generative columns
+are weak corroboration, not the case against the design.
 
 ## Implementation
 

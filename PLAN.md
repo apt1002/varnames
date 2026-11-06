@@ -171,17 +171,11 @@ labels (see `README.md`).
       cell gives for free, and at the canonical grid the boundary distribution
       *is* nearly the marginal (95% of tokens are startable).  The generative
       gain disappears with it.  The sample-0 dictionaries stay plain: no special
-      case for the stop.  One control outstanding (`--profile full`).
+      case for the stop.  One control outstanding (`--profile full`).  The
+      generative columns are weak evidence either way: the mid-word metrics are
+      only just better than the marginal baseline, and the "real identifier hit
+      rate" is a memorisation rate, not a success rate.
       `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
-- [ ] **C30. The factorised model over-generates length 3x.** *Diagnosed, not
-      fixed* — every configuration generates ~16 tokens against a corpus mean of
-      5.1, while identity labelling (`k = V`, the full table) generates 8.33
-      against 9.18.  So the drift belongs to the assoc factorisation, not to the
-      sampler or the clustering resolution (it is flat in `k`), and it is why the
-      real-identifier hit rate is ~2% at every `V`.  Every generative metric in
-      `BUDGET64_STUDY.md`, `NEWLINE_CLUSTER.md` and `SHARED_CLUSTERS.md` is
-      measured on it, so it outranks the remaining C experiments.
-      `docs/NEWLINE_CLUSTER.md` (last section).
 - [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
       early at `q` trees and encode `P(quarter | left cluster)` instead, buying
       back part of the two-tree factorisation penalty at `O(k² log k)` extra

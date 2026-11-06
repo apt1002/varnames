@@ -183,19 +183,26 @@ def report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus, M_ref):
     # ---- generation -----------------------------------------------------
     gen = b64.sample(m, stop, args.samples, rng)
     gstr = [''.join(sym[t] for t in seq) for seq in gen]
-    glen = np.array([len(s) for s in gstr])
+    gtok = np.array([len(seq) for seq in gen])      # generated, and measured
+    glen = np.array([len(s) for s in gstr])         # ... in the matching unit
     starts = np.flatnonzero(M_raw[stop] > 0)
     ends = np.flatnonzero(M_raw[:, stop] > 0)
     first = np.array([seq[0] if seq else -1 for seq in gen])
     last = np.array([seq[-1] if seq else -1 for seq in gen])
-    start_mid = np.mean([f not in set(starts.tolist()) for f in first])
-    end_mid = np.mean([l not in set(ends.tolist()) for l in last])
+    sset, eset = set(starts.tolist()), set(ends.tolist())
+    start_mid = np.mean([f not in sset for f in first])
+    end_mid = np.mean([l not in eset for l in last])
+    # Chance baselines: the marginal share of tokens that never start / end.
+    cstart_mid = 1.0 - len(sset) / len(sym)
+    cend_mid = 1.0 - len(eset) / len(sym)
     digit = np.mean([bool(s) and s[0].isdigit() for s in gstr])
-    clen = np.array([len(s) for s in seqs])
+    ctok = np.array([len(s) for s in seqs])
+    clen = np.array([len(line) for line in args._lines])
     print(f"generation ({args.samples} samples):")
-    print(f"  starts mid-word {100 * start_mid:5.1f}%   "
-          f"ends mid-word {100 * end_mid:5.1f}%   "
-          f"first char digit {100 * digit:5.1f}%")
+    print(f"  starts mid-word {100 * start_mid:5.1f}% (chance "
+          f"{100 * cstart_mid:4.1f}%), ends mid-word {100 * end_mid:5.1f}% "
+          f"(chance {100 * cend_mid:4.1f}%), first char digit "
+          f"{100 * digit:4.1f}%")
     print(f"  first-token KL {boundary_kl(m, M_raw, stop, 'first'):.4f} bits, "
           f"last-token KL {boundary_kl(m, M_raw, stop, 'last'):.4f} bits")
     for side, label in (('first', 'first'), ('last', 'last')):
@@ -207,9 +214,10 @@ def report(name, m, seqs, M_raw, nchars, sym, args, rng, corpus, M_ref):
         print(f"  {label}-token: digit mass model {100 * q[dig].sum():.2f}% "
               f"vs corpus {100 * p[dig].sum():.2f}%;   over-produced "
               f"(model/corpus): {detail}")
-    print(f"  length mean {glen.mean():.2f} (corpus {clen.mean():.2f}), "
-          f"95th pct {np.percentile(glen, 95):.0f} "
-          f"(corpus {np.percentile(clen, 95):.0f})")
+    print(f"  length: tokens {gtok.mean():.2f} (corpus {ctok.mean():.2f}), "
+          f"95th pct {np.percentile(gtok, 95):.0f} "
+          f"(corpus {np.percentile(ctok, 95):.0f}); "
+          f"chars {glen.mean():.2f} (corpus {clen.mean():.2f})")
     valid = np.mean([bool(VALID.match(s)) for s in gstr])
     real = np.mean([s in corpus for s in gstr])
     print(f"  syntactically valid {100 * valid:.1f}%, "
@@ -236,7 +244,8 @@ def main():
     _, P_mar, M_ref = hf.priors(M, alpha)
     lines = tw.read_lines(args.validation, stride=args.stride)
     seqs = mfr.tokenise(lines, chars, rules, nchars)
-    corpus = set(tw.read_lines(args.validation))
+    args._lines = tw.read_lines(args.validation)
+    corpus = set(args._lines)
     print(f"{args.dir}: V={V}, k={args.k}, kappa={args.kappa}, "
           f"held-out n={len(seqs)}, profile={args.profile}")
     print(f"corpus boundary check: {len(np.flatnonzero(M_raw[stop] > 0))} "
