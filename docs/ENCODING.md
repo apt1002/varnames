@@ -296,39 +296,50 @@ which is the frontier measured in `WORDLIST_BUDGET.md` / `MODEL_BUDGET.md`.
 1. Tokenise a held-out set with the canonical dictionaries (`V ∈ {512, 4096,
    8192}`), as `words_per_identifier.py` already does.
 2. Cluster as now (`cluster_words.py`, Hellinger `k`-means, `k ∈ {32, 64}`, and
-   `k = 16` at `V = 512`), then form the quarters **by mass**:
-   * **early stop** (the reference): build each right cluster's tree and halt
-     when `q` subtrees remain.  Every subtree of a Huffman build is itself the
-     Huffman code of its own leaves, so the quarters arrive with optimal bottom
-     codes and no extra work; the grouping is chosen by mass.
-   * **equal-mass quantiles** (the balanced variant): cut each cluster's words
-     into `q` groups of equal probability mass, then build a tree in each.  This
-     makes every top-stage leaf `P(cell)/q`, which is what minimises the top
-     tree's largest leaf.
-   * **`k`-means inside the cluster** (the control that should lose): a
-     context-similarity split, which controls neither mass nor code length, so a
-     quarter can be dominated by one frequent word and the split buys nothing.
-     It is also *not* the same construction as the early stop — an earlier draft
-     of this note claimed it "agreed up to the clustering metric"; it does not,
-     and the criterion is the whole experiment.
+   `k = 16` at `V = 512`), then form the quarters **only by truncating the
+   build**: halt each right cluster's tree when `q` subtrees remain, and take
+   those survivors as the quarters.  There is no freedom here, and that is the
+   point (see "How the gain arises" below): an imposed partition — equal-mass
+   quantiles, or `k`-means inside the cluster — forces the unequal merge *inside*
+   a quarter, which is precisely the loss the truncation avoids.  Measure one
+   imposed partition anyway, as a control that should lose; `k`-means inside the
+   cluster is the natural one, since it also shows that a context-similarity
+   criterion is not a code criterion.
+3. **How the gain arises — and why the grouping is not a design choice.**
+   Huffman's cost is the sum over merges of the merged mass, so the `q − 1`
+   merges *above* the stop point are exactly what CQF replaces:
 
-   The mechanism, stated once: **any** two-stage code pays one rounding per
-   token, and it is paid in the top stage.  What the split buys is that the top
-   stage's largest leaf is a *quarter* of a cell rather than a cell, so the
-   rounding shrinks.  The bottom tree is optimal for its quarter under all three
-   constructions above, so there is no "loss per quarter" — the only thing that
-   differs is which partition the rounding is measured against.  (A *nested*
-   factorisation — cluster, then quarter, then word — would pay three roundings;
-   that is a different scheme and not what CQF is.)
-3. Measure four lengths per identifier: arithmetic reference; flat Huffman
+       in-cell loss avoided = Σ over the last q − 1 merges of the merged mass
+
+   CQF replaces them with a top symbol shared across cells, costing
+   `H(quarter | left cluster) + r_top`.  The trade works because a cell whose
+   final merges are expensive is a cell with one heavy survivor and small
+   siblings: the shared top tree lets that survivor pair with *other cells'*
+   heavy survivors instead of with its own tail.
+
+   Three consequences, all of which rule out imposing a partition:
+
+   * If the survivors were equal in mass, finishing the build would cost exactly
+     `log₂ q` bits per symbol — the cheapest a `q`-way split can be.  There would
+     be nothing left for the shared tree to recover, and the extra stage would
+     only add its own rounding.  Equal quarters are the one case where CQF
+     *cannot* win, so "balance the quarters" is the wrong prescription.
+   * Any imposed partition must merge unequal masses *inside* a quarter (a heavy
+     word sharing a bottom tree with small ones), which reintroduces the loss in
+     every quarter — the bottom trees are individually optimal for their groups,
+     but the grouping is what costs.
+   * The only design freedom is therefore `q` (and whether to ship quarters at
+     all).  Where to stop is chosen by the build.
+
+4. Measure four lengths per identifier: arithmetic reference; flat Huffman
    (one tree per left cluster over `V` words — affordable for `V = 512`, and for
    `4,096` only as an upper-bound curiosity); CF (two trees); CQF for
    `q ∈ {2, 4}`.
-4. Price each scheme with the size accounting above, then plot **total model
+5. Price each scheme with the size accounting above, then plot **total model
    bytes (word list + memberships + block + code lengths) against mean bits and
    against the 64/128-bit fit rates**, alongside the "spend the same bytes on
    more words / more clusters" frontier.
-5. Decision rule: adopt CQF only if, at matched total bytes, it beats the best
+6. Decision rule: adopt CQF only if, at matched total bytes, it beats the best
    CF configuration on the *fit* rates — the quantity the product cares about —
    by more than the run-to-run noise of the frontier.  The measured upper bound
    on the gain is the CF penalty itself (1.4–1.6 bits/identifier), and CQF can
@@ -416,15 +427,15 @@ The point of the compound key is *not* to let similarity override probability
 inside a tree; it is to decide **which words share a tree**, which is the only
 place the two objectives genuinely conflict.
 
-**The one modification of the tree build that can pay: balanced quarters.**
-For CQF the early-stop leaves `q` subtrees per cell, and those subtrees become
-the top tree's leaves.  A standard build leaves the `q` *largest* subtrees,
-which can be very unequal (`0.5 / 0.2 / 0.2 / 0.1` of a cell), so one quarter
-carries most of the cell's mass and the split bought nothing.  Constraining the
-final merges so the `q` survivors are near-equal in mass costs a little on the
-bottom tree and cuts the top tree's worst leaf by up to `q`.  That is a
-*balance* constraint, not a distance penalty — and it is the version of
-"modify the Huffman build" that has a mechanism behind it.
+**Why the tree build should *not* be modified.**  An earlier draft proposed
+constraining the final merges so the `q` survivors come out near-equal in mass.
+That is backwards: equal survivors are the case where finishing the build costs
+only `log₂ q` bits, so there is no loss for the shared top stage to recover, and
+forcing them perturbs the greedy grouping inside every quarter.  The surviving
+subtrees must be whatever the greedy build produced — the inequality at the top
+*is* the thing being sold.  What a codesign can legitimately change is which
+words are in the same **cell** (§6 above), not how the tree inside a cell is
+shaped.
 
 **Walking (`scripts/codesign.py`, ~150 lines, reuses `cluster_words.py`):**
 
@@ -435,9 +446,12 @@ bottom tree and cuts the top tree's worst leaf by up to `q`.  That is a
    has nothing to win and only the model side matters — a one-afternoon answer.
 3. If it does, sweep `λ_fit` and let `k` fall out; compare the frontier with the
    `k`-means frontier at matched model bytes (the shape used in `SHARED_CLUSTERS.md`).
-4. Independently, build each cell's tree with and without the balance constraint,
-   with `q = 2` and `4`, and measure the top-tree cost.  This one is cheap and
-   separable; do it first.
+4. Independently of the loop, run the quarters accounting of §5 step 3: over
+   every cell, sum the masses of the last `q − 1` merges (the in-cell loss that
+   truncation avoids) and compare it with the top stage's charge for the same
+   tokens (`H(quarter | left cluster)` plus a redundancy bound).  This needs no
+   new code — only the merge masses, which the build already knows — and it
+   says whether any `q` can pay before anything is built.  Do it first.
 
 ## 7. Open questions
 
