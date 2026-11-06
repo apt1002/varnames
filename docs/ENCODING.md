@@ -121,8 +121,9 @@ the time, then a quarter of the time for two zeros, and so on:
 
     E[trailing zeros] ≈ ½ + ¼ + … = 1 bit per identifier, purely by luck.
 
-Nothing has to be stripped to get it: the canonical form is *the integer*, whose
-binary length already ends at the highest set bit.  Two consequences:
+Nothing has to be stripped to get it: the canonical form is simply *the
+integer*, and an integer's binary length already stops at its highest set bit.
+Two consequences:
 
 * It is another **~1 bit/identifier that arithmetic coding cannot match** — the
   shortest fraction in the arithmetic interval is already optimal, and has no
