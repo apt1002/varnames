@@ -518,13 +518,35 @@ frontier.  `q = 4` is **rejected**: at `k = 32` it is dominated by `q = 2` (less
 fit, 3.2x the bytes), and at `k = 64` it costs 10–20 kB/pt against a 15 kB/pt
 frontier — inside the noise, at 3.2x the price.
 
-One caveat to close: the fit-rate deltas above are proportions over 4,227
-identifiers, and the paired standard error has not been measured for the
-canonical cells.  At `V = 512, k = 16` the paired gain is `−0.677 ± 0.056` bits
-but only `+0.6 ± 0.5` fit points — the bits gain is certain and the threshold
-gain is not, which is why the adoption rests on the domination table (0.2–0.6 pt
-gaps) rather than on the `k = 32` margin alone.  `quarter_codes.py` now prints
-the paired errors; one rerun of the `k = 32` cell pins them down.
+**The noise, measured.** These are proportions over 4,227 identifiers, so the
+right yardstick is the *paired* per-identifier difference (same held-out
+identifiers, same trees below the top stage).  At `V = 4096, k = 32`:
+
+| comparison | bits | fit<=64 |
+|---|---:|---:|
+| flat − CF | −2.448 ± 0.047 | +3.1 ± 0.3 pt |
+| CQF `q = 2` − CF | −0.868 ± 0.023 | **+1.3 ± 0.2 pt** |
+| CQF `q = 4` − CF | −0.974 ± 0.025 | +1.0 ± 0.2 pt |
+| `ref` − CF | −9.801 ± 0.176 | +12.3 ± 0.5 pt |
+
+So the `k = 32` claim is solid on both statistics: 6σ in fit rate, 38σ in bits.
+The unpaired binomial standard error would have been 0.6 pt, which is why the
+paired form matters — it is three times tighter, because almost all identifiers
+sit far from the threshold and the ones that flip are a small correlated set.
+
+Two honesty notes on the domination table, whose margins are 0.2–0.6 pt: those
+are *cross-model* differences (a different code for a different `k`), so their
+sampling error is the unpaired one, ~0.6 pt, and individually they are not
+significant.  What is significant is the bits gap they are built from
+(`−0.868 ± 0.023` here), and the fact that the fit ordering agrees with the bits
+ordering in all three cells.  And at `V = 512, k = 16` the same test gives
+`−0.677 ± 0.056` bits but only `+0.6 ± 0.5` fit points: a bits gain that does not
+show up in a 64-bit threshold count, which is a good reminder that the two
+metrics can disagree when the mean sits well below the threshold.
+
+A larger held-out set (`--stride 10`, ~42k identifiers) would tighten all of
+this by `sqrt(10)` at negligible cost, and is the right setting for the H6
+re-measurement.
 
 ### The experiment
 

@@ -178,15 +178,16 @@ labels (see `README.md`).
       pay for at ~4.3 kB/bit.  The sample-0 dictionaries stay plain: no special
       case for the stop.  `docs/NEWLINE_CLUSTER.md`,
       `scripts/newline_cluster.py`.
-- [ ] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.*  The
+- [x] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.*  The
       mechanism is confirmed exactly (the identity closes to three decimals) and
       the held-out codes recover what the accounting predicted (35% / 40% of the
       flat → CF penalty at `k = 32`, 42% / 50% at `k = 64`) with no sign that the
       training-count numbers were optimistic.  Priced in fit rates at matched
       bytes, `q = 2` is cheaper than doubling `k` on both canonical vocabularies
       and 4–6x cheaper than the frontier at `k = 32`; `q = 4` is dominated there
-      and inside the noise at `k = 64`.  Open: paired standard errors for the
-      canonical cells (the harness prints them now; one rerun of `k = 32`).
+      and inside the noise at `k = 64`.  The `k = 32` margins are `+1.3 ± 0.2`
+      fit points and `−0.868 ± 0.023` bits paired, so the claim is not a sampling
+      artefact.  Remaining follow-up: re-measure on a 10x held-out set at H6.
       `docs/ENCODING.md` §5, `scripts/quarter_accounting.py` (pricing),
       `scripts/quarter_codes.py` (held-out scoring) — stop each
       right-cluster Huffman tree early at `q` trees and encode
