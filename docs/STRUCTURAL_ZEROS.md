@@ -7,7 +7,7 @@ small correction and the impossible cells are a small fraction of it.
 
 ## What a structural zero is
 
-The word × word adjacency matrix of the run-aware dictionary
+The word × word adjacency matrix of the pair-merge dictionary
 ([`TREE_WORDS.md`](TREE_WORDS.md)) has cells that are **impossible for any
 corpus**, not merely unobserved.  Writing `w = (ab)` for the word created by
 merging tokens `a` and `b`, and `rank(w)` for the creation order:
@@ -37,35 +37,42 @@ matrix (checked for all three dictionaries).
 
 | dictionary | `V` | positive cells | structural cells | `P_mar` mass on them |
 |---|---:|---:|---:|---:|
-| `tw96` | 160 | 20,499 | 371 | 3.87% |
-| `tw512` | 576 | 149,932 | 3,461 | 4.18% |
-| `tw2040` | 2,104 | 802,606 | 26,068 | 3.51% |
+| `tw4096ns` | 4,096 | 1,813,165 | 77,110 | 3.09% |
+| `tw6144ns` | 6,144 | 2,237,618 | 144,948 | 2.72% |
+| `tw8192ns` | 8,192 | 2,507,680 | 227,364 | 2.48% |
+| `tw96` (legacy) | 160 | 20,499 | 371 | 3.87% |
+| `tw512` (legacy) | 576 | 149,932 | 3,461 | 4.18% |
+| `tw2040` (legacy) | 2,104 | 802,606 | 26,068 | 3.51% |
 
 Most observed zeros are simply unobserved tail pairs, not structural ones; the
-structural cells are ~3–4% of the independence prior's mass.  Following the
+structural cells are 2.5–3% of the independence prior's mass at the grid (3.5–4%
+at the legacy vocabularies).  The absolute number grows with `V` (77,110 cells at
+4,096, 227,364 at 8,192, i.e. 0.46% and 0.34% of `V²`) while their prior mass
+share shrinks, because the extra words are the rare ones whose rows and columns
+carry little independent mass.  Following the
 recipe of [`ADJACENCY_MATRIX.md`](ADJACENCY_MATRIX.md), `P_mar = (r/T)(c/T)ᵀ` is
 computed, the structural cells are set to zero, and the rest is renormalised to
 sum 1 before forming `M_ref = M + alpha·P_mar`.
 
 ## Effect on held-out compression
 
-`tw2040`, stride-20 sample of `work/camel/merged_validation.txt` (11,477
+`tw4096ns`, stride-20 sample of `work/camel/merged_validation.txt` (21,134
 identifiers), mean bits under `P_ref`:
 
 | `kappa` | plain `P_mar` | structural zeros | Δ |
 |---:|---:|---:|---:|
-| 100 | 45.87 | 45.86 | −0.01 |
-| 300 | 45.76 | 45.75 | −0.01 |
-| 1000 | 45.95 | 45.92 | −0.03 |
-| 3000 | 46.86 | 46.80 | −0.06 |
+| 100 | 42.27 | 42.26 | −0.01 |
+| 300 | 42.08 | 42.07 | −0.01 |
+| 1000 | 42.20 | 42.17 | −0.03 |
+| 3000 | 43.03 | 42.97 | −0.06 |
 
 Under the **factorised** model (rank-`L` Hellinger, `kappa = 300`):
 
 | model | plain | structural zeros |
 |---|---:|---:|
-| `sqrtcnt` `L = 256` | 47.10 | 47.09 |
-| `sqrtcnt` `L = 128` | 48.61 | 48.60 |
-| `sqrtcnt` `L = 64` | 50.59 | 50.59 |
+| `sqrtcnt` `L = 256` | 43.76 | 43.76 |
+| `sqrtcnt` `L = 128` | 45.09 | 45.09 |
+| `sqrtcnt` `L = 64` | 46.61 | 46.63 |
 
 The correction is always in the right direction and grows slowly with `kappa`
 (larger prior ⇒ the impossible cells carry more mass), but it is an order of
@@ -75,11 +82,16 @@ away).
 
 ## Why so small
 
-The prior has a fixed mass `alpha = kappa·V` against a token total `T`.  At the
-held-out optimum `kappa = 300`, `alpha/T ≈ 4.5%`, and of the prior mass only
-~3.5% sits on structurally impossible cells — so the correction touches
-~0.16% of the probability mass.  Zeroing a few percent of a few percent cannot
-move the code length appreciably.
+The prior has a fixed mass `alpha = kappa·V` against a token total `T`
+(`T = 21,697,898` at `V = 4,096`, so `alpha/T = 5.7%` at `kappa = 300` and 5.4%
+of `M_ref`).  Of that prior mass only 3.1% sits on structurally impossible
+cells, so the correction touches **0.17%** of the probability mass.  Zeroing a
+few percent of a few percent cannot move the code length appreciably.
+
+The same arithmetic explains the `kappa` trend in the table above: the prior's
+share of `M_ref` is 1.9%, 5.4%, 15.9% and 36.2% at `kappa` 100, 300, 1,000 and
+3,000, so the structural correction covers 0.06%, 0.17%, 0.49% and 1.1% of the
+mass — and even at 1.1% it buys only 0.06 bits.
 
 ## Conclusion
 
