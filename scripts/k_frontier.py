@@ -41,12 +41,25 @@ import model_fit_rates as mfr
 from newline_cluster import model_from, plain_labels
 
 
-def model_bytes(V, k):
+# The pair-merge dictionary itself: every symbol above the characters is a rule
+# naming two children.  MODEL_BUDGET.md measures the child-index stream at
+# 2.2-2.6 bytes per rule (Zipf code: 4.5 kB/2,040, 10.6/4,414, 30.9/11,694),
+# plus ~2 kB of code.  Without this term the frontier is not the model: at
+# V = 8192 it is 21.5 kB, i.e. 40% of what the other terms add up to.
+DICT_BYTES_PER_RULE = 2.4
+DICT_CODE_BYTES = 2000.0
+
+
+def dict_bytes(V):
+    return DICT_BYTES_PER_RULE * (V - 64) + DICT_CODE_BYTES
+
+
+def model_bytes(V, k, with_dict=True):
     word = (2 * (V - k) + V * np.log2(V)) / 8.0
     uni = float(V)
     mem = 2.0 * V * np.log2(k) / 8.0
     blk = float(k * k)
-    return word + uni + mem + blk
+    return word + uni + mem + blk + (dict_bytes(V) if with_dict else 0.0)
 
 
 def main():
@@ -57,6 +70,8 @@ def main():
     ap.add_argument('--validation', default='work/camel/merged_validation.txt')
     ap.add_argument('--stride', type=int, default=100)
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--no-dict', action='store_true',
+                    help='omit the dictionary/rule term (code-side bytes only)')
     args = ap.parse_args()
 
     M, uni, chars, rules, sym = hf.dense_matrix(args.dir)
@@ -80,7 +95,7 @@ def main():
         m = model_from(M_ref, lcl, rcl, k)
         bits = mfr.bits_assoc(seqs, m['logc'], m['logD'], m['logden'],
                               lcl, rcl)
-        by = model_bytes(V, k)
+        by = model_bytes(V, k, with_dict=not args.no_dict)
         rows.append(dict(k=k, bits=bits.mean(), f64=(bits <= 64).mean() * 100,
                          f128=(bits <= 128).mean() * 100, by=by))
         print(f"{k:>4} {bits.mean():>9.3f} {rows[-1]['f64']:>7.1f}% "

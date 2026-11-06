@@ -119,7 +119,10 @@ The frontier above is a set of points at different `V`; anything priced against
 it (C26's shared clusters, C27's reservation, C28's quarters) was compared with
 a *slope* obtained from two of those points.  `scripts/k_frontier.py` sweeps `k`
 at fixed `V` with the same accounting and the same held-out set, which turns the
-slope into a curve — at two vocabularies.
+slope into a curve — at three vocabularies.  (All byte figures in this
+subsection are *code-side*: word index, unigram, memberships and block.  The
+dictionary term is charged separately, and matters — see "What the byte numbers
+include" below.)
 
 `V = 4096`, stride 10 (`n = 42,268`):
 
@@ -233,6 +236,58 @@ Three things to take from it.
   2.2 bits for 8.1 kB (3.8 kB/bit), 6144→8192 buys 1.6 bits for 8.3 kB
   (5.2 kB/bit), while a doubling of `k` above 16 buys ≈0.3 bits for 2–6 kB and
   is worthless above 32.
+
+### What the byte numbers include — and the 60 kB question
+
+The canonical `model_bytes` (this section, `k_frontier.py`, and the C26/C27/C28
+pricing tables) charges the **word index** (`V log V` bits), the **unigram** (`V`
+bytes), the **memberships** (`2V log k` bits) and the **block** (`k²` bytes).  It
+does **not** charge the pair-merge dictionary — the rule table that defines the
+vocabulary in the first place.  The older table at the top of this document does:
+the child-index stream alone is 2.2–2.6 bytes per rule (4.5 kB at 2,104 words,
+10.6 at 4,478, 30.9 at 11,758), plus ~2 kB of code.
+
+So the two tables price different objects, and the gap grows with `V`:
+
+| configuration | code-side | + dictionary | **total** | fit ≤64 |
+|---|---:|---:|---:|---:|
+| 4096, k=16 | 15,612 | 11,677 | **27.3 kB** | 77.8 % |
+| 4096, k=32 | 17,400 | 11,677 | 29.1 kB | 78.1 % |
+| 4096, k=64 | 21,488 | 11,677 | 33.2 kB | 78.9 % |
+| 4096, k=96 | 27,199 | 11,677 | 38.9 kB | 79.3 % |
+| 6144, k=4 | 20,432 | 16,592 | 37.0 kB | 79.3 % |
+| 6144, k=8 | 22,015 | 16,592 | 38.6 kB | 80.0 % |
+| 6144, k=16 | 23,741 | 16,592 | **40.3 kB** | **80.5 %** |
+| 6144, k=32 | 26,041 | 16,592 | 42.6 kB | 80.9 % |
+| 8192, k=4 | 27,663 | 21,507 | 49.2 kB | 81.2 % |
+| 8192, k=6 | 28,881 | 21,507 | 50.4 kB | 81.9 % |
+| 8192, k=16 | 31,996 | 21,507 | **53.5 kB** | **82.5 %** |
+| 8192, k=64 | 39,920 | 21,507 | 61.4 kB | 83.1 % |
+| 12,288, k=16 | 48,767 | 31,338 | ~80.1 kB | not measured |
+
+*(The dictionary column is derived, not measured per configuration: 2.4 B per
+rule plus 2 kB, the range measured by `model_budget.py --index-code`.  Fits and
+code-side bytes are as measured elsewhere in this document.)*
+
+Three consequences, and one of them corrects an earlier reading.
+
+* **The new builds are only modestly better than the old ones, not dramatically.**
+  Like for like, `8192 / k = 64` is 61.4 kB at 83.1 % against the old
+  `11,758 / k = 52` at 64.2 kB and 82.5 %: about 0.6 points for 3 kB less.  The
+  apparent collapse from "60 kB" to "32 kB" was the omitted dictionary, not an
+  improvement in the model.
+* **`V` and `k` are comparably priced once the dictionary is charged.**  The `V`
+  step is 4.8–6.6 kB per point at matched `k`; the `k` step is 1.7–6.8.  The
+  earlier "`V` is 2–6x cheaper" claim was the same omission seen from the other
+  side.  The weaker, older finding survives: at matched model size a larger word
+  list wins, but not by a wide margin.
+* **A 12,288-word model lands at ~80 kB, not 45 kB**, which is consistent with
+  the historical "≈60 kB at 11,800 words" (the old build carried a coarser `k`,
+  hence larger memberships, and an older unigram code).
+
+None of this touches the *verdicts* of C26, C27 or C28: those are within-`V`
+comparisons, where the dictionary term cancels exactly.  It does change what a
+"15 % model saving" means when the saving is on the code side only.
 
 **Method note.**  Two consecutive shape claims from the `k`-sweeps (a "cheapest
 segment at 32→48", then a "staircase in `V`") were both artefacts of comparing
