@@ -477,6 +477,52 @@ shaped.
    new code — only the merge masses, which the build already knows — and it
    says whether any `q` can pay before anything is built.  Do it first.
 
+### A merge-loop formulation (proposal, under discussion)
+
+An alternative to the coordinate descent above: make the clusters *be* Huffman
+trees and alternate the usual two phases — recompute each cluster's centroid
+(the **normalised mean of the `√p` vectors**, not `√` of the mean), then rebuild
+the partition by merging.  Phase 2 repeatedly takes the globally least probable
+remaining tree `t` and merges it into the cluster minimising
+
+    [Hellinger cost of moving t there]  +  [Δ_CS of the merge]
+
+Two results are worth keeping, whichever way the design goes:
+
+* **The merge cost has a closed form.**  With `a`, `b` the two trees' masses,
+
+      Δ_CS = (a + b)·(1 − h₂(a/(a+b))),      h₂ = binary entropy in bits
+
+  i.e. zero exactly when the masses are equal, maximal when one is zero, and
+  *increasing in the partner's mass*.  Consequences: with the Hellinger term
+  switched off the rule is exactly Huffman; and at a fixed point, where the
+  Hellinger term is the same for every partner inside the chosen cluster, the
+  tree built inside each cluster is the Huffman tree for that cluster.  That is
+  the necessary condition, and it holds.
+* **The fit term can only override close mass ratios.**  As bits per occurrence
+  of `t`, `Δ_CS/a = (1 − h₂(θ))/θ`, while the Hellinger term is at most 2 bits
+  (`2H² ≤ 2`).  Break-even mass ratios: 1.4:1 for a 0.05-bit fit, 2:1 for 0.25,
+  4.9:1 even at the maximum.  So the fit decides only between partners of
+  similar mass and the resulting clusters are **mass-stratified** — they overlap
+  in Hellinger space by construction.
+
+  That is not automatically fatal: a *quarter* is a code-only refinement (the
+  block `D` stays `k × k`), so quarters may overlap almost perfectly and cost
+  nothing, whereas a codesigned cluster *is* the block model's cell, so its
+  overlap is charged through `D`.  The budget for the whole idea is therefore
+  the factorisation penalty itself — the 1.2 bits/identifier between the flat
+  and two-tree codes — and any fit damage larger than that is a net loss.
+
+Calibration caveat: `2H² ≈ KL/2` in the small-distance limit (measured ratio
+~2.9 on typical perturbations), so as written the fit is underweighted about
+twofold against a code cost in true bits.  Either double it or calibrate it
+against measured block-model bits.
+
+Open: no descent proof between passes (phase 2 assigns trees greedily in mass
+order, so the previous partition is only reproducible at a fixed point), and a
+cluster reduced to one tree has no stay-put option.  A fixed point is
+self-consistent; monotonicity is empirical.
+
 ## 7. Open questions
 
 * Which tables ship: word list, one or two cluster assignments, `D`, and the
