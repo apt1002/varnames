@@ -315,6 +315,55 @@ matters is therefore **bytes versus fit**, not bytes versus bytes: CQF has to
 out-perform re-spending the same 8–16 kB on a longer word list or a finer `k`,
 which is the frontier measured in `WORDLIST_BUDGET.md` / `MODEL_BUDGET.md`.
 
+### The accounting check, run
+
+`scripts/quarter_accounting.py` computes the three layouts exactly from the
+counts — no sampling, no held-out set — as Huffman costs (so the rounding is
+real, not modelled).  `V = 512`, `k = 16`, `kappa = 300`, 3.82M identifiers,
+35.1M transitions (9.20 per identifier):
+
+| scheme | bits/identifier | vs flat | model bytes |
+|---|---:|---:|---:|
+| flat (yardstick) | **65.371** | — | 11,260 |
+| CF | 69.250 | +3.878 | 888 |
+| CQF `q = 2` | 68.548 | +3.177 | 1,140 |
+| CQF `q = 4` | 68.072 | +2.701 | 1,708 |
+
+and the mechanism, checked to three decimals against the identity above:
+
+| q | top stage | CF cluster step | increase | merges avoided | net | bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| 2 | 32.689 | 24.207 | +8.482 | 9.184 | **+0.702** | +252 |
+| 4 | 40.470 | 24.207 | +16.263 | 17.440 | **+1.177** | +820 |
+
+The Huffman rounding on the flat trees is 0.034 bits/token (0.31 per
+identifier), so these are essentially rounding-free numbers: the `kappa` prior
+makes every cell non-zero, which is why Huffman is so efficient here.
+
+**Two conclusions.** The mechanism is real — CQF recovers 18% (`q = 2`) and 30%
+(`q = 4`) of the flat → CF penalty, and the amounts are exactly the expensive
+in-cell merges.  But the *fraction* is measured where the penalty is large: at
+`V = 512, k = 16` the penalty is 3.878 bits/identifier because 16 clusters is
+coarse.  At the canonical grid the flat → CF penalty is ~1.2 bits/identifier,
+so the same fractions recover only ~0.22 (`q = 2`) and ~0.36 (`q = 4`) bits.
+
+**Priced against the frontier**, using the `k`-doubling slope measured on the
+canonical grid (`V = 4096`: `k = 32` → 64 costs 3.2 kB and buys 0.73 bits, so
+≈4.3 kB per bit):
+
+| config | CQF bytes over CF | bits it buys | bits the same bytes buy elsewhere |
+|---|---:|---:|---:|
+| 4096, k=32, q=2 | +1.1 kB | ~0.22 | ~0.26 |
+| 4096, k=32, q=4 | +3.6 kB | ~0.36 | ~0.83 |
+| 4096, k=64, q=2 | +5.0 kB | ~0.22 | ~1.15 |
+| 4096, k=64, q=4 | +15.9 kB | ~0.36 | ~3.7 |
+
+So **CQF is a loss at `k = 64` and at best a draw at `k = 32`** — the one
+candidate left is `q = 2` at `k = 32`, and it needs the canonical accounting run
+(`quarter_accounting.py --dir work/tw4096ns --k 32 --qs 2,4`) to see whether the
+recovery fraction holds up where the penalty is smaller.  The gain column above
+is an extrapolation, not a measurement; the byte column is exact.
+
 ### The experiment
 
 1. Tokenise a held-out set with the canonical dictionaries (`V ∈ {512, 4096,
@@ -335,8 +384,16 @@ which is the frontier measured in `WORDLIST_BUDGET.md` / `MODEL_BUDGET.md`.
 
        in-cell loss avoided = Σ over the last q − 1 merges of the merged mass
 
-   CQF replaces them with a top symbol shared across cells, costing
-   `H(quarter | left cluster) + r_top`.  The trade works because a cell whose
+   CQF replaces them with a top symbol shared across cells.  Careful with the
+   comparison: the top stage is not *new* — CF already pays a cluster step of
+   `H(right cluster | left cluster)`.  What CQF pays is the **increase** from `k`
+   to `kq` symbols, `H(quarter | left cluster) − H(right cluster | left
+   cluster)` plus its rounding.  So the net is
+
+       recovered − (top stage increase)
+
+   and quoting `H(quarter | left cluster) + r_top` as the cost overstates it,
+   because it charges the whole top stage rather than its increment.  The trade works because a cell whose
    final merges are expensive is a cell with one heavy survivor and small
    siblings: the shared top tree lets that survivor pair with *other cells'*
    heavy survivors instead of with its own tail.

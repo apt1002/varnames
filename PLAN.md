@@ -176,7 +176,16 @@ labels (see `README.md`).
       only just better than the marginal baseline, and the "real identifier hit
       rate" is a memorisation rate, not a success rate.
       `docs/NEWLINE_CLUSTER.md`, `scripts/newline_cluster.py`.
-- [ ] **C28. Cluster quarters.** *Planned* — stop each right-cluster Huffman tree
+- [ ] **C28. Cluster quarters.** *Accounting done at the testing point* —
+      `quarter_accounting.py` confirms the mechanism exactly: CQF recovers the
+      expensive in-cell merges (18% of the flat → CF penalty at `q = 2`, 30% at
+      `q = 4`) minus the increase in the top stage, and the identity closes to
+      three decimals.  Priced against the frontier the scheme is a loss at
+      `k = 64` and at best a draw at `k = 32`, because the recovery fraction was
+      measured where the penalty is 3.9 bits and the canonical penalty is 1.2.
+      Open: the canonical accounting run (`V = 4096`, `k = 32/64`), then the
+      measured-code experiment only if that survives.
+      `docs/ENCODING.md` §5.  *Originally planned* — stop each right-cluster Huffman tree
       early at `q` trees and encode `P(quarter | left cluster)` instead, buying
       back part of the two-tree factorisation penalty at `O(k² log k)` extra
       model bytes; price it against spending the same bytes on more words or
