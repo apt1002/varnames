@@ -1,111 +1,143 @@
-# Building the adjacency matrix
+# Building the word adjacency matrix
 
-This is the canonical reference for how the **prefix/suffix adjacency matrix**
-`M` is built, and for the prior (`κ`) that fills its unobserved cells.  The
-documents that *study* this matrix — the Hellinger factorisation
-([`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) and the character
-successor model ([`CODE_LENGTHS.md`](CODE_LENGTHS.md)) — refer back here rather
-than restating the construction.
+This is the canonical reference for the **word × word adjacency matrix** `M`
+and for the prior (`κ`) that fills its unobserved cells.  The documents that
+*study* this matrix — the Hellinger factorisation
+([`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) and the block
+clustering ([`CLUSTER_WORDS.md`](CLUSTER_WORDS.md),
+[`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md)) — refer back here rather than
+restating the construction.
 
-The idea in one sentence: for each split of an identifier, record the longest
-known **left context** (something that can end the left half) paired with the
-longest known **right context** (something that can start the right half), and
-count the pairs.  The result is a roughly `N × N` matrix of how often those
-contexts meet.
+The idea in one sentence: tokenise each identifier into words, and for every
+split at a word boundary count the word on the left paired with the word on the
+right.
 
 ## 1. What a cell counts
 
 Prepare the corpus as usual: case-normalise to CamelCase
-([`CASE_NORMALISATION.md`](CASE_NORMALISATION.md)) and wrap each identifier as
+([`CASE_NORMALISATION.md`](CASE_NORMALISATION.md)), build the pair-merge
+dictionary ([`DICTIONARY_RULES.md`](DICTIONARY_RULES.md),
+[`TREE_WORDS.md`](TREE_WORDS.md) §2) and tokenise each identifier by replaying
+its rules ([`TREE_WORDS.md`](TREE_WORDS.md) §3).
+
+Append the stop character `\n` to each identifier and bend it into a cycle, so
+that the tokenised identifier `w₁ w₂ … wₙ` is the cycle
 
 ```
-^identifier$
+w₁ → w₂ → … → wₙ → \n → w₁
 ```
 
-(`^`, `$` mark the ends; `$` is the stop character used everywhere in this
-project).  For a string of length `len`, consider every split into a non-empty
-left half and a non-empty right half (so there are `len − 1` splits).
+and contributes `n + 1` adjacent pairs.  For a split between two consecutive
+tokens define
 
-For a given split define
+* `a`, the **left context** — the token immediately to the left of the split;
+* `b`, the **right context** — the token immediately to the right.
 
-* `a`, the **left context** — the longest substring that is a *suffix of the
-  left half* and appears in the common-substring vocabulary.  It never ends in
-  `$`.
-* `b`, the **right context** — the longest substring that is a *prefix of the
-  right half* and appears in the vocabulary.  It may end in `$`.
-
-Then `M[a, b]` is incremented once.  So `M` is the joint count of "what the left
-piece ends with" against "what the right piece starts with", over all
-identifiers and all their splits.  It is **symmetric data** crossed with the
-vocabulary: `a` and `b` range over the same set of substrings, but the matrix is
-square only because both halves draw on the one vocabulary.
-
-## 2. The vocabulary: common substrings
-
-The vocabulary is the set of **common substrings** — substrings of the wrapped
-identifiers (within `^…$`) occurring at least `T` times — enumerated by
-`scripts/common_substrings.py`.  `T` is the size knob: it fixes `N`, the number
-of contexts.  Sizes on the current corpus (`work/camel/merged.txt`):
-
-| `T` | `N` (contexts) | max length |
-|---:|---:|---:|
-| 100000 | 278 | 5 |
-| 50000 | 613 | 6 |
-| 20000 | 1,788 | 9 |
-| 10000 | 3,935 | 13 |
-| 5000 | 8,038 | 14 |
-| 2000 | 20,198 | 15 |
-| 1000 | 40,168 | 30 |
-| 500 | 80,869 | 44 |
-
-(Rows count the empty string.  Below `T = 2000` the longest entry is a padding
-run of `o`, not a word — see [`CASE_NORMALISATION.md`](CASE_NORMALISATION.md).)
-
-## 3. The empty context (backoff)
-
-The empty string `""` is included in the vocabulary and serves as the
-**backoff context** on either side: when the longest known suffix/prefix is
-empty, `a` or `b` is `""`.  Keeping it explicit matters — a split with no known
-left context is still a split, and folding it away would silently reshape the
-marginals.  (The right context may be `$` itself, the "nothing follows" case.)
-
-## 4. Symmetry under reversal is exact
-
-The construction is mirror-symmetric: reverse an identifier and swap `^ ↔ $`
-and every left context becomes a right context.  Consequently, building `M` on
-the corpus and `Mᴿ` on the all-reversed corpus gives, exactly,
+Then `M[a, b]` is incremented once for that split.  Because the tokenisation is
+a partition of the identifier, the word-boundary splits are *exactly* the
+adjacent pairs, so
 
 ```
-Mᴿ[ φ(b), φ(a) ] = M[a, b]        (φ = reverse + swap ^↔$)
+M[a, b]  =  the number of occurrences of the word b immediately after the word a.
 ```
 
-with relative Frobenius residual `0.0` (`scripts/symmetry_check.py`, on
-`T = 10000`: max discrepancy `0` against a max count of 104,614).  This is a
-useful debugging invariant, and it is why a *reversed* corpus is a genuinely
-different dataset: the identifier corpus is **not** reversal-symmetric, so the
-row (left-context) and column (right-context) behaviour legitimately differ.
+That is the whole construction.  It is the **dictionary split**: a context is a
+whole word, and the characters inside a word are not looked at.  Both sides
+range over the same `V` symbols — the `63` characters, `\n`, and the
+`NUM_PAIRS` words — which is why the matrix is square; it is not a claim that
+the two sides are independent.
 
-## 5. Density and structural zeros
+The stop closes the cycle.  `M[\n, b]` counts the identifiers that *begin* with
+`b`, and `M[a, \n]` counts those that *end* with `a`.  `M[\n, \n] = 0`: there
+are no empty identifiers.  A word never spans two identifiers, because `\n` is
+a separator and is not merged across.
 
-`M` counts only pairs that actually occur, so it is dense for small `N` (the few
-frequent contexts meet constantly) and sparse for large `N` (rare pairs are
-nearly unique):
+> The earlier **prefix/suffix** matrix — left and right contexts are the
+> longest common substrings at every *character* split — belonged to the
+> character-level successor model.  That model is retired; its construction is
+> recorded in [`SUCCESSOR_MODEL.md`](SUCCESSOR_MODEL.md) and
+> [`CODE_LENGTHS.md`](CODE_LENGTHS.md).  This note describes the word matrix
+> only.
 
-| `T` | `N` | `nnz` | density | largest count |
+## 2. The vocabulary: the word list
+
+The vocabulary is the tree word list: the characters plus `\n` plus
+`NUM_PAIRS` pair words, `V = 63 + 1 + NUM_PAIRS`.  There is no threshold to
+choose: the vocabulary is fixed by the dictionary, and the size knob is
+`NUM_PAIRS`.  The adopted grid is
+`V ∈ {4096, 6144, 8192}` (see the build-directory key in `PLAN.md`).  The word
+list is built from a 5 % sample of the corpus (`--sample 20`); the matrix is
+then counted over the full training split (`--stride 0`).
+
+On the 10-ecosystem training split (3,804,036 identifiers; 422,671 are held
+out):
+
+| `V` | `NUM_PAIRS` | tokens `T` | distinct bigrams | density |
 |---:|---:|---:|---:|---:|
-| 100000 | 278 | 55,297 | 71.6% | 198,881 |
-| 20000 | 1,788 | 753,302 | 23.6% | 144,214 |
-| 5000 | 8,038 | 3,331,843 | 5.2% | 42,195 |
-| 1000 | 40,168 | 9,818,809 | 0.61% | 18,293 |
+| 4,096 | 4,032 | 21,697,898 | 1,813,165 | 10.8 % |
+| 6,144 | 6,080 | 20,145,653 | 2,237,618 | 5.9 % |
+| 8,192 | 8,128 | 19,241,177 | 2,507,680 | 3.7 % |
 
-(Measured on `work/camel/merged.txt`, the 10-ecosystem corpus: 4,226,707
-identifiers, 81,455,598 positions in total.  Because `N` grows much faster than
-the number of occurring pairs, the density falls by two orders of magnitude
-across the table — the matrix is not an object one can store densely at any
-useful vocabulary.)
+`T` *falls* as `V` grows: the extra words merge tokens, so an identifier that
+took eight words at `V = 4 096` may take seven at `8 192`.  The matrix gets
+larger while the number of events it counts gets smaller.
 
-A structural zero is **not** an impossibility: it only says the pair was not
-seen.  The next section fills those cells.
+## 3. The cycle and the stop
+
+Every identifier contains exactly one `\n`, at the end of its token sequence.
+Bending the sequence into a cycle gives the string's first word the stop as its
+predecessor and the stop the first word as its successor, so each identifier
+contributes
+
+```
+(\n, w₁), (w₁, w₂), …, (wₙ, \n)        — n + 1 pairs.
+```
+
+The cycle is load-bearing.  It is what makes `Σ_v N(u,v) = N(u)` hold for every
+`u`, including `\n` (§4), and it is why `N(\n)` is exactly the number of
+identifiers.
+
+There is no empty context: every context is a word.  The smoothing that a
+character model gets from shorter suffixes has no word-level analogue; the
+prior of §6 is the whole backoff.
+
+## 4. Row and column marginals are equal
+
+For every symbol `a`,
+
+```
+Σ_b M[a, b]  =  Σ_b M[b, a]  =  N(a),
+```
+
+the unigram count of `a`; in matrix form `M 1 = Mᵀ 1 = u`.  Each occurrence of
+a word has exactly one successor and exactly one predecessor in the cycle, and
+`\n` occurs once per identifier, so both marginals count the same events.
+
+This is exact, and it is the invariant to check after any change to the
+builder.  It does **not** say `M` is symmetric — it is not, and reversal is not
+a symmetry of the word tokenisation.  It also supplies the denominator of the
+prior in §6, which is why it is stated here rather than left implicit.
+
+## 5. Density and unobserved cells
+
+The matrix is sparse at every grid size, but its mass is not: half the tokens
+sit in under 1 % of the cells, and nine tenths in a quarter to a third of them.
+
+| `V` | positive cells | density | largest count | cells with 50 % of mass | cells with 90 % of mass |
+|---:|---:|---:|---:|---:|---:|
+| 4,096 | 1,813,165 | 10.8 % | 117,588 | 0.6 % | 25.8 % |
+| 6,144 | 2,237,618 | 5.9 % | 102,990 | 0.7 % | 30.8 % |
+| 8,192 | 2,507,680 | 3.7 % | 91,412 | 0.8 % | 35.0 % |
+
+A zero is **not** an impossibility.  Most of the zeros are unobserved tail
+pairs — a rare word simply never met another rare word — and the next section
+fills them.  A small minority are *structural*: a cell `(a, b)` is impossible
+when the word list contains the merged word `(ab)`, because then an adjacent
+`a, b` is always merged.  The structural cells are 77,110 / 144,948 / 227,364
+at `V = 4 096 / 6 144 / 8 192` (2.5–3 % of the independence prior's mass), and
+correcting the prior for them changes held-out length by at most 0.06
+bits/identifier, so §6 does not.  The full statement, including the absorbed
+left-context case, is [`STRUCTURAL_ZEROS.md`](STRUCTURAL_ZEROS.md).
 
 ## 6. Filling unobserved cells: the counting prior
 
@@ -113,135 +145,103 @@ Add a small amount of pseudo-count mass, shaped like the independence model, to
 form a **corrected reference**
 
 ```
-M_ref = M + alpha · P_mar ,   P_mar = (r / T) (c / T)ᵀ   (sum = 1),
-                              r = M 1,  c = Mᵀ 1,  T = 1ᵀM1,   alpha = kappa · N .
+M_ref = M + alpha · P_mar ,    P_mar = (r / T) (c / T)ᵀ   (sum = 1),
+                               r = c = u,   T = 1ᵀ M 1 = Σ_a N(a),   alpha = kappa · V .
 ```
 
-Here `P_mar` is the rank-1 independence (outer-product) shape rescaled to unit
-mass, and `alpha` is the prior mass.  Three design points:
+`P_mar` is the rank-1 independence (outer-product) shape rescaled to unit mass,
+and `alpha` is the prior mass.  Because the matrix is cyclic, `r` and `c` are
+both the unigram vector `u` (§4), but the formula is written symmetrically so
+that it also covers a non-cyclic build.
 
-* **Fixed total mass, not a fraction of the corpus.**  `alpha = kappa·N` does
-  *not* scale with `T`, so the correction washes out as the corpus grows — it is
-  a prior on *unseen pairs*.  Adding the *unnormalised* `alpha·M_mar`
+Three design points:
+
+* **Fixed total mass, not a fraction of the corpus.**  `alpha = kappa·V` does
+  *not* scale with `T`, so the correction washes out as the corpus grows — it
+  is a prior on *unseen pairs*.  Adding the *unnormalised* `alpha·M_mar`
   (`M_mar = r cᵀ / T`) would instead inject `alpha·T` pseudo-counts — at
-  `alpha = 1` that is half the matrix — and would never vanish.  (That was an
-  earlier error; `M_mar` is retained **only** as the convex-mixing partner of
-  the `backoff` *reconstruction* remedy, where its sum-`T` normalisation is what
-  makes the weight `λ` meaningful.)
-* **Mass per context.**  The optimal mass turns out to be a constant multiple of
-  `N` (below), so one `kappa` serves every vocabulary size.  A fixed per-cell
-  pseudo-count `c` would force `alpha = c·N²` and the optimum would drift like
-  `1/N`.
-* **`M_ref` is the reference for the whole analysis.**  Every model is fitted to
-  `M_ref` and scored against it, so results are **not comparable across
+  `alpha = 1` that is half the matrix — and would never vanish.  (`M_mar` is
+  retained **only** as the convex-mixing partner of the `backoff`
+  *reconstruction* remedy, where its sum-`T` normalisation is what makes the
+  weight `λ` meaningful.)
+* **Mass per context.**  With `alpha = kappa·V` the prior adds `alpha·r_a/T`
+  pseudo-counts to row `a`; since the mean of `r_a` is `T/V`, that is `kappa`
+  per row on average.  `kappa` is therefore the quantity the optimum holds
+  fixed, which is why one value serves every vocabulary size.  A fixed
+  per-cell pseudo-count `c` would force `alpha = c·V²` and the optimum would
+  drift like `1/V`.
+* **`M_ref` is the reference for the whole analysis.**  Every model is fitted
+  to `M_ref` and scored against it, so results are **not comparable across
   `kappa`** by design: `kappa` is a counting fix, not a reconstruction knob.
+
+At the recommended `kappa = 300` (§7) the prior is 5.7 % of the token mass at
+`V = 4 096` (`alpha = 1.23 × 10⁶`) and 12.8 % at `V = 8 192`
+(`alpha = 2.46 × 10⁶`).
 
 ## 7. Choosing `kappa`: held-out predictive likelihood
 
-`kappa` must **not** be chosen by the KL.  The KL `KL(M_ref ‖ M̂/ΣM̂)` decreases
-monotonically in `kappa` for *every* method, because as `kappa → ∞` the reference
-`M_ref` tends to the rank-1 `P_mar`, which any rank-`L` model fits almost
-exactly.  Instead, fix it by **predictive** performance.
+`kappa` must **not** be chosen by the factorisation's in-sample KL.  That KL
+decreases monotonically in `kappa` for every method, because as
+`kappa → ∞` the reference `M_ref` tends to the rank-1 `P_mar`, which any
+rank-`L` model fits almost exactly.  Nor can it be chosen on the training
+identifiers: the prior exists for cells that the training data did not see.
 
-`scripts/choose_kappa.py` binomial-thins the counts into train/test
-(`p_train = 0.5`), fits the `sqrtcnt` model (see
-[`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) to
-`M_train + kappa·N·P_mar(train)`, and scores the test counts as cross-entropy in
-bits per held-out event (lower is better; mean over 3 splits).  The test set
-contains pairs *unseen in train*, so this is the criterion that can reward the
-prior.  The sweep is over `kappa` directly, so the fitted mass is `alpha =
-kappa·N` at every `N`.
+Choose it on **held-out identifiers**, the quantity the product ships: tokenise
+the validation split, code each identifier under `P_ref(v | u) ∝ M_ref(u,v)`,
+and take the mean bits/identifier (lower is better).  Swept on the full-table
+model at stride 10 (`n = 42,268`):
 
-Re-checked on the 10-ecosystem corpus at both ends of the grid
-(`work/camel/merged.txt`, 73.0M transitions):
+| `kappa` | 3 | 10 | 30 | 100 | **300** | 1,000 | 3,000 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `V = 4,096`, mean bits | 43.30 | 42.95 | 42.64 | 42.33 | **42.15** | 42.27 | 43.11 |
+| `V = 4,096`, fit ≤ 64 | 89.2 % | 89.6 % | 89.9 % | 90.2 % | **90.3 %** | 90.2 % | 89.3 % |
+| `V = 8,192`, mean bits | 41.75 | 41.17 | 40.66 | 40.18 | **39.95** | 40.31 | 41.63 |
+| `V = 8,192`, fit ≤ 64 | 91.5 % | 92.1 % | 92.6 % | 92.9 % | **93.1 %** | 92.7 % | 91.5 % |
 
-| `T` (`N`) | best `kappa` | best `alpha` | CE\* at best | CE `kappa=300` | CE `kappa=1000` | CE `kappa=0` | CE indep. |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100000 (278) | 1500 | 4.2×10⁵ | 13.73332 | 13.73435 | 13.73354 | 13.73582 | 15.03257 |
-| 5000 (8 038) | 700 | 5.6×10⁶ | 21.87699 | 21.94077 | 21.88038 | 22.66604 | 23.33078 |
+The optimum is `kappa = 300` at both ends of the grid, and the curve is flat
+within 0.2 bit between 100 and 300.  `kappa = 0` diverges: a bigram unobserved
+in training has no mass at all.  Larger `kappa` costs more at the top of the
+grid, because the prior's mass `kappa·V` grows with `V` against a shrinking
+token total (§2).
 
-(\*cross-entropy of the test table under the model, bits/event; "CE indep." is
-the no-latent-structure baseline `P_mar(train)`; the `std` over the 3 splits is
-0.0001–0.0012, so the differences between `kappa = 700` and `1000` are about 1σ
-at the small end and ~3σ at the large end.)
+Scored on held-out *pairs* instead of identifiers, the optimum is flatter and
+slightly lower — `kappa = 300` at `V = 4 096` and `100` at `V = 8 192`
+([`BREAK_OPEN_PRIOR.md`](BREAK_OPEN_PRIOR.md) §8.7) — which is the same range.
+Both the factorisation and the shipped word model use the one value:
 
-* The prior helps, and the benefit **grows with sparsity** — 0.0025
-  bits/event at `N = 278` (within noise) to 0.79 bits/event at `N = 8 038`.
-  Every `kappa > 0` beats `kappa = 0`, and the independence model is far worse
-  than either (1.3 and 1.45 bits/event).
-* The optimum is prior mass **per context**, not per cell: the best `kappa` is
-  700–1500 across a 29× range of `N`, effectively a constant ≈10³.  A *single*
-  fixed `kappa` transfers across sizes.
-
-**Recommendation for the factorisation: a fixed `alpha = 1000·N`
-(`kappa = 1000`).**  It is within 0.0002 bits/event of the optimum at `N = 278`
-and 0.003 at `N = 8 038`, and needs no per-corpus tuning.  `choose_kappa.py`
-remains available to re-check it.  Caveat: with a single corpus we cannot
-separate the `N`- from the corpus-size dependence, so ≈10³ is an empirical
-constant for this corpus.
-
-### The two `kappa`s are different knobs
-
-The **shipped word model** also carries a `kappa` (`alpha = kappa·V`, applied to
-the word × word matrix before clustering), and its measured optimum is **300**,
-not 1000 — [`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) sweeps it at both
-ends of the grid: 42.15 bits/identifier at 300 against 42.27 at 1000 (`V = 4 096`)
-and 39.95 against 40.31 (`V = 8 192`).
-
-That is not a contradiction; the two numbers optimise different things:
-
-| | this section (factorisation) | shipped word model |
+| criterion | what is held out | optimum |
 |---|---|---|
-| object | rank-`L` `sqrtcnt` fit of `M` | `k`-means block model + coding |
-| criterion | held-out pair cross-entropy | held-out bits per identifier |
-| prior share of the counts | 11 % at 1000 (`N = 8 038`) | 5.7 % at 300, 19 % at 1000 (`V = 4 096`, `T = 21.7 M`) |
-| optimum | 700–1 500 | 300 |
+| held-out bits/identifier (shipped) | identifiers | 300 at both grid ends |
+| held-out pair cross-entropy (factorisation) | `(a, b)` pairs | 100–300 |
 
-Scoring identifiers rather than pairs punishes the prior harder, because the
-prior's mass is spread over the whole matrix and each identifier touches only
-5–6 transitions: at `kappa = 1000` the reference is 19 % independence-shaped and
-the block model's within-cell detail is diluted.  The cost of one value serving
-both is small either way — 0.1–0.4 bits/identifier if the product used 1000, and
-0.0002–0.003 bits/event on this section's own criterion if it used 300 — so the
-choice is settled by the product: **`kappa = 300` for the word model,
-`kappa = 1000` for the factorisation analyses in this note**, and every table
-states which one it used.  As everywhere else in the project, `kappa` is a
-counting fix rather than a third design knob.
-
-**Pre-expansion record** (2.07M-identifier corpus, five thresholds; the
-unobserved-cell column counts cells, not contexts, which the current script no
-longer reports):
-
-| `T` (`N`) | cells unobs. | best `kappa` | best `alpha` | CE\* best | CE `kappa=0` | CE indep. |
-|---:|---:|---:|---:|---:|---:|---:|
-| 100000 (159) | 21% | 1000 | 1.6×10⁵ | 12.4049 | 12.4061 | 13.5351 |
-| 50000 (316) | 36% | 1500 | 4.7×10⁵ | 14.0671 | 14.0754 | 15.4134 |
-| 20000 (911) | 65% | 1500 | 1.4×10⁶ | 16.6422 | 16.7232 | 18.1551 |
-| 10000 (2102) | 83% | 1000 | 2.1×10⁶ | 18.6564 | 18.9291 | 20.1605 |
-| 5000 (4478) | 92% | 700 | 3.1×10⁶ | 20.5217 | 21.0966 | 21.9917 |
+**Recommendation: a fixed `alpha = 300·V` (`kappa = 300`).**  It is the minimum
+of the identifier curve at both ends of the grid, within 0.2 bit of the optimum
+everywhere in 100–300, and needs no per-corpus tuning.  Caveat: with a single
+corpus we cannot separate the `V`- from the corpus-size dependence, so ≈300 is
+an empirical constant for this corpus.  Re-check it with the sweep in §8.
 
 ## 8. Reproducing
 
 ```sh
-# build the matrix (writes M.npz, and the low-rank factors) for a threshold
-python3 scripts/pair_matrix.py work/camel/merged.txt \
-        work/common10000/common_substrings.txt --outdir work/common10000 \
-        --lsvd 2,4,8,16,32,64
+# the whole grid: dictionaries on the 5% sample, adjacency over all lines
+bash scripts/h5_build.sh ns
 
-# re-check kappa by held-out likelihood (grid outdirs: /tmp/cs100000, /tmp/cs5000)
-python3 scripts/choose_kappa.py work/camel/merged.txt \
-        --outdirs /tmp/cs5000 --L 16 --reps 3 \
-        --kappas 0,300,700,1000,1500,3000
+# or one vocabulary, then its matrix summary
+python3 scripts/tree_words.py train --corpus work/camel/merged_training.txt \
+        --num-pairs 4032 --sample 20 --stride 0 --outdir work/tw4096ns
+python3 scripts/tree_words.py stats --dir work/tw4096ns
 
-# the κ-parameterised KL tables
-python3 scripts/sqrt_and_smooth.py work/camel/merged.txt \
-        --outdirs work/common10000 --ls 16 --kappas 0,100,300,1000,3000
+# the kappa sweep (held-out bits/identifier; the full-table figure)
+for k in 3 10 30 100 300 1000 3000; do
+    python3 scripts/model_fit_rates.py --dir work/tw4096ns --ks 16 \
+            --kappa "$k" --stride 10
+done
 
-# reversal-symmetry invariant
-python3 scripts/symmetry_check.py work/camel/merged.txt \
-        work/common10000/common_substrings.txt \
-        work/rev/merged_rev.txt work/rev/common10000/common_substrings.txt
+# the factorisation study (joint KL, and its kappa dependence)
+python3 scripts/hfactor_words.py factor --dirs work/tw4096ns,work/tw8192ns \
+        --ls 16 --kappas 0,100,300,1000,3000
 ```
 
-`scripts/run_sweep.sh` runs the construction and the analyses over a list of
-thresholds.
+`scripts/hfactor_words.py score` runs the same held-out criterion at a single
+`kappa`, and `scripts/cluster_words.py` consumes `adj.npz` directly once the
+matrix exists.
