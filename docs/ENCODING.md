@@ -1,10 +1,15 @@
 # The encoding
 
-Status: **design note; nothing here is measured yet.**  This collects the
-decisions the standard has to make, the argument for publishing a *code* rather
-than a *table of probabilities*, and the experiments that would settle what is
-still open.  Measurements that bear on it live in `CODING_OVERHEAD.md` (Huffman
-vs arithmetic), `CLUSTER_WORDS.md` (the factorised block model) and
+Status: **design note; the decisions are settled, the binary layout is
+specified but not yet measured.**  This collects what the encoding has to do,
+the argument for publishing a *code* rather than a *table of probabilities*, and
+the extensions that leave the encoding alone.  The three questions it used to
+leave open are closed: the standard ships one model, fixing `V`, `k` and `q`,
+and the file is specified in [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §7; the
+reserved stop clusters are rejected (`NEWLINE_CLUSTER.md`); and the canonical
+integer is a requirement on the encoder (§1), not something the decoder checks.
+Measurements that bear on it live in `CODING_OVERHEAD.md` (Huffman vs
+arithmetic), `CLUSTER_WORDS.md` (the factorised block model) and
 `MODEL_BUDGET.md` (what a table costs in bytes).
 
 ## 1. What the encoding has to do
@@ -266,18 +271,3 @@ Neither idea changes how a codeword is written; both are written up separately.
 
 An implementation of §§2–4 decodes a model built either way: the first changes
 only the label space, the second only which labels exist.
-
-## 6. Open questions
-
-* Which tables ship: word list, the right-cluster map (and the `q` that groups
-  it into left clusters), `D`, and the code lengths.  Does the standard fix `V`,
-  `k`, `q` and the corpus, or publish a family?  The container is settled — the
-  file format and its binary form are specified in
-  [`MODEL_FORMAT.md`](MODEL_FORMAT.md).
-* The reserved `\n` clusters (`NEWLINE_CLUSTER.md`) interact with this: a
-  dedicated start/end cluster makes the first and last trees tiny and exact,
-  and removes the stop from the clusters whose code lengths it distorts.
-* If the code is published, the encoder must agree with the decoder on the
-  *canonical* integer (the zero-padded code) — the standard should say so
-  explicitly, because "any integer that decodes to the identifier" is not a
-  bijection.
