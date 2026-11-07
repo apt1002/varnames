@@ -99,22 +99,19 @@ It is important that the model is small and efficient, otherwise nobody will wan
 to use it. The pertinent optimisation criterion is the fraction of identifiers
 in the training corpus that fit in 64 bits, measured as a function of the model
 size. With a large model we could do much better, but that's not the point; the
-question is how well we can do with a small model. Both halves are measured:
-the fit rate on held-out identifiers
-([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and systematically
-compared ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Fitting an
-additional 1% of identifiers into 64 bits seems to cost between 2K
-and 6K in the interesting model size range; it costs more for larger models.
+question is how well we can do with a small model. The fit rate is measured on
+held-out identifiers ([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and
+systematically compared by measured model size
+([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Fitting an additional 1% of
+identifiers into 64 bits seems to cost between 2K and 6K in the interesting
+model size range; it costs more for larger models.
 
 ![The measured size-versus-fit frontier](docs/frontier.svg)
 
 The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
-furthest bottom-left. Filled points are the arithmetic reference for each
-word list (the small numbers are `k`); the hollow points are the three measured
-shipped files (4096/16, 8192/16 and 8192/32, the operating point), which sit
-below and left of the reference curve.
+furthest bottom-left.
 
 We tried two main strategies, and found that the second one is much better:
 
