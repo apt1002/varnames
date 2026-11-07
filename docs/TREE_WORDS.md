@@ -519,7 +519,9 @@ this is moot.
   adjacent pair as `a·V + b`, and merge per-chunk `np.unique` results.  The two
   paths are checked against the old implementation by
   `scripts/word_build_rescan.py`; the word list and the matrix are identical,
-  including the cyclic row-sum invariant `sum_v N(u,v) = N(u)`.
+  including the cyclic row-sum invariant `sum_v N(u,v) = N(u)`.  Only the
+  storage order of the adjacency triplets depends on `--jobs`; the matrix does
+  not.
 * **Tie-breaking.**  "Most common length-2 substring" needs a deterministic rule
   on ties (a canonical order over the words, or "lowest pair in creation
   order"); the regression scripts use smallest `(u,v)`.

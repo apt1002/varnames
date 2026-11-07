@@ -436,7 +436,7 @@ prior stays the independence `P_mar` over the pair-merge dictionary.
 
 ### 8.7 At the canonical grid (10-ecosystem corpus)
 
-Re-measured for H6 on `work/tw4096ns` and `work/tw8192ns`, same protocol
+Re-measured on `work/tw4096ns` and `work/tw8192ns`, same protocol
 (dictionary and counts from the build's own 5 % sample; held-out
 `merged_validation` at stride 10, `n = 42,268`), modes `mar` and `break`
 (`breakz` is within 0.1 bits of `break` and is not repeated).  The `break − mar`

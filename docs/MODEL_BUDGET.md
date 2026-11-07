@@ -165,7 +165,7 @@ Four things follow.
 `scripts/k_frontier.py` sweeps `k` at fixed `V` with the same accounting and the
 same held-out set.  These are the same points as the frontier table above, kept
 separate because the *local slope* is what prices a change made inside a model
-(C26's shared clusters, C27's reserved cell, C28's quarters).
+(the shared clusters, the reserved stop cell, the quarters).
 
 `V = 4096`, stride 10 (`n = 42,268`):
 
@@ -359,9 +359,10 @@ are unaffected.
   membership and block structure, not the word list.
 * **The next two objects are the unigram and the memberships** (8.2 kB each at
   the operating point).  `2V · ⌈log₂k / 8⌉` doubles by `k = 64`, so it is also
-  the term that makes a fine `k` expensive; it is what C26's shared assignment
-  buys down.  The unigram is one byte per word by house convention and has an
-  entropy-coded version about 30 % smaller that nothing charges for yet.
+  the term that makes a fine `k` expensive; it is what the shared cluster
+  assignment buys down.  The unigram is one byte per word by house convention
+  and has an entropy-coded version about 30 % smaller that nothing charges for
+  yet.
 
 ## Reproducing
 

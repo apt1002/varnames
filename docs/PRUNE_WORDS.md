@@ -49,7 +49,7 @@ split the costs change, so a popped word whose cost has moved is re-queued with
 its fresh cost.  When a word is deleted its operands may stop being children of
 any kept word and become removable; those are pushed then.
 
-## Scale of the measurement (H6)
+## Scale of the measurement
 
 The two runs below are at `NUM_PAIRS = 512` (`V = 576`) and `2040`
 (`V = 2104`) — **below the canonical grid** (`V = 4,096`–`8,192`), so under the

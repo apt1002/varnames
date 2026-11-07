@@ -22,7 +22,7 @@ loss(a→b) = log2 P_table(b|a) − log2 P_assoc(b|a) ≥ 0,
 attributed to the cell `(lcl(a), rcl(b))` — the storage unit the constraint acts
 on.  `scripts/cluster_loss_attribution.py`.
 
-## C21 — which cells carry the loss
+## Which cells carry the loss
 
 | `k` | full table | `assoc` | net loss | gross loss | gross gain | cells used |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -98,7 +98,7 @@ line: **the loss is the heterogeneity of a many-word left cluster**, i.e. the
 residual error of the clustering itself — and cluster `2` pools 366 words of
 mixed shape, so its bigrams are the worst modelled.
 
-## C22 — what one high-loss block looks like
+## What one high-loss block looks like
 
 Inside a cell the model says
 
@@ -176,7 +176,7 @@ Three things:
 
 ## Pre-expansion record
 
-The C21/C22 measurement that established these conclusions was taken at
+The measurement that established these conclusions was taken at
 `V = 2,104` (`work/tw2040`), `k = 52`, stride 40, `n = 5,739`: full table 45.86,
 `assoc` 56.72, net loss 10.85, gross +12.48 on 75.1 % of bigrams and −1.63 on
 24.9 %; top 5 % of cells 65.8 % of bigrams and 40.0 % of loss; ranks and

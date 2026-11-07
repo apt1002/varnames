@@ -1,5 +1,5 @@
 #!/bin/bash
-# H5: rebuild the canonical-grid dictionaries and their cyclic bigram matrices.
+# Rebuild the canonical-grid dictionaries and their cyclic bigram matrices.
 #
 # Dictionary: --sample 20 over work/camel/merged_training.txt (the 5% sample the
 # whole grid was built with, so the word lists stay comparable across V).

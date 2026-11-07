@@ -319,7 +319,7 @@ Notes on the accounting:
 * **One term is missing: the word→left-cluster map.**  The top stage is indexed
   by the left cluster of the *current* word, and neither formula charges the
   `V log₂k` bits that map needs; the leaf list only implies the *right*-cluster
-  side.  If C26's shared assignment is adopted, one map serves both and the term
+  side.  If the shared cluster assignment is adopted, one map serves both and the term
   is already paid — which is one more reason that idea is attractive.
 * **`V log V` is right, and it is what makes the scheme work.**  An earlier draft
   of this note tried to charge `Σ_j V_j log V_j ≈ V log(V/qk)` instead and to add
@@ -444,7 +444,7 @@ were built and scored on held-out identifiers — that is the next section.
 
 `scripts/quarter_codes.py` constructs the four codes from the training counts and
 scores them on `merged_validation.txt` at **stride 10 (42,268 identifiers)** —
-the H6 re-measurement; the earlier pass used 4,227 identifiers.  Held-out
+the current re-measurement; the earlier pass used 4,227 identifiers.  Held-out
 identifiers average 4.71 tokens at `V = 4096` and 4.06 at `V = 8192` against
 5.70 in the corpus, so bits/identifier are not comparable *across* corpora, but
 every comparison inside a cell is paired on the same identifiers.  The absolute
@@ -710,7 +710,7 @@ So the thing worth codesigning is the **model term** — which cells share a
 block entry and a membership — not the codeword assignment.  The budget for any
 such idea is the factorisation penalty itself, now measured at
 **0.87–1.39 bits/identifier** across the grid (`CODING_OVERHEAD.md`), not the
-1.2 it was when this was drafted.  The plan item is C29 in `PLAN.md`.
+1.2 it was when this was drafted.  The plan item is in `PLAN.md`.
 
 The quarters are a fixed lattice imposed before the code is built; a better
 design changes the clustering *and* the trees together.  The objective is
