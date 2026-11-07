@@ -669,6 +669,17 @@ points — which is why both are always reported.
 
 ## 6. Coding the assignment (a sketch)
 
+**Status: a design sketch, not implemented.**  `scripts/codesign.py` does not
+exist.  What has changed since it was written: the code side is now measured as
+nearly exhausted (the flat Huffman penalty is 0.13–0.19 bits/identifier and the
+zero-weight stop more than pays it back — §3, `CODING_OVERHEAD.md`), while the
+model is not (7.8–9.1 bits above the full table, `BUDGET64_STUDY.md`).
+So the thing worth codesigning is the **model term** — which cells share a
+block entry and a membership — not the codeword assignment.  The budget for any
+such idea is the factorisation penalty itself, now measured at
+**0.87–1.39 bits/identifier** across the grid (`CODING_OVERHEAD.md`), not the
+1.2 it was when this was drafted.  The plan item is C29 in `PLAN.md`.
+
 The quarters are a fixed lattice imposed before the code is built; a better
 design changes the clustering *and* the trees together.  The objective is
 

@@ -279,34 +279,37 @@ old numbers remain reproducible without it.
       grid is rebuilt by `scripts/h5_build.sh` (dictionaries identical on
       rebuild; the adjacency triplets' storage order depends on `--jobs`, the
       matrix does not).
-- [~] **H6. Re-measure the corpus-dependent reports.** *In progress.*
-      **Pass 1 — corpus-level reports, done:** `README.md`, `docs/CORPUS.md`,
+- [x] **H6. Re-measure the corpus-dependent reports.** *Done.*
+      **Pass 1 — corpus-level:** `README.md`, `docs/CORPUS.md`,
       `docs/CASE_NORMALISATION.md` and `docs/RUN_LENGTHS.md` describe the
       10-ecosystem union (per-ecosystem composition and shape, union statistics,
       common-substring thresholds, character and word-level runs, and the case
       ablation re-run at `V = 4096`).
-      **Pass 2 — model reports, done:** `CODE_LENGTHS`, `ADJACENCY_MATRIX`
-      (κ choice and the density table), `TREE_WORDS`, `DICTIONARY_RULES`,
+      **Pass 2 — model reports:** `CODE_LENGTHS`, `ADJACENCY_MATRIX` (κ choice
+      and the density table), `TREE_WORDS`, `DICTIONARY_RULES`,
       `WORD_COMPRESSIBILITY`, `BOUNDARY_TRIGRAM`, `SUCCESSOR_MODEL` (frontier
       rebuilt from the 26-point grid sweep), `CLUSTER_WORDS`, `CLUSTER_LOSS`,
       `MATRIX_COMPRESSION`, `PRUNE_WORDS`, `STRUCTURAL_ZEROS`,
-      `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled five seeds at each of
+      `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled at five seeds each of
       `k = 32, 64`), `NEWLINE_CLUSTER`, `ENCODING` §5 (C28 on the 10× held-out
-      set).  **Remaining:** `ENCODING` §6 and the testing-point numbers in
-      `SMALL_DICT` (which exist only to exercise scripts).  **`BREAK_OPEN_PRIOR`
-      done:** re-run at `V = 4096` and `8192` on the 10× held-out set — the
-      prior is 10.1/10.9 bits and 12.8/13.6 fit points worse at the best
-      `kappa`, the deficit grows with `V`, the prior-mass inflation reaches
-      29–66×, and `lambda = 1` still wins the mixture test.  **`BUDGET64_STUDY` done:** coverage, the
-      length boundary, the failure markers and the generative view re-measured
-      at 4096/32, 6144/16 and 8192/16 with their full-table ceilings.
-      **`MODEL_BUDGET` done:** priced on the arithmetic inventory once
-      (rules + unigram + memberships + block + 2 kB code), which retires the
-      code-side-plus-dictionary sum that double-charged a Huffman bottom stage;
-      the operating point is 39.8 kB at `V = 8192, k = 16` (was quoted 53.5 kB,
-      README corrected), `k = 16` is confirmed as the floor, and
-      `k_frontier.py` now defaults to the full inventory with `--code-side` for
-      the old pricing.
+      set).
+      **The last four, closed here.**  `MODEL_BUDGET`: priced on the arithmetic
+      inventory once (rules + unigram + memberships + block + 2 kB code), which
+      retires the code-side-plus-dictionary sum that double-charged a Huffman
+      bottom stage; the operating point is 39.8 kB at `V = 8192, k = 16`
+      (quoted 53.5 kB before, README corrected), `k = 16` is confirmed as the
+      floor, and `k_frontier.py` now defaults to the full inventory with
+      `--code-side` for the old pricing.  `BUDGET64_STUDY`: coverage, the length
+      boundary, the failure markers and the generative view re-measured at
+      4096/32, 6144/16 and 8192/16 with their full-table ceilings.
+      `BREAK_OPEN_PRIOR`: re-run at `V = 4096` and `8192` on the 10× held-out
+      set — 10.1 / 10.9 bits and 12.8 / 13.6 fit points worse at the best
+      `kappa`, prior-mass inflation 29–66×, and `lambda = 1` still wins the
+      mixture test.  `ENCODING` §6 carries a status banner (sketch, not
+      implemented; the code side is exhausted, the model term is the target);
+      `SMALL_DICT` was already on the current corpus (`n = 4,227` is stride 100
+      of the same 422,680-line held-out set), so only its frontier-price row
+      needed updating.
 - [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
       `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
       pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
