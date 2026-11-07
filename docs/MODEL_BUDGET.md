@@ -546,12 +546,17 @@ softens but survives:
 
 So a bigger word list is still the cheaper way to buy a point, but by 1.5–4×
 against the 8–25 kB/pt the `k` direction costs above 16, not by the 2–6× claimed
-when the rule table was omitted.  The mechanism is mechanical: a bigger word list
-shortens identifiers (held-out mean length falls 4.70 → 4.05 tokens from
-`V = 4096` to `8192`) and the 64-bit budget is dominated by the *long*
-identifiers, so `V` attacks the part of the distribution the threshold measures;
-a finer `k` only shaves the conditional entropy of tokens already inside an
-identifier.
+when the rule table was omitted.  Measured in the packed file the `V` prices hold
+(3.5 and 5.4 kB per bit, §7) but the `k` prices collapse, because the shipped
+curve turns over at 32: 16 → 24 costs 2.9 kB/pt, 24 → 32 costs 1.2, and past 32
+the step buys nothing at all.  That is a property of the Huffman code, not of the
+accounting: per-cluster trees see fewer tokens as `k` grows, and past 32 the
+noisier lengths cost as much as the finer partition buys.  Why `V` is different
+is mechanical: a bigger word list shortens identifiers (held-out mean length
+falls 4.70 → 4.05 tokens from `V = 4096` to `8192`) and the 64-bit budget is
+dominated by the *long* identifiers, so `V` attacks the part of the distribution
+the threshold measures; a finer `k` only shaves the conditional entropy of
+tokens already inside an identifier.
 
 ## 7. The size oracle
 

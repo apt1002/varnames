@@ -48,7 +48,7 @@ continues to 50.00 at `k = 128` (store 24,576), 48.96 at `k = 256` (73,728),
 bytes, and `scripts/model_size.py` measures them (`MODEL_BUDGET.md` §7).  At the
 cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
 
-| `V` | best `k` | word list | labels | depths | header | file | bits/id | fit ≤64 | fit ≤128 |
+| `V` | `k` | word list | labels | depths | header | file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 512 | 32 | 897 | 320 | 980 | 80 | 2,277 | 65.706 | 60.0 % | 94.5 % |
 | 4,096 | 32 | 9,825 | 2,560 | 3,220 | 80 | 15,685 | 48.926 | 80.4 % | 98.3 % |
@@ -72,8 +72,12 @@ cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
 * **The leftover still goes to `k`, but it has stopped paying much.**  Within
   `V = 8,192`, `k` from 8 to 32 buys 0.88 bits and 1.1 fit points for 2,663 B;
   from 32 to 64 it gives back 0.13 bits for another 2,964 B (`MODEL_BUDGET` §7).
+  At the smaller word lists the curve is flatter rather than overturned: at
+  4,096 the next step (`k = 64`) buys 0.24 bits for 2,452 B, 10 kB per bit, and
+  at 6,144 `k = 48` buys 0.29 bits for 1,863 B, 6.3 — both above the 2–6 kB/bit
+  the grid charges elsewhere, which is why the knees above are 32, 24 and 32.
   So the order of the two knobs is unchanged by the byte accounting: words
-  first, then the `k` the remaining bytes can justify, which is 32 at 8,192.
+  first, then the `k` the remaining bytes can justify.
 
 ## What it shows
 
