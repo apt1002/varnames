@@ -10,8 +10,8 @@ The decision rule that reads the result is spelled out below.  The shipped
 build keeps the constraint at `q = 1`: the file stores one label per word, the
 right cluster, and the left cluster is that label divided by `q` — the label
 itself at `q = 1` (`CLUSTER_QUARTERS.md`, `MODEL_FORMAT.md` §1).  Measured in
-the packed file the constraint is cheaper than the accounting thought: at
-`k = 32` the omitted second map is worth 0.03 bits for 5,120 B.
+the packed file at the operating point, the omitted second map is worth 0.32
+bits per identifier for 5,120 B — 16 kB per bit against a frontier at 3–5.
 
 ## The question
 
@@ -164,30 +164,45 @@ same way before it is quoted as a win.
 The tables above price the memberships in bits and the word list at a formula.
 `scripts/model_size.py` builds the same constraint in the shipped format — one
 shared assignment versus two independent ones — packs both, and decodes held-out
-identifiers through the packed file (`MODEL_BUDGET.md` §7).  `q = 1`, stride 10;
-"bought" is the bits the second map saves:
+identifiers through the packed file (`MODEL_BUDGET.md` §7).  `q = 1`, stride 10,
+no terminator in the word trees; "bought" is the bits per identifier the second
+map saves:
 
-| point | one map | bits/id | fit ≤64 | two maps | bits/id | fit ≤64 | saved | bought |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 4096, `k = 32` | 15,685 B | 48.926 | 80.4 % | 18,245 B | 48.287 | 80.9 % | 2,560 B | 0.64 bits |
-| 8192, `k = 16` | 30,612 B | 45.790 | 84.1 % | 34,708 B | 45.317 | 84.6 % | 4,096 B | 0.47 bits |
-| 8192, `k = 32` | 32,126 B | 45.221 | 84.8 % | 37,246 B | 45.190 | 84.8 % | 5,120 B | 0.03 bits |
+| point | one map | bits/id | fit ≤64 | two maps | bits/id | fit ≤64 | the map costs | buys | per bit |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 4096, `k = 16` | 14,659 B | 48.982 | 80.5 % | 16,707 B | 48.973 | 80.6 % | 2,048 B | 0.009 bits | 228 kB |
+| 8192, `k = 16` | 30,571 B | 45.676 | 84.5 % | 34,667 B | 45.128 | 85.1 % | 4,096 B | 0.548 bits | 7.5 kB |
+| 8192, `k = 32` | 32,085 B | 45.217 | 85.0 % | 37,205 B | 44.898 | 85.3 % | 5,120 B | 0.319 bits | 16.0 kB |
 
-* **The constraint's price falls with `k`**, faster than the accounting
-  predicted: 0.47 bits at `k = 16`, 0.03 at `k = 32` — 8.7 and 170 kB per bit,
-  against a frontier that charges 3.9–5.5.  Once the clusters are fine enough, a
-  word's successor and predecessor profiles agree well enough that a second
-  assignment adds almost nothing.  (These are Huffman-code numbers from a
-  different model than the `assoc` table's 0.19–0.33 bits above; read the
-  gradient, not the level.)
-* **At `V = 4,096, k = 32` the two are nearly tied**: 2,560 B for 0.64 bits
-  (4.0 kB/bit) and +0.5 pt of fit (5.1 kB/pt), both at the frontier's own rate.
-  The size of the model is what decides, exactly as the decision rule says.
+* **The constraint's price falls with `k`; the second map's price rises.**  The
+  bits forgone by keeping one map are 0.55 at `k = 16` and 0.32 at `k = 32`,
+  while the second map's own bytes grow from 4,096 to 5,120.  So per bit bought
+  the second map goes from 7.5 kB to 16.0 kB — away from the frontier's 3–5 kB
+  per bit, not towards it.  Once the clusters are fine enough, a word's
+  successor and predecessor profiles agree well enough that a second assignment
+  adds almost nothing, which is the prediction of "Why it might pay" confirmed
+  in bytes rather than in the `assoc` accounting.
+* **At `V = 4,096, k = 16` the question does not arise**: 2,048 B buys 0.009
+  bits and 0.1 fit point, which is 228 kB per bit — the dearest of the three.
+  In the smallest model the clusters are coarse enough that the left and right
+  profiles agree least, and yet the extra resolution is still worth nothing:
+  what binds there is the size of the word list, not the memberships.
 * **The map that is dropped is the left one.**  The packed file stores one
   label per word — the right cluster — and derives the left cluster from it
-  (divided by `q`, so unchanged at `q = 1`).  A two-map file adds `V log₂ k`
-  bits beside those labels: 2,560 B at `k = 32, V = 4,096` and 5,120 B at
-  `k = 32, V = 8,192`.
+  (divided by `q`, so unchanged at `q = 1`).  A two-map file adds `V · ⌈log₂k⌉`
+  bits beside those labels: 2,048 B at `k = 16, V = 4,096`, 4,096 B at
+  `k = 16, V = 8,192`, 5,120 B at `k = 32, V = 8,192`.
+
+### One map is worth its constraint
+
+The conclusion this note exists to support: **the single membership map is not a
+compromise, it is the cheaper design**, and it gets cheaper as the model gets
+finer.  At the operating point a second map would cost 5,120 B to buy 0.32 bits,
+where the frontier sells bits for 3–5 kB (`MODEL_BUDGET.md` §6) — 3–5× too dear.
+The constraint also removes an entire object a decoder would otherwise have to
+validate (two maps must agree on the split, `q` labels per left cluster), and it
+is what lets `k` be fine at all: the map is `V · ⌈log₂k⌉` bits, so at `k = 64` a
+second map alone would be 6,144 B, more than the whole top stage.
 
 ### Verdict
 

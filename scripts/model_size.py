@@ -16,27 +16,33 @@ The build
     truncated Huffman per cluster    ->  q right clusters, depths inside them
     Huffman per left cluster         ->  k top trees of k*q leaves
 
-Symbol numbering is the file's (`MODEL_FORMAT.md` §2): id 0 is the stop, the
-characters are ids 1..len(alphabet), the words follow.  A build numbers the
-characters 0..62 and the stop 63, so the codec shifts the characters by one and
-maps the stop to 0.  That shift is not cosmetic: it is what puts the stop first
-in every tree's canonical order.
+Symbol numbering is the file's (`MODEL_FORMAT.md` §2): the characters are ids
+`0 .. len(alphabet)-1` and the words follow.  There is no stop symbol in the
+file, so `to_file_id` only has to drop the tokeniser's trailing stop.
 
 The terminator
 --------------
 The stop is never written; the padding zeros are its codeword.  The padding meets
 the *top* stage first, so each top tree carries one extra leaf: a zero-weight
-**STOP** leaf 0, which is therefore the deepest leaf of that tree.  Both stages
-then use one convention, and it is the mirror of DEFLATE's: the all-zeros
-codeword belongs to the *first* leaf at the **maximum** depth, and the remaining
-codes are handed out in ascending depth order from the far end of the space.
+**STOP** leaf 0, which is therefore the deepest leaf of that tree.  The bottoms
+need no stop leaf — the identifier simply does not continue.  Both stages use
+one convention, the mirror of DEFLATE's: the all-zeros codeword belongs to the
+*first* leaf at the **maximum** depth, and the remaining codes are handed out in
+ascending depth order from the far end of the space.  So the top STOP leaf takes
+code 0, and the file needs no orientation table.  The orientation is derivable
+from the depths and the labels alone, so nothing is stored for it;
+`check_terminator` asserts it on the built model.
 
-  * bottom trees: symbol 0 is the zero-weight leaf, so it takes code 0;
-  * top trees: leaf 0 is STOP, so it takes code 0; the stop's own bottom leaf
-    exists only to keep symbol 0 in the alphabet.
-
-The orientation is derivable from the depths and the labels, so the file needs no
-orientation table; `check_terminator` asserts it on the built model.
+The start state
+---------------
+The corpus tokeniser emits a stop token, so its adjacency matrix is `V0 x V0`
+with `V0 = V + 1` counting the stop.  The stop's *row* is the distribution of
+the first token, so it survives as the start state and is folded into one top
+tree; its *column* does not, because nothing is coded after the end of an
+identifier.  The matrix is therefore `V0 x (V0-1)` — the `V x (V-1)` of
+`MODEL_FORMAT.md` — and the file has `V` symbols.  The start state belongs to
+left cluster 0 by convention; the build picks the cluster that codes the
+first-token distribution cheapest and renumbers the labels so that one is 0.
 
 `--flat` measures the flat yardstick instead: one Huffman tree per left cluster
 over all `V` words, which is the upper bound `docs/MODEL_BUDGET.md` §5.3 prices
@@ -50,7 +56,6 @@ import argparse
 import json
 import os
 import sys
-import zlib
 
 import numpy as np
 
@@ -62,8 +67,7 @@ import cluster_substrings_lib as csl
 import model_fit_rates as mfr
 from quarter_accounting import huffman
 
-MAGIC = b'VNAM'
-VERSION = 1
+MAGIC = b'NVM1'
 ZIPF_EXPONENT = 0.7
 
 
@@ -256,11 +260,19 @@ def zipf_prefix(V, scale_bits=20):
 
 # ------------------------------------------------------- canonical codes
 
-def canonical_codes(depths, mode='max'):
+def canonical_codes(depths, mode='max', complete=True):
     """Canonical codes for one tree, from the depths.
 
     ``mode='min'``: code 0 belongs to the lowest label at the minimum depth.
     ``mode='max'``: code 0 belongs to the lowest label at the maximum depth.
+
+    ``complete=False`` admits a tree whose Kraft sum is below one, whose
+    codewords leave holes in the space.  Such a code is still prefix-free and
+    still decodable — nothing the encoder emits lands in a hole — but the holes
+    are wasted code space.  It is passed for ``q > 1``, where a truncated build
+    is only guaranteed to tile the space if each survivor's leaves land at the
+    same depth: measured at ``q = 2`` on 8192/16 every tree *is* complete
+    (Kraft 1.0000 on all 32), so the flag is a guard, not a cost.
 
     Returns ``codes`` as a list of ``(value, length)`` indexed by leaf position.
     """
@@ -290,13 +302,17 @@ def canonical_codes(depths, mode='max'):
     # complete and prefix-free, checked without allocating the code space
     maxd = max(depths)
     total = sum(1 << (maxd - d) for d in depths)
-    assert total == 1 << maxd, f'not complete: Kraft {total} != 2^{maxd}'
+    if complete:
+        assert total == 1 << maxd, f'not complete: Kraft {total} != 2^{maxd}'
+    else:
+        assert total <= 1 << maxd, f'over-full: Kraft {total} > 2^{maxd}'
     spans = sorted((v << (maxd - L), 1 << (maxd - L)) for v, L in codes)
     free = 0
     for start, blk in spans:
         assert start == free, 'not prefix-free or not complete'
         free = start + blk
-    assert free == 1 << maxd, 'codes do not cover the space'
+    if complete:
+        assert free == 1 << maxd, 'codes do not cover the space'
     return codes
 
 
@@ -317,26 +333,64 @@ def walk(book, maxlen, read_bit):
 
 # ------------------------------------------------------------ the build
 
-def huffman_trunc(weights, survivors):
+def huffman_trunc(weights, survivors, bias=False):
     """Huffman depths, stopping the merge at `survivors` trees.
 
     `quarter_accounting.huffman` returns one group when `n <= stop_at`; the
     truncation at `n` survivors must return `n` singletons instead.
+
+    `bias` adds the depth-flattening offset of `MODEL_FORMAT.md` §3 to every
+    leaf *before* the merge, so that the depths of every tree span at most 15
+    levels and the field can be 4 bits.  Zero-weight leaves are left alone: they
+    are the terminator, and they must stay deepest.
+
+    The starting bias is the larger of the two conditions that between them
+    bound the span, both on the biased weights `q`:
+
+    * the ratio `q_max / q_min <= 2^15` bounds the gap in *ideal* depths;
+    * the floor `q_min >= 2^-15` bounds the *Huffman* gap, because the
+      shallowest leaf is never shorter than one bit while the deepest can run a
+      couple of bits past `-log2 q_min`.
+
+    Neither is sufficient on its own — measured at 8192/32 the ratio alone gives
+    a span of 17 and the pair a span of 16 — so the bias is doubled until the
+    built tree actually spans 15 or less.  Each doubling costs a little fit and
+    the loop starts from the smallest bias the two conditions allow.
     """
     n = len(weights)
     if survivors >= n:
         return np.zeros(n), 0.0, [[i] for i in range(n)]
-    return huffman(weights, stop_at=survivors)
+    w = np.asarray(weights, dtype=np.float64)
+    if not bias:
+        return huffman(w, stop_at=survivors)
+    live = w[w > 0]
+    if live.size <= 1:
+        return huffman(w, stop_at=survivors)
+    pmax, pmin = float(live.max()), float(live.min())
+    b = max(0.0,
+            (pmax - 32768.0 * pmin) / 32767.0,
+            float(live.sum()) / 32768.0 - pmin)
+    for _ in range(24):
+        lens, cost, groups = huffman(np.where(w > 0, w + b, w),
+                                     stop_at=survivors)
+        if int(lens.max()) - int(lens.min()) <= 15 or b <= 0.0:
+            return lens, cost, groups
+        b = b * 2.0
+    return lens, cost, groups
 
 
 def to_file_id(i, nchars):
-    """Build symbol id -> file symbol id (stop 0, characters 1..n)."""
+    """Build symbol id -> file symbol id.
+
+    The build's own numbering has the stop as symbol `nchars`, because the
+    corpus tokeniser emits it.  The file has no stop: its characters are ids
+    `0 .. nchars-1` and its words follow, so every build id above the stop
+    shifts down by one.
+    """
     i = int(i)
     if i == nchars:
-        return 0
-    if i < nchars:
-        return i + 1
-    return i
+        raise ValueError('the stop is not a symbol of the file')
+    return i if i < nchars else i - 1
 
 
 def shared_labels(M, k, rng, weight=1.0, block=512):
@@ -356,96 +410,148 @@ def shared_labels(M, k, rng, weight=1.0, block=512):
     return labels.astype(np.int64)
 
 
-def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
-                shared_weight=1.0, stop_weight='zero', reserve_stop=False):
-    """Build the model tables from a dictionary directory."""
-    chars, rules, sym = tw.load_dictionary(directory)
-    M, uni, _, _, _ = hf.dense_matrix(directory)
-    V, nchars = M.shape[0], len(chars)
-    stop = nchars
+def prepared_matrix(directory, kappa):
+    """The build's matrix: prior added, stop column dropped, stop row kept.
 
+    Returns `Mw` (V x V over the file's symbols), `start` (the V-vector of
+    first-token counts, i.e. the old stop row) and the dictionary.
+    """
+    chars, rules, _sym = tw.load_dictionary(directory)
+    M, _uni, _, _, _ = hf.dense_matrix(directory)
+    V0, nchars = M.shape[0], len(chars)
+    stop = nchars
     r0, c0, T0 = M.sum(1), M.sum(0), float(M.sum())
-    alpha = kappa * V
-    cb = alpha * c0 / T0
-    for i0 in range(0, V, 512):
+    cb = kappa * V0 * c0 / T0
+    for i0 in range(0, V0, 512):
         M[i0:i0 + 512] += np.outer(r0[i0:i0 + 512] / T0, cb)
     del cb, r0
-    c = M.sum(0)                       # unigram: the column mass
+    # rows: the symbols, plus the start state (the old stop row); columns: the
+    # symbols only.  A file id is a position in `keep`, so no shifting is left.
+    keep = np.ones(V0, dtype=bool)
+    keep[stop] = False
+    keep_idx = np.flatnonzero(keep)
+    start = M[stop, keep_idx].astype(np.float64)
+    Mw = M[np.ix_(keep_idx, keep_idx)]
+    del M
+    return dict(Mw=Mw, start=start, chars=chars, rules=rules, nchars=nchars,
+                V=V0 - 1)
+
+
+def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
+                shared_weight=1.0, bias=False):
+    """Build the model tables from a dictionary directory.
+
+    The file has no stop symbol.  The corpus tokeniser emits one, but it is not
+    a symbol of the model: it has no bottom leaf, no membership and no depth.
+    Its *row* of the adjacency matrix survives as the **start state**, which is
+    what makes the first token's distribution available to the top stage; its
+    column does not, because nothing is coded after the end of an identifier.
+    So the matrix loses a row and a column: `V0 x (V0-1)` for `V0 = V + 1`
+    tokens, which is the `V x (V-1)` of `MODEL_FORMAT.md` in its own numbering.
+
+    The start state needs a left cluster, and it is fixed by convention: the
+    identifier starts in left cluster 0.  The build chooses which cluster that
+    is — the one whose top tree codes the first-token distribution cheapest —
+    and then permutes the labels so it is numbered 0.
+    """
+    p = prepared_matrix(directory, kappa)
+    Mw, start, chars, rules = p['Mw'], p['start'], p['chars'], p['rules']
+    V, nchars = p['V'], p['nchars']
+    c = Mw.sum(0)                      # unigram: the column mass
 
     if shared:
-        lcl = rcl = shared_labels(M, k, np.random.default_rng(seed),
+        lcl = rcl = shared_labels(Mw, k, np.random.default_rng(seed),
                                   shared_weight)
     else:
-        lcl, _ = cw.cluster_axis(M, k, np.random.default_rng(seed), 0)
-        rcl, _ = cw.cluster_axis(M, k, np.random.default_rng(seed + 1), 1)
+        lcl, _ = cw.cluster_axis(Mw, k, np.random.default_rng(seed), 0)
+        rcl, _ = cw.cluster_axis(Mw, k, np.random.default_rng(seed + 1), 1)
 
     # ---- quarters: truncate each right cluster's Huffman build at q --------
     ql = np.zeros(V, dtype=np.int64)
     bot_depth = np.zeros(V, dtype=np.int64)
     empty = []
     for j in range(k):
-        words = np.flatnonzero(rcl == j)
-        if words.size == 0:
+        mem = np.flatnonzero(rcl == j)
+        if mem.size == 0:
             empty.append(j)
             continue
-        if reserve_stop and stop in words and words.size > 1:
-            rest = words[words != stop]
-            lens, _, groups = huffman_trunc(c[rest], max(1, q - 1))
-            for pos, i in enumerate(rest):
-                bot_depth[i] = int(lens[pos])
-            groups = [[stop]] + [[int(rest[i]) for i in g] for g in groups]
-        else:
-            w = c[words].astype(np.float64)
-            if stop_weight == 'zero' and stop in words:
-                w[list(words).index(stop)] = 0.0
-            lens, _, groups = huffman_trunc(w, q)
-            for pos, i in enumerate(words):
-                bot_depth[i] = int(lens[pos])
-            groups = [[int(words[i]) for i in g] for g in groups]
+        lens, _, groups = huffman_trunc(c[mem].astype(np.float64), q,
+                                        bias=bias)
+        for pos, i in enumerate(mem):
+            bot_depth[i] = int(lens[pos])
         for gi, g in enumerate(groups):
             for i in g:
-                ql[i] = j * q + gi
+                ql[mem[i]] = j * q + gi
     kq = k * q
     lcl = ql // q if shared else lcl
 
     # ---- top trees: mass of each quarter after each left cluster ----------
     # Leaf 0 is a zero-weight STOP leaf: the padding decodes as it, so the
     # terminator lives in the top stage and every identifier ends for free.
-    G = np.zeros((k, V))
-    np.add.at(G, lcl, M)
+    # `S[L][J]` is the mass from left cluster `L` into quarter `J`, so it must be
+    # accumulated over the rows of `L`.  When the maps are shared, the quarters
+    # of `L` are exactly `L*q .. L*q+q-1` and the two readings agree; when they
+    # are separate, a quarter holds words of several left clusters and only the
+    # row split is correct.
     S = np.zeros((k, kq))
     for L in range(k):
-        S[L] = np.bincount(ql, weights=G[L], minlength=kq)
-    top_depth = np.zeros((k, kq + 1), dtype=np.int64)
-    for L in range(k):
-        w = np.concatenate([[0.0], S[L]])
-        lens, _, _ = huffman_trunc(w, 1)
-        top_depth[L] = lens.astype(np.int64)
-    del G
+        rows = np.flatnonzero(lcl == L)
+        if rows.size:
+            S[L] = np.bincount(ql, weights=Mw[rows].sum(0), minlength=kq)
 
-    memberships = np.empty(V, dtype=np.int64)
-    file_bottom = np.empty(V, dtype=np.int64)
-    for s in range(V):
-        memberships[to_file_id(s, nchars)] = int(ql[s])
-        file_bottom[to_file_id(s, nchars)] = int(bot_depth[s])
+    def top_depths(Smass):
+        out = np.zeros((k, kq + 1), dtype=np.int64)
+        for L in range(k):
+            w = np.concatenate([[0.0], Smass[L]])
+            lens, _, _ = huffman_trunc(w, 1, bias=bias)
+            out[L] = lens.astype(np.int64)
+        return out
+
+    top_depth = top_depths(S)
+
+    # ---- where does the identifier start?  Left cluster 0, chosen cheapest --
+    # the start state enters the top stage as a distribution over quarters; the
+    # bottom step is the same in every left cluster, so it cannot change argmin
+    start_q = np.zeros(kq)
+    np.add.at(start_q, ql, start)
+    codes = [canonical_codes([int(x) for x in top_depth[L]])
+             for L in range(k)]
+    lens_L = np.array([[codes[L][1 + int(j)][1] for j in range(kq)]
+                       for L in range(k)])
+    L0 = int(np.argmin(lens_L @ start_q))
+    S[L0] += start_q                          # the start state joins its tree
+    top_depth = top_depths(S)
+
+    # renumber so the start's left cluster is 0.  A label permutes the trees
+    # *and* the leaves inside them, so both are reordered by the same `perm`.
+    perm = np.arange(k)
+    perm[0], perm[L0] = L0, 0
+    ql = perm[ql // q] * q + ql % q
+    # leaf `1 + J` holds quarter `J = j*q + g`, so relabelling right cluster
+    # `j` as `perm[j]` moves that leaf to `1 + perm[j]*q + g` — not to `1 + perm[J]`,
+    # which would truncate the tree whenever `q > 1`.
+    if kq > 1:
+        J = np.arange(kq)
+        leaves = 1 + perm[J // q] * q + J % q
+        top_depth = top_depth[perm][:, np.concatenate(([0], leaves))]
+    else:
+        top_depth = top_depth[perm]
+    lcl = ql // q if shared else perm[lcl]
+
     rules_file = [(to_file_id(a, nchars), to_file_id(b, nchars))
                   for _kind, (a, b), _nid in rules]
 
-    file_lcl = np.empty(V, dtype=np.int64)
-    for s in range(V):
-        file_lcl[to_file_id(s, nchars)] = int(lcl[s])
-
     return dict(directory=directory, alphabet=''.join(chars),
-                rules=rules_file, memberships=memberships, bottom=file_bottom,
-                top=top_depth, lcl=file_lcl, V=V, k=k, q=q, nchars=nchars,
-                stop_build=stop, empty=empty, shared=shared)
+                rules=rules_file, memberships=ql, bottom=bot_depth,
+                top=top_depth, lcl=np.asarray(lcl, dtype=np.int64),
+                V=V, k=k, q=q, nchars=nchars, start=L0, empty=empty,
+                shared=shared)
 
 
 # ------------------------------------------------------------- the YAML
 
 def model_yaml(m):
     lines = ['format: varnames-model',
-             f'version: {VERSION}',
              f'alphabet: {json.dumps(m["alphabet"])}',
              f'left_clusters: {m["k"]}',
              f'right_clusters_per_left: {m["q"]}',
@@ -504,10 +610,9 @@ def read_yaml(path):
             assert section is not None, line
             m[section].append(parse_flat_list(stripped[1:].strip()))
     assert m['format'] == 'varnames-model', m['format']
-    assert m['version'] == VERSION
     k, q = m['left_clusters'], m['right_clusters_per_left']
     nchars = len(m['alphabet'])
-    V = nchars + 1 + len(m['rules'])
+    V = nchars + len(m['rules'])
     assert len(m['memberships']) == V, (len(m['memberships']), V)
     assert len(m['bottom_trees']) == k * q
     assert len(m['top_trees']) == k
@@ -527,7 +632,7 @@ def read_yaml(path):
         assert sum(1 << (mx - d) for d in tree) == 1 << mx, \
             f'top tree {L} is not complete'
     for i, (a, b) in enumerate(m['rules']):
-        assert a != b and 0 <= a < nchars + 1 + i and 0 <= b < nchars + 1 + i
+        assert a != b and 0 <= a < nchars + i and 0 <= b < nchars + i
     bottom = np.zeros(V, dtype=np.int64)
     for J, tree in enumerate(m['bottom_trees']):
         ids = [i for i in range(V) if m['memberships'][i] == J]
@@ -550,7 +655,7 @@ def pack_rules(rules, V, nchars):
     prefix = zipf_prefix(V)
     enc = ArithEncoder()
     for i, (a, b) in enumerate(rules):
-        total = int(prefix[nchars + 1 + i])
+        total = int(prefix[nchars + i])
         for x in (a, b):
             enc.encode(int(prefix[x]), int(prefix[x + 1]), total)
     return enc.finish(), enc.bits
@@ -582,7 +687,6 @@ def pack(m, depth_bits=None, packed_rules=True):
         out.extend(data)
 
     add('magic', MAGIC)
-    add('version', bytes([VERSION]))
     add('header', varint(V) + varint(k) + varint(q) + varint(nchars))
     add('rules_length', varint(len(rules_data)))
     add('rules', rules_data)
@@ -611,7 +715,6 @@ def pack(m, depth_bits=None, packed_rules=True):
             bw.put(int(d), depth_bits)
     add('top_depths', bw.finish())
 
-    add('crc32', zlib.crc32(bytes(out)).to_bytes(4, 'little'))
     return bytes(out), sections
 
 
@@ -619,9 +722,6 @@ def unpack(buf, packed_rules=True):
     """Read the binary back; the only thing the decoder sees."""
     assert buf[:4] == MAGIC, 'bad magic'
     pos = 4
-    version = buf[pos]
-    assert version == VERSION
-    pos += 1
     V, pos = read_varint(buf, pos)
     k, pos = read_varint(buf, pos)
     q, pos = read_varint(buf, pos)
@@ -632,22 +732,22 @@ def unpack(buf, packed_rules=True):
     if packed_rules:
         dec = ArithDecoder(buf[pos:pos + rules_len])
         rules = []
-        for i in range(V - 1 - nchars):
-            total = int(prefix[nchars + 1 + i])
+        for i in range(V - nchars):
+            total = int(prefix[nchars + i])
             pair = []
             for _ in range(2):
                 t = dec.target(total)
                 x = int(np.searchsorted(prefix, t, side='right') - 1)
-                assert 0 <= x < nchars + 1 + i, (i, x)
+                assert 0 <= x < nchars + i, (i, x)
                 dec.update(int(prefix[x]), int(prefix[x + 1]), total)
                 pair.append(x)
             rules.append(tuple(pair))
     else:
         br = BitReader(buf[pos:pos + rules_len])
         width = ceil_log2(V)
-        children = [br.get(width) for _ in range(2 * (V - 1 - nchars))]
+        children = [br.get(width) for _ in range(2 * (V - nchars))]
         rules = [tuple(children[2 * i:2 * i + 2])
-                 for i in range(V - 1 - nchars)]
+                 for i in range(V - nchars)]
     pos += rules_len
     alphabet = buf[pos:pos + nchars].decode('ascii')
     pos += nchars
@@ -675,9 +775,6 @@ def unpack(buf, packed_rules=True):
     for L in range(k):
         for J in range(kq + 1):
             top[L, J] = br.get(depth_bits)
-    crc = int.from_bytes(buf[pos:pos + 4], 'little')
-    assert crc == zlib.crc32(buf[:pos]), 'CRC mismatch'
-    pos += 4
     assert pos == len(buf), (pos, len(buf))
     return dict(alphabet=alphabet, rules=[list(p) for p in rules],
                 memberships=list(memberships), bottom=bottom, top=top,
@@ -697,7 +794,7 @@ def codes_from(m, lcl):
             bottom[J] = None
             continue
         depths = [int(m['bottom'][i]) for i in ids]
-        coded = canonical_codes(depths, mode='max')
+        coded = canonical_codes(depths, mode='max', complete=(m['q'] == 1))
         bottom[J] = dict(ids=[int(i) for i in ids], codes=coded,
                          book=codebook(coded), maxlen=max(depths))
     top = {}
@@ -710,56 +807,44 @@ def codes_from(m, lcl):
 
 def check_terminator(m):
     """The conditions that make the padding decode as the terminator."""
-    memberships = np.asarray(m['memberships'])
     problems = []
     for L in range(m['k']):
         dep = [int(x) for x in m['top'][L]]
         if len(dep) > 1 and dep[0] != max(dep):
             problems.append(f'top tree {L}: the STOP leaf is at depth {dep[0]}, '
                             f'not the maximum {max(dep)}')
-    J = int(memberships[0])
-    ids = np.flatnonzero(memberships == J)
-    dep = [int(m['bottom'][i]) for i in ids]
-    if len(ids) > 1 and int(m['bottom'][0]) != max(dep):
-        problems.append(f'bottom tree {J}: the stop is at depth '
-                        f'{int(m["bottom"][0])}, not the maximum {max(dep)}')
     return problems
 
 
-def encode(seq, m, lcl, bottom, top, write_stop=False, strip=True):
-    """Bits of one identifier (list of file symbol ids ending in the stop).
+def encode(seq, m, lcl, bottom, top, write_stop=False):
+    """Bits of one identifier.
 
-    The stop's codeword is not written -- the padding supplies it -- and the
-    trailing zeros of the last real codeword need not be either.
+    `seq` is a list of file symbol ids — there is no stop among them.  The code
+    alternates (right cluster | left cluster) and (symbol | right cluster),
+    starting in left cluster 0, and ends with the STOP leaf of the last top
+    tree.  The STOP codeword is all zeros, so writing it changes nothing: the
+    padding supplies it, and the trailing zeros of the last real codeword are
+    not stored either.  `write_stop` keeps them, for the nominal-length count.
     """
     bits = []
-    u = 0
+
+    def put(code):
+        v, L = code
+        for pos in range(L - 1, -1, -1):
+            bits.append((v >> pos) & 1)
+
+    L = 0
     for v in seq:
-        if v == 0:
-            if not write_stop:
-                break               # the padding is the terminator
-            # the old convention: the stop as an ordinary symbol (top + bottom)
-            J = int(m['memberships'][0])
-            t = top[lcl[u]]['codes'][1 + J]
-            e = bottom[J]
-            c = e['codes'][e['ids'].index(0)]
-            for pos in range(t[1] - 1, -1, -1):
-                bits.append((t[0] >> pos) & 1)
-            for pos in range(c[1] - 1, -1, -1):
-                bits.append((c[0] >> pos) & 1)
-            break
         J = int(m['memberships'][v])
-        t = top[lcl[u]]['codes'][1 + J]
-        for pos in range(t[1] - 1, -1, -1):
-            bits.append((t[0] >> pos) & 1)
+        put(top[L]['codes'][1 + J])
         e = bottom[J]
-        c = e['codes'][e['ids'].index(v)]
-        for pos in range(c[1] - 1, -1, -1):
-            bits.append((c[0] >> pos) & 1)
-        u = v
-    if strip:
-        while bits and bits[-1] == 0:
-            bits.pop()
+        put(e['codes'][e['ids'].index(int(v))])
+        L = int(lcl[v])
+    put(top[L]['codes'][0])          # the STOP leaf: all zeros
+    if write_stop:
+        return bits
+    while bits and bits[-1] == 0:
+        bits.pop()
     return bits
 
 
@@ -770,7 +855,7 @@ def decode(bits, m, lcl, bottom, top, limit=100000):
         return next(it, 0)          # past the end: padding zeros
 
     out = []
-    L = lcl[0]
+    L = 0
     for _ in range(limit):
         slot = walk(top[L]['book'], top[L]['maxlen'], read_bit)
         if slot == 0:
@@ -780,55 +865,56 @@ def decode(bits, m, lcl, bottom, top, limit=100000):
         if e is None:
             raise ValueError(f'right cluster {J} is empty')
         v = e['ids'][walk(e['book'], e['maxlen'], read_bit)]
-        if v == 0:
-            return out
         out.append(v)
-        L = lcl[v]
+        L = int(lcl[v])
     raise ValueError('did not terminate')
 
 
-def flat_model(directory, k, kappa=300.0, seed=1, stop_weight='zero'):
+def flat_model(directory, k, kappa=300.0, seed=1):
     """The flat yardstick: one Huffman tree per left cluster over all `V` words.
 
-    This is the code `ENCODING.md` 2 describes: the stop is a zero-weight leaf
-    of every tree, so the padding decodes as it in any context.  It is not
-    shippable (`k*V` lengths) and exists to bound what a Huffman code can do at
-    the same `(V, k)` under the shipped convention.
+    This is the code `ENCODING.md` 2 describes, at `q = 1`: each left cluster
+    has one tree of `V + 1` leaves, one per word plus the zero-weight STOP leaf
+    that terminates the identifier.  It is not shippable (`k*V` depths instead
+    of `V`) and exists to bound what a Huffman code can do at the same
+    `(V, k)` under the shipped convention.
     """
-    chars, rules, sym = tw.load_dictionary(directory)
-    M, _uni, _, _, _ = hf.dense_matrix(directory)
-    V, nchars = M.shape[0], len(chars)
-    stop = nchars
-    r0, c0, T0 = M.sum(1), M.sum(0), float(M.sum())
-    cb = kappa * V * c0 / T0
-    for i0 in range(0, V, 512):
-        M[i0:i0 + 512] += np.outer(r0[i0:i0 + 512] / T0, cb)
-    c = M.sum(0)
-    lcl, _ = cw.cluster_axis(M, k, np.random.default_rng(seed), 0)
+    p = prepared_matrix(directory, kappa)
+    Mw, start = p['Mw'], p['start']
+    V, nchars = p['V'], p['nchars']
+    lcl, _ = cw.cluster_axis(Mw, k, np.random.default_rng(seed), 0)
     G = np.zeros((k, V))
-    np.add.at(G, lcl, M)
-    del M
-    depths = np.zeros((k, V), dtype=np.int64)
-    for L in range(k):
-        w = G[L].astype(np.float64)
-        if stop_weight == 'zero':
-            w[stop] = 0.0
+    np.add.at(G, lcl, Mw)
+    del Mw
+
+    def one_tree(L):
+        w = np.concatenate([[0.0], G[L].astype(np.float64)])
         lens, _, _ = huffman_trunc(w, 1)
-        depths[L] = lens.astype(np.int64)
-    file_lcl = np.empty(V, dtype=np.int64)
-    file_depths = np.empty((k, V), dtype=np.int64)
-    for s in range(V):
-        f = to_file_id(s, nchars)
-        file_lcl[f] = int(lcl[s])
-        file_depths[:, f] = depths[:, s]
-    return dict(depths=file_depths, lcl=file_lcl, k=k, V=V, nchars=nchars,
+        return lens.astype(np.int64)
+
+    depths = np.zeros((k, V + 1), dtype=np.int64)       # position 0 = STOP
+    for L in range(k):
+        depths[L] = one_tree(L)
+    # the start state joins the left cluster that codes it cheapest, then that
+    # cluster is renumbered 0 — the same convention as the shipped build
+    codes = [canonical_codes([int(x) for x in depths[L]]) for L in range(k)]
+    lens_L = np.array([[codes[L][1 + int(v)][1] for v in range(V)]
+                       for L in range(k)])
+    L0 = int(np.argmin(lens_L @ start))
+    G[L0] += start
+    depths[L0] = one_tree(L0)
+    perm = np.arange(k)
+    perm[0], perm[L0] = L0, 0
+    lcl = perm[lcl]
+    depths = depths[perm]
+    return dict(depths=depths, lcl=lcl, k=k, V=V, nchars=nchars,
                 rules=[(to_file_id(a, nchars), to_file_id(b, nchars))
-                       for _kind, (a, b), _nid in rules],
-                alphabet=''.join(chars))
+                       for _kind, (a, b), _nid in p['rules']],
+                alphabet=''.join(p['chars']))
 
 
 def flat_report(args):
-    m = flat_model(args.dir, args.k, args.kappa, args.seed, args.stop_weight)
+    m = flat_model(args.dir, args.k, args.kappa, args.seed)
     V, k = m['V'], m['k']
     books = []
     for L in range(k):
@@ -836,21 +922,15 @@ def flat_report(args):
         books.append(dict(codes=codes, book=codebook(codes),
                           maxlen=int(m['depths'][L].max())))
     width = max(1, int(m['depths'].max()).bit_length())
-    prefix = zipf_prefix(V)
-    enc = ArithEncoder()
-    for i, (a, b) in enumerate(m['rules']):
-        total = int(prefix[m['nchars'] + 1 + i])
-        for x in (a, b):
-            enc.encode(int(prefix[x]), int(prefix[x + 1]), total)
-    rules_bytes = len(enc.finish())
+    rules_bytes = len(pack_rules(m['rules'], V, m['nchars'])[0])
     map_bits = ceil_log2(k)
-    code_bytes = (k * V * width + 7) // 8
+    code_bytes = (k * (V + 1) * width + 7) // 8
     map_bytes = (V * map_bits + 7) // 8
-    total = (4 + 1 + 5 + 2 + rules_bytes + len(m['alphabet']) + map_bytes
-             + 1 + code_bytes + 4)
+    total = (4 + 5 + 2 + rules_bytes + m['nchars'] + map_bytes + 1
+             + code_bytes)
     print(f"{args.dir}: flat yardstick V={V}, k={k}, depth field {width} bits, "
           f"max depth {int(m['depths'].max())}")
-    print(f'  codebook {code_bytes} B ({k} trees of {V} depths), map '
+    print(f'  codebook {code_bytes} B ({k} trees of {V + 1} depths), map '
           f'{map_bytes} B, rules {rules_bytes} B, total {total} B')
 
     lines = tw.read_lines(args.validation, stride=args.stride)
@@ -859,26 +939,23 @@ def flat_report(args):
     nchars = m['nchars']
     written, bad = [], 0
     for seq in seqs:
-        fseq = [to_file_id(s, nchars) for s in seq]
+        assert seq[-1] == nchars
+        fseq = [to_file_id(s, nchars) for s in seq[:-1]]
         bits = []
-        u = 0
+        L = 0
         for v in fseq:
-            if v == 0:
-                break
-            c = books[m['lcl'][u]]['codes'][v]
+            c = books[L]['codes'][1 + v]
             for pos in range(c[1] - 1, -1, -1):
                 bits.append((c[0] >> pos) & 1)
-            u = v
-        while bits and bits[-1] == 0:
+            L = int(m['lcl'][v])
+        while bits and bits[-1] == 0:       # the STOP codeword is all zeros
             bits.pop()
         # decode the same stream: one stage, padding ends it.  The word budget
-        # is known, so the loop is bounded; the terminator must then be the
-        # stop leaf.  (Unbounded padding reads would follow the all-zeros path
-        # into a fresh leaf every time.)
+        # is known, so the loop is bounded; the terminator must then be leaf 0.
         it = iter(bits)
         read = lambda: next(it, 0)
-        out, L, ok = [], m['lcl'][0], True
-        for _ in range(len(fseq) - 1):
+        out, L, ok = [], 0, True
+        for _ in range(len(fseq)):
             try:
                 v = walk(books[L]['book'], books[L]['maxlen'], read)
             except ValueError:
@@ -887,14 +964,14 @@ def flat_report(args):
             if v == 0:
                 ok = False
                 break
-            out.append(v)
-            L = m['lcl'][v]
+            out.append(v - 1)
+            L = int(m['lcl'][v - 1])
         if ok:
             try:
                 ok = walk(books[L]['book'], books[L]['maxlen'], read) == 0
             except ValueError:
                 ok = False
-        if not ok or out != fseq[:-1]:
+        if not ok or out != fseq:
             bad += 1
         written.append(len(bits))
     written = np.array(written)
@@ -908,28 +985,36 @@ def flat_report(args):
 
 def self_test():
     """The worked example of MODEL_FORMAT.md §5, end to end."""
-    m = dict(V=8, k=2, q=2, nchars=5, alphabet='abcde', rules=[(1, 2), (6, 3)],
-             memberships=[3, 0, 1, 2, 2, 2, 1, 3],
-             bottom=np.array([1, 0, 1, 1, 2, 2, 1, 1]),
+    m = dict(V=7, k=2, q=2, nchars=5, alphabet='abcde',
+             rules=[(1, 2), (3, 4)],
+             memberships=[0, 1, 2, 2, 2, 1, 3],
+             bottom=np.array([0, 1, 1, 2, 2, 1, 0]),
              top=np.array([[4, 1, 2, 3, 4], [4, 2, 1, 3, 4]]))
     lcl = [i // m['q'] for i in m['memberships']]
     bottom, top = codes_from(m, lcl)
     assert check_terminator(m) == [], check_terminator(m)
+    # the STOP leaf of every top tree is the all-zeros codeword
     assert ''.join(str(top[0]['codes'][0][0] >> p & 1)
                    for p in range(3, -1, -1)) == '0000'
+    assert ''.join(str(top[1]['codes'][0][0] >> p & 1)
+                   for p in range(3, -1, -1)) == '0000'
+    # right cluster 2 holds ids 2, 3, 4 at depths 1, 2, 2
     assert [''.join(str(c[0] >> p & 1) for p in range(c[1] - 1, -1, -1))
             for c in bottom[2]['codes']] == ['1', '00', '01']
-    for name, seq, want in (('a', [1, 0], '01'),
-                            ('ab', [1, 2, 0], '0101'),
-                            ('abc', [1, 2, 3, 0], '010100011')):
+    # a one-symbol right cluster spends nothing on the word step
+    assert bottom[0]['codes'] == [(0, 0)]
+    for name, seq, want in (('b', [1], '01'),
+                            ('bc', [1, 2], '0100011'),
+                            ('abc', [0, 1, 2], '10100011')):
         got = encode(seq, m, lcl, bottom, top)
         assert ''.join(map(str, got)) == want, (name, got, want)
-        assert decode(got, m, lcl, bottom, top) == seq[:-1], name
+        assert decode(got, m, lcl, bottom, top) == seq, name
     buf, sections = pack(m)
     back = unpack(buf)
     assert list(back['memberships']) == m['memberships']
     assert np.array_equal(back['bottom'], m['bottom'])
     assert np.array_equal(back['top'], m['top'])
+    assert [tuple(p) for p in back['rules']] == m['rules']
     print(f'self-test ok: {len(buf)} B packed, sections '
           + ', '.join(f'{k}={v}' for k, v in sections.items()
                       if not k.endswith('_bits')))
@@ -947,8 +1032,8 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--assignment', default='one', choices=('one', 'two'))
     ap.add_argument('--shared-weight', type=float, default=1.0)
-    ap.add_argument('--stop-weight', default='zero', choices=('zero', 'mass'))
-    ap.add_argument('--reserve-stop', action='store_true')
+    ap.add_argument('--depth-bias', action='store_true',
+                    help='flatten the depths before the Huffman build')
     ap.add_argument('--validation', default='work/camel/merged_validation.txt')
     ap.add_argument('--stride', type=int, default=10)
     ap.add_argument('--yaml', default='')
@@ -967,12 +1052,10 @@ def main():
     m = build_model(args.dir, args.k, args.q, args.kappa, args.seed,
                     shared=(args.assignment == 'one'),
                     shared_weight=args.shared_weight,
-                    stop_weight=args.stop_weight,
-                    reserve_stop=args.reserve_stop)
+                    bias=args.depth_bias)
     V, k, q, kq = m['V'], m['k'], m['q'], m['k'] * m['q']
     tag = (f'{args.dir}: V={V}, k={k}, q={q}, assignment={args.assignment}, '
-           f'stop weight={args.stop_weight}'
-           + (', stop reserved' if args.reserve_stop else ''))
+           )
     print(tag)
     if m['empty']:
         print(f'  empty right clusters: {len(m["empty"])} of {k}')
@@ -986,8 +1069,14 @@ def main():
     bd = np.asarray(m['bottom'], dtype=int)
     td = np.asarray(m['top'], dtype=int)
     width_needed = max(1, int(max(bd.max(), td.max())).bit_length())
+    mem = np.asarray(m['memberships'], dtype=int)
+    bspan = max(int(bd[mem == J].max() - bd[mem == J].min())
+                for J in range(kq) if (mem == J).any())
+    tspan = max(int(td[L, 1:].max() - td[L, 1:].min()) for L in range(k))
+    span_field = max(1, max(bspan, tspan).bit_length())
     print(f'  depths: bottom max {bd.max()}, top max {td.max()}, '
-          f'field {width_needed} bits')
+          f'field {width_needed} bits; per-tree span {max(bspan, tspan)} '
+          f'(bottom {bspan}, top {tspan}), offset field {span_field} bits')
     counts = {d: int((bd == d).sum()) for d in range(int(bd.max()) + 1)}
     print('  bottom depths: ' + ' '.join(f'{d}:{counts[d]}' for d in counts
                                          if counts[d]))
@@ -1048,13 +1137,14 @@ def main():
 
     written, nominal, bad = [], [], 0
     for seq in seqs:
-        fseq = [to_file_id(s, nchars) for s in seq]
+        assert seq[-1] == nchars, 'the tokeniser ends an identifier with the stop'
+        fseq = [to_file_id(s, nchars) for s in seq[:-1]]
         w = encode(fseq, back, lcl, b_bottom, b_top)
-        if decode(w, back, lcl, b_bottom, b_top) != fseq[:-1]:
+        if decode(w, back, lcl, b_bottom, b_top) != fseq:
             bad += 1
         written.append(len(w))
         nominal.append(len(encode(fseq, back, lcl, b_bottom, b_top,
-                                  write_stop=True, strip=False)))
+                                  write_stop=True)))
     written = np.array(written)
     nominal = np.array(nominal)
     print(f'  held-out n={len(seqs)}: round-trip failures {bad}')
@@ -1075,8 +1165,6 @@ def main():
             json.dump(dict(dir=args.dir, V=V, k=k, q=q,
                            seed=args.seed,
                            assignment=args.assignment,
-                           stop_weight=args.stop_weight,
-                           reserve_stop=args.reserve_stop,
                            sections=sections, total=len(buf),
                            total_two_maps=len(buf) + extra_map,
                            plain=len(plain), yaml=len(text),

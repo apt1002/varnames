@@ -3,10 +3,13 @@
 Status: **results (grid).**  The clustering notes measure the model in
 "numbers" (`k² + 2V`); this note prices the model the standard publishes, in
 **bytes**, so the word list can be charged for and the size compared against the
-project's budget.  Two shapes of the same statistics are kept apart throughout:
-the **Huffman** code the standard publishes and the **arithmetic** reference the
-fit tables were measured on.  Everything below is computed at the canonical grid
-(`V = 4096 / 6144 / 8192`, `kappa = 300`) on the 10× held-out set
+project's budget.  **Every number below is a byte count from a file
+`scripts/model_size.py` packed and read back, or a fit rate from decoding
+identifiers through it.**  The arithmetic reference that used to stand beside
+those figures is gone: the format contains no arithmetic coder, so an arithmetic
+size was never a size the project could ship, and every decision it made has
+been re-taken on the measured Huffman code.  Everything below is computed at the
+canonical grid (`V = 4096 / 6144 / 8192`, `kappa = 300`) on the 10× held-out set
 (`n = 42,268`), except where a figure is marked as an estimate.  The inventory is
 stated once, so that no object is charged twice.  The pre-grid measurements are
 kept in "Pre-grid record" at the end.
@@ -15,34 +18,31 @@ kept in "Pre-grid record" at the end.
 
 The model is a word list and three tables.  The design is nearly settled:
 
-* **The word list.**  A pair-merge dictionary: `V` symbols in total, of which 64
-  are implicit — the 63 characters and the stop `\n` — and the remaining
-  `V − 64` (`4,032` / `6,080` / `8,128`) are merge rules.  A rule is `P a b`:
-  two integers less than `V`, both defined earlier in the list than the rule
-  itself.  The decoder replays the rules, so the word list is stored as pairs.
+* **The word list.**  A pair-merge dictionary: `V` symbols in total, of which the
+  63 characters are implicit and the other `V − 63` (`4,032` / `6,080` /
+  `8,128`) are merge rules.  A rule is `P a b`: two integers defined earlier in
+  the list than the rule itself.  The decoder replays the rules, so the word
+  list is stored as pairs.
 * **The bottom stage: `k` Huffman trees with `V` leaves in total.**  One tree
   per cluster; its leaves are the words in that cluster, labelled by word index.
   A leaf's depth is its code length, so the trees carry `P(word | cluster)`; the
   word → cluster map carries the membership.  Together they are the cluster
   membership table and the unigram vector.
-* **The top stage: `k` Huffman trees with `k` leaves each.**  One tree per left
-  cluster, its leaves the right clusters `0 … k−1`.  That is the cluster ×
-  cluster adjacency matrix, row by row.
+* **The top stage: `k` Huffman trees with `k + 1` leaves each.**  One tree per
+  left cluster, its leaves the right clusters `0 … k−1` plus a zero-weight
+  STOP leaf.  That is the cluster × cluster adjacency matrix, row by row.
 
 Nothing else is published.  The 63 characters are implicit in the identifier
 syntax; the cluster → list-of-words index, the tree walks and the canonical code
-assignment are derived at load time.
+assignment are derived at load time.  There is no stop symbol in the file: an
+identifier ends when the top stage says so, so the corpus tokeniser's stop
+token has no leaf of its own (`MODEL_FORMAT.md` §1).
 
-How the tables are *generated* is a separate matter, and the tool chain is not
-settled.  What the research still has to settle — `kappa`, the clustering
-method, the choice of `k` — moves the parameters but not the structure.  The
-code as specified has one structural refinement: each left cluster can be split
-into `q` right clusters, so the right-hand alphabet is `kq` while the left stays
-`k`.  That is still three tables — the one map is one label per word, one bit
-wider, not a second assignment (`CLUSTER_QUARTERS.md` §"The structural cost",
-`MODEL_FORMAT.md` §1).  Measured, the split does not repay its extra label once
-the terminator is free, so the shipped model is `q = 1` and the refinement is
-priced, not used (`CLUSTER_QUARTERS.md`).
+How the tables are *generated* is a separate matter, and it does not reach the
+file.  A build may change its prior, its clustering method, its sample or its
+value of `k`; the format describes whatever tables it is handed, so such a
+change moves the numbers in this note and nothing else.  That is the property
+that lets the model be re-tuned after the format is fixed.
 
 For comparison, then, a candidate model is the triple `(V, k, q)`, which fixes
 its size once the cost per leaf and per index is fixed, plus one measurement:
@@ -62,8 +62,9 @@ The lengths are near-optimal: `len(s) ≈ −log₂ p(s)`, and the excess — th
 redundancy — is bounded by about the largest leaf probability plus a small
 constant.  That bound is why a Huffman code is affordable on the
 cluster-conditional distributions here, which are very skewed; the measured
-rounding is 0.024–0.038 bits per token (`CODING_OVERHEAD.md`).
-`CLUSTER_QUARTERS.md` uses the same bound to price the quarter code.
+rounding is 0.024–0.038 bits per token (`CODING_OVERHEAD.md`).  The bound is
+why a Huffman code is affordable at all; it is not a size, so nothing in this
+note is priced with it — every table below is a byte count from a packed file.
 
 What has to be published is the **lengths**, not the codewords.  Given one length
 per symbol, the code is assigned canonically, in the one direction that leaves
@@ -76,26 +77,24 @@ model.
 
 Three properties of the shipped code matter for the accounting:
 
-* **The terminator is a zero-weight leaf, one per stage.**  In a word tree it is
-  the stop; in a top tree it is the STOP leaf (`MODEL_FORMAT.md` §1).  Its
-  codeword is the all-zeros path and is never written: the padding *is* the
-  terminator.  Its own length is therefore free per identifier, and each tree is
-  built with that leaf's weight driven to zero so that the other symbols get the
-  lengths of the renormalised distribution (`ENCODING.md` §2).  The padding meets
-  the top stage first, so a top tree's STOP leaf is the one that ends an
-  identifier; the stop's own word-tree leaf is never read.
+* **The terminator is a zero-weight leaf in the top stage.**  Its codeword is
+  the all-zeros path and is never written: the padding *is* the terminator.  Its
+  own length is therefore free per identifier, and each top tree is built with
+  that leaf's weight driven to zero so that the other leaves get the lengths of
+  the renormalised distribution (`ENCODING.md` §2).  The word trees carry no
+  terminator: the padding meets the top stage first, so an identifier ends
+  before any word step.
 * **All trailing zeros are free, not just the stop's.**  The code sits in the low
   bits of the integer, so an integer's binary length already stops at its highest
   set bit: whatever zeros end the final codeword are indistinguishable from the
   terminator's padding and are never stored.  On a balanced code that is about
   `½ + ¼ + … = 1` bit per identifier, by luck.  The zero-weight stop and the
-  trailing zeros together are worth ~2 bits/identifier that an arithmetic coder
-  cannot match.
-* **The terminator leaves still cost a leaf each.**  The stop is one of the `V`
-  words and takes a leaf in its cluster's tree; every top tree pays one extra
-  depth for its STOP leaf (660 B rather than 640 B over the 32 trees at the
-  operating point).  They are in the model; they are just not in the
-  identifiers.
+  trailing zeros together are worth ~2 bits/identifier against a code that has
+  to spend bits on the end of the identifier, and this is the convention every
+  fit rate in this note is measured under.
+* **The terminator leaf still costs a depth.**  Every top tree pays one extra
+  depth for its STOP leaf — 660 B rather than 640 B over the 32 trees at the
+  operating point.  It is in the model; it is just not in the identifiers.
 
 ## 3. The best representation of a Huffman tree
 
@@ -127,56 +126,75 @@ be permuted without changing the tokenisation (see "The unigram in creation
 order" below), so the depth table carries whatever depth distribution the words
 happen to have.
 
-**Measured** (`scripts/model_size.py`, 5-bit field everywhere below): the deepest
-word tree is 21 at `V = 8192, k = 16` and 20 at `V = 4096`; the deepest top tree
-is 13 at `k = 16` and 22 at `k = 64`, and 20 on the `V = 512` build.  So 5 bits
-holds the whole grid, no tree needs length limiting, and the 6-bit possibility is
-closed.  The depth distribution is broad rather than peaked — at 8192/16 the word
-depths run from 0 (singletons) to 21, with 9–13 holding 7,700 of the 8,192
-leaves — which is why the field cannot be smaller: 4 bits would force a length
-limit, and that costs more bits per identifier than the 1 kB a wider field
-costs.
+**Measured** (`scripts/model_size.py`, 5-bit field everywhere below): on the
+whole grid the deepest word tree is **29**, at `8192, k = 8`, and that is a
+degenerate cluster of 16 words; the operating point is 23 and every other point
+is 27 or less.  The deepest top tree is 20, at `k = 64`.  So 5 bits holds the
+grid, no tree needs length limiting, and the 6-bit possibility is closed — but
+not with much room: one bad cluster at `k = 8` came within two levels of the
+ceiling.  The depth distribution is broad rather than peaked — at 8192/16 the
+word depths run from 0 (singletons) to 23 — which is why the field cannot simply
+be smaller: 4 bits would force a length limit, and a limit costs more bits per
+identifier than the 1.1 kB a wider field costs.  The way to 4 bits without a
+limit is to bias the weights before the build, and that is measured in
+[`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3: it holds every tree to a 15-level span,
+takes 1,156 B off the operating-point file, and does not move the fit rate.
 
-## 4. Theory: the Zipf model of word tree indices
+## 4. Coding the child indices
 
 The word list is itself a tree: rule `r` is `(a, b)` and both children are
-earlier than the rule.  A child index is therefore `< s`, the number of symbols
-defined when its rule was created, so `s ≤ V` and the naive `⌈log₂V⌉` is not the
-right cost.  The index stream is also strongly skewed: a low index is an old,
-frequent word, because the greedy rule always merges the most frequent adjacent
-pair, so creation order is roughly a frequency rank.  That makes the index
-distribution approximately Zipf, and a two-parameter prior over the index range
-fits it without storing anything:
+earlier than the rule, so a child index is below `N = len(alphabet) + r`.  The
+index stream is also strongly skewed: a low index is an old, frequent word,
+because the greedy rule always merges the most frequent adjacent pair, so
+creation order is roughly a frequency rank.
 
-    p(j) ∝ (j + 1)^−0.7,   j = 0 … s − 1.
+`scripts/rule_encoding.py` prices the grid of
+[`MODEL_FORMAT.md`](MODEL_FORMAT.md) §4 on the shipped 8,192-word list — 8,128
+rules, 16,256 child indices — and the best entry is what the file uses.  Bytes
+are for the whole list, bits per child index:
 
-Coding the index stream four ways (`scripts/model_budget.py --index-code`, and
-the empirical entropy of the index histogram for the last column):
+| encoding | bytes | bits/child |
+|---|---:|---:|
+| **Zipf `b = 3`, base 2, Pair** | **20,925** | **10.298** |
+| Zipf `b = 3`, base √e, Pair | 20,961 | 10.316 |
+| Zipf `b = 2`, base e, Pair | 20,983 | 10.326 |
+| Zipf `b = 3`, base e, Triangle | 21,162 | 10.415 |
+| Zipf `b = 2`, base 2, Pair | 21,416 | 10.539 |
+| Pair / Variable | 22,948 | 11.293 |
+| Square / Variable | 23,245 | 11.439 |
+| Triangle / Variable | 24,154 | 11.887 |
+| Pair / Fixed | 24,492 | 12.053 |
 
-| `V` | fixed `⌈log₂V⌉` | variable `⌈log₂s⌉` | Zipf `p(j) ∝ (j+1)^−0.7` | empirical optimum |
-|---:|---:|---:|---:|---:|
-| 4,096 | 12.1 kB (24.0 b/rule) | 11.2 (22.2) | **9.8 (19.5)** | 9.2 (18.2) |
-| 6,144 | 19.8 (26.0) | 17.8 (23.5) | **15.4 (20.2)** | 14.4 (19.0) |
-| 8,192 | 26.4 (26.0) | 24.5 (24.1) | **21.1 (20.8)** | 19.9 (19.6) |
+* **The skew inside `[0, N)` is the whole of the gain.**  Fixed width at
+  `⌈log₂ N⌉` per rule — the cheapest a fixed field can be, since the decoder
+  knows `r` — costs 24,492 B, and the geometric ladder 20,925 B.  A single
+  13-bit field for every child would cost 26,416 B.  Nothing comes from
+  `N < V`; all of it comes from coding the skew.
+* **Combining the pair never pays.**  Triangle maps `N²` ordered pairs into
+  `2N²` values, so it spends a full bit per rule before coding anything; Square
+  sends `(u, v)` and `(v, u)` to the same number, so it cannot be inverted, and
+  both orders occur in the list.  Pair — two numbers, each in `[0, N)` — is what
+  the file stores.
+* **The ladder beats the arithmetic coder it replaced**, by 184 B, and it needs
+  no arithmetic coder: the decoder computes the interval edges from `N` and `b`
+  with integer arithmetic (`N(2^i − 1) // 255` at base 2) and reads a
+  variable-width residual inside the interval it lands in.  Nothing is stored
+  for the code and nothing is computed at start-up beyond those divisions — the
+  rule list is read, not derived.
 
-So the answer to "can we get away with fewer than `log V` bits" is **yes, about
-20 % fewer** (19 / 22 / 20 % from 4,096 to 8,192), but almost all of it comes
-from coding the *skew within* `[0, s)`, not from `s < V`: variable-width buys
-7–10 %, and the Zipf prior buys another 12–14 % at no side-information cost.  The
-empirical optimum is a further 5–6 % away and would need the distribution stored,
-so it is not worth it.
+The empirical limit is close.  The pooled entropy of the absolute child index
+over `[0, V)` is 9.80 bits/child, i.e. 19,916 B, only 5 % below the ladder — and
+a code that reached it would have to store the distribution, which costs more
+than the 1 kB it saves.  Three tempting alternatives do **not** work, and the
+first two are worth stating because they look as if they should:
 
-Three tempting alternatives do **not** work, and the first two are worth stating
-because they look as if they should:
-
-* the *unigram* distribution is a poor code for child indices (43.4 kB at
-  `V = 11 758` on the pre-grid build, worse than plain uniform — the two
-  distributions are unrelated);
+* the *unigram* distribution is a poor code for child indices — worse than
+  plain uniform, because a rule's children are frequent *at the time it was
+  made* and the unigram is measured at the end;
 * the children come in index order only 54–55 % of the time (`a < b` 55.4 /
-  54.9 / 53.8 %), so there is no triangular saving;
-* storing the empirical distribution costs more than the 5–6 % it would save.
-
-`k_frontier.py` and every byte figure below charge the Zipf code.
+  54.9 / 53.8 % at 4,096 / 6,144 / 8,192), so there is no triangular saving —
+  and measured, the Triangle pairing is 1.2 kB dearer than Pair;
+* storing the empirical distribution costs more than the 5 % it would save.
 
 ## 5. The adopted design, priced
 
@@ -186,96 +204,86 @@ because they look as if they should:
 in the layout of [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3 and reports each
 section, so every number below is a byte count from a file the decoder read
 back.  The columns are the shipped code, `q = 1`, so the map is `⌈log₂ k⌉` bits
-wide; the right-hand column is the operating point of §7.
+wide; the right-hand column is the operating point.
 
 | object | who stores it | how | 4096/16 | 8192/16 | 8192/32 | derivable at load? |
 |---|---|---|---:|---:|---:|---|
-| word list — rules | the decoder | Zipf-coded child indices | 9,825 | 21,145 | 21,145 | no |
+| word list — rules | the decoder | geometric-ladder child indices (§4) | 9,806 | 21,109 | 21,109 | no |
 | bottom — depths | the decoder | `V` depths, 5-bit field | 2,560 | 5,120 | 5,120 | no |
 | bottom — cluster map | the decoder | `V` labels, 4 or 5 bits | 2,048 | 4,096 | 5,120 | no |
 | top — depths | the decoder | `k(k+1)` depths, 5-bit field | 170 | 170 | 660 | no |
-| header, alphabet, CRC | the decoder | magic, version, varints, 63 bytes | 80 | 81 | 81 | — |
-| terminator | — | the all-zeros paths | 0 | 0 | 0 | yes |
+| header, alphabet, depth width | the decoder | magic, varints, 63 bytes | 75 | 76 | 76 | — |
+| terminator | — | the all-zeros path | 0 | 0 | 0 | yes |
 | padding | — | high zero bits of the integer | 0 | 0 | 0 | yes |
 | cluster → words index | — | from the map | 0 | 0 | 0 | yes |
 | canonical codes | — | from the depths | 0 | 0 | 0 | yes |
 | program code | the library | — | 2,048 | 2,048 | 2,048 | — |
-| **total** | | | **16,731** | **32,660** | **34,174** |
+| **total** | | | **16,707** | **32,619** | **34,133** |
 
-The depth field is **5 bits measured**: the deepest word tree on the grid is 21
-and the deepest top tree 22 (at `k = 64`), both well inside 31, so nothing needs
-length limiting and the 6-bit contingency is closed (`MODEL_FORMAT.md` §3).
+The depth field is **5 bits measured**: the deepest word tree on the grid is 29
+and the deepest top tree 19, both inside 31, so nothing needs length limiting
+(`MODEL_FORMAT.md` §3).  It is 5 rather than 4 because one tree at 8192/32 spans
+18 levels; the weight bias of `MODEL_FORMAT.md` §3 holds every tree to 15 and
+would make the field 4 bits for 1,156 B, at no measured fit cost.
 
-Three differences from the earlier estimate of this table are worth naming,
+Two differences from the earlier estimate of this table are worth naming,
 because each was a formula that had drifted: the top stage carries the STOP leaf
-(hence `k(k+1)` depths, not `k²`), the header is charged at all, and the depth
-field's cost is counted per depth rather than per bracket byte.  The earlier
-estimate's 16.6 / 32.5 / 36.9 kB become 16.7 / 32.7 / 34.2 kB measured.  The
-rules section, which is over three fifths of the file, came out within 0.3 % of
-the Zipf pricing of §4 — the one formula that held.
+(hence `k(k+1)` depths, not `k²`), and the header is charged at all.  The
+earlier estimate's 16.6 / 32.5 / 36.9 kB become 16.7 / 32.6 / 34.1 kB measured.
 
-The quarter code's own share would be 672 / 1,184 / 1,664 B at the three points
-— the map one bit wider and the top stage doubled — and it is not shipped.
-Measured, it buys 0.10 bits and 0.13 points for 1,184 B at 8192/16, and at the
-operating point `k = 32` it is 0.05 bits and 0.08 points *worse* for 1,664 B
-(`CLUSTER_QUARTERS.md`, §7).
+What the quarter code would add — the map one bit wider, the top stage doubled,
+1.7 kB at the operating point — and what it buys are in
+[`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md); it is not shipped.
 
-### 5.2 The arithmetic alternative
+### 5.2 The flat yardstick
 
-The arithmetic model stores probabilities and evaluates `P(b | a)` at load time.
-It is the shape the fit tables were measured on, and it is a **different
-object**, not an addition to the Huffman one:
+One tree per left cluster over *all* `V` words — `k·V` depths — is the code
+`ENCODING.md` §2 describes if the factorisation is removed.  It is not
+shippable, and `--flat` measures it under the same convention so the factored
+code can be bounded against it:
 
-| object | representation | cost at `V = 8192, k = 16` |
-|---|---|---:|
-| word list — rules | one merge rule per word: two child indices, Zipf-coded | 21.1 kB |
-| word list — unigram | the `V` word probabilities, in creation order, one byte each | 8.2 kB |
-| membership | the two maps word → left/right cluster | 8.2 kB |
-| block | the `k × k` cluster-pair table, one byte per cell | 0.3 kB |
-| program code | — | 2.0 kB |
-| **total** | | **39.8 kB** |
+| point | flat bits/id | flat ≤ 64 | flat file | factored bits/id | factored ≤ 64 | factored file |
+|---|---:|---:|---:|---:|---:|---:|
+| 4096/16 | 46.612 | 83.1 % | 52,889 B | 48.982 | 80.5 % | 14,659 B |
+| 8192/16 | 43.333 | 86.9 % | 123,584 B | 45.676 | 84.5 % | 30,571 B |
+| 8192/64 | 42.134 | 88.4 % | 420,544 B | 44.952 | 85.3 % | 35,049 B |
 
-The 63 characters are implicit in the identifier syntax and cost nothing, and
-anything derivable at load time — notably the *cluster* → list-of-words index
-(`V log₂V` bits at runtime) — is not charged.  Probabilities are quantised to one
-byte per number on the logarithmic grid `P ∝ exp(byte/resolution) − 1`,
-`resolution = 12`; this is **free** to within 0.01 bits (`model_fit_rates.py`).
+At 8192/16 the flat codebook alone is `k·V` depths — 98,304 B at a measured
+6-bit field, against 5,290 B for the factored bottom and top trees — so with the
+maps equal at 4,096 B the flat file is **123,584 B against 30,571 B**.  It buys
+2.343 bits/identifier and 2.4 fit points, which on this frontier's cheap band of
+1–5 kB a point is worth 2–12 kB: the flat code pays 93 kB for what the frontier
+sells for a tenth of that.  That is domination, not a trade, and it gets worse
+as `k·V` grows — at 8192/64 the flat file is 420,544 B for 2.818 bits (39 kB a
+point at 8192/16, 124 kB a point at 8192/64).  It also needs a wider depth
+field: the flat code's deepest leaf is 33 levels, so its depths take 6 bits
+where the factored model's take 5.
 
-With one shared cluster assignment the two maps collapse to one: **35.7 kB**.
-The Huffman inventory in §5.1 assumes the same sharing; keeping both maps adds
-4.1 kB there too (34.7 kB).  Either way the Huffman shape saves 5.1 kB.  Side by
-side, the two shapes at `V = 8192, k = 16` are:
+### 5.3 The fit-rate convention
 
-| object | arithmetic | Huffman |
-|---|---|---|
-| word list rules | rule table | rule table |
-| the distributions | unigram + memberships + block | depths + map + top depths |
-| program code | 2 kB | 2 kB |
-| **total** | **39.8 kB** | **30.6 kB** |
+The shipped criterion is the factored Huffman code with the zero-weight STOP leaf
+and the free trailing zeros.  Three consequences for every fit rate quoted here:
 
-They must never be added — an earlier draft did exactly that and got 53.5 kB by
-charging the Huffman bottom-stage codebook on top of the arithmetic tables and
-double-counting the 2 kB of code.
+* **Measure bits up to the last 1**, not the sum of codeword lengths.  The
+  canonical form is the integer, and its binary length stops at its highest set
+  bit; a summed length over-counts by ~1 bit/identifier (`ENCODING.md` §2).
+* **The terminator's transition is not paid.**  The STOP leaf's codeword is the
+  all-zeros path, and the trailing zeros of the last real codeword are not
+  stored either: together they are worth 2–3 bits per identifier against a code
+  that has to spend bits on the end of the identifier (`CODING_OVERHEAD.md`).
+* **Every number in §5.1, §5.2, §6 and §7 is measured**, by the same script, on
+  the same held-out set, from the packed file.  Nothing in this note is an
+  ideal length any more.
 
-#### The unigram in creation order
+### 5.4 The word list is in creation order, and cannot be permuted
 
-**The word list is in *creation* order, and that is not unigram order.**  The
+**The word list is in *creation* order, and that is not frequency order.**  The
 greedy rule selects the most frequent *pair* of adjacent symbols, so the sequence
-of **selection counts** is monotone non-increasing — but the stored unigram is
-the word's count in the **final** segmentation, and a word created early keeps
-being absorbed into longer words later, by an amount that is not monotone in the
-creation index.  So the guarantee does not hold, even when the dictionary and
-the counts come from the same corpus:
-
-| build | adjacent rises | mean rank displacement |
-|---|---:|---:|
-| `tw4096ns` (`V = 4 096`) | 1 998 / 4 031 (49.6 %) | 17.9 % of `V` |
-| `tw6144ns` (`V = 6 144`) | 2 978 / 6 079 (49.0 %) | 16.7 % of `V` |
-| `tw8192ns` (`V = 8 192`) | 3 976 / 8 127 (48.9 %) | 15.8 % of `V` |
-
-(`scripts/wordlist_order.py`.  All three are `--sample 20` builds, and the
-sampling mismatch roughly doubles the rise rate: the full-corpus `s0` builds
-measured 26–27 %.  The displacement is the robust figure.)
+of **selection counts** is monotone non-increasing — but a word's count in the
+**final** segmentation is not, because an early word keeps being absorbed into
+longer words later.  Measured on the three sample-20 builds: 49.6 / 49.0 / 48.9 %
+of adjacent pairs rise, with a mean rank displacement of 17.9 / 16.7 / 15.8 % of
+`V` (`scripts/wordlist_order.py`).
 
 The counterexample is stark.  The first created words are `er` 66 665,
 `on` 29 190, `es` 51 855, `at` 29 429, `in` 37 791, `en` 28 996 — so `on` was
@@ -285,501 +293,347 @@ longer words (`only`, `once`, `control`, …) far more heavily.
 
 The order is semantic — the tokeniser merges the lowest-ranked adjacent pair
 first — so it cannot be renumbered without changing the tokenisation, and
-storing the permutation would cost `V log₂V` bits, about 1.5 times the unigram
-itself.  Costed honestly the arithmetic unigram is `V` bytes (4.1 / 6.1 /
-8.2 kB); entropy-coding the byte grid (5.4–5.8 bits/value on the pre-grid
-builds, i.e. ~0.7 `V`) would bring it to 2.9 / 4.3 / 5.7 kB.  The Huffman shape
-has no unigram to store — the depths replace it — but its depth table is in the
-same creation order and cannot be permuted either.
+storing the permutation would cost `V log₂V` bits, more than the depth table
+itself.  The depths inherit the order, so §3's "in label order" means "in
+creation order", and the depth table carries whatever depth distribution the
+words happen to have.
 
-### 5.3 The fit-rate convention
+## 6. The frontier, measured
 
-The shipped criterion is the Huffman code with the zero-weight stop and the free
-trailing zeros.  Three consequences for every fit rate quoted below:
+Every point below is a packed model file from `scripts/model_size.py`, decoded
+and scored on the 10× held-out set (stride 10, `n = 42,268`), one map, `q = 1`,
+seed 1.  Dominated points are removed: a point is kept if no cheaper point is at
+least as good.
 
-* **Measure bits up to the last 1**, not the sum of codeword lengths.  The
-  canonical form is the integer, and its binary length stops at its highest set
-  bit; a summed length over-counts by ~1 bit/identifier (`ENCODING.md` §2).
-* **The stop's transition is not paid.**  The zero-weight stop returns ~1.8 bits
-  and costs ~0.75 in rounding, so the stop is worth ~1 bit; with the trailing
-  zeros that is ~2 bits better than the arithmetic figure for the same tables
-  (`CODING_OVERHEAD.md`).
-* **The frontier tables are the arithmetic reference.**  §4 and §6 quote the
-  ideal length of the cyclic code including the stop; they are therefore
-  conservative by ~2 bits and lie down-left of where the shipped design lands.
-  Every number in §5.1 and §7 is measured under the shipped convention by
-  `scripts/model_size.py`, and is labelled so.
-
-One correction to an earlier version of this note.  At `V = 8192, k = 16` the
-Huffman figure 45.027 bits / 85.3 % was given as the shipped design and later
-identified as the **flat** code — one tree per left cluster over all `V` words.
-It is an upper bound on what a Huffman code can do at this point, not something
-shippable.  Measured under the shipped convention (`--flat`) against the
-factored code at the same points:
-
-| point | flat bits/id | flat ≤ 64 | flat file | factored bits/id | factored ≤ 64 | factored file |
-|---|---:|---:|---:|---:|---:|---:|
-| 4096/16 | 46.257 | 83.4 % | 52,913 B | 49.083 | 80.0 % | 14,683 B |
-| 8192/16 | 43.120 | 87.1 % | 123,625 B | 45.790 | 84.1 % | 30,612 B |
-| 8192/64 | 42.371 | 88.1 % | 420,585 B | 45.347 | 84.5 % | 35,090 B |
-
-At `8192/16` the flat codebook is `k·V` depths — 98,304 B at a measured 6-bit
-field, against 5,290 B for the factored bottom and top trees — so with the maps
-equal at 4,096 B the flat code buys **2.67 bits and 3.0 points for 93,013
-bytes**.  On the frontier's 1–6 kB per point (§6) 3.0 points are worth 3–18 kB,
-not 93 kB: the flat code is not merely unshippable, it is dominated.  The same
-holds across the grid — 3.4 points for +38,230 B at 4096/16, 3.6 points for
-+385,495 B at 8192/64 — and the price grows as `k·V` while the fit gain does
-not.  The earlier estimate was also pessimistic about the flat code's bits —
-45.027 imagined the exact flat fit while the measured flat code is 43.120 — and
-the "32.5 kB gets 85.3 %" sentence was a mix-up of the two: 30.6 kB gets 84.1 %,
-and both halves now come from the same oracle run at the same point.
-
-### 5.4 The arithmetic size at the grid
-
-Zipf index code, raw-byte unigram, +2 kB code (`scripts/model_budget.py`):
-
-| `V` | `k` | rules | unigram | members | block | code | total |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 4,096 | 16 | 9.8 | 4.1 | 4.1 | 0.3 | 2.0 | **20.3 kB** |
-| 4,096 | 32 | 9.8 | 4.1 | 5.1 | 1.0 | 2.0 | 22.0 |
-| 4,096 | 64 | 9.8 | 4.1 | 6.1 | 4.1 | 2.0 | 26.1 |
-| 6,144 | 16 | 15.4 | 6.1 | 6.1 | 0.3 | 2.0 | 29.9 |
-| 6,144 | 32 | 15.4 | 6.1 | 7.7 | 1.0 | 2.0 | 32.2 |
-| 8,192 | 16 | 21.1 | 8.2 | 8.2 | 0.3 | 2.0 | **39.8** |
-| 8,192 | 32 | 21.1 | 8.2 | 10.2 | 1.0 | 2.0 | 42.6 |
-| 8,192 | 64 | 21.1 | 8.2 | 12.3 | 4.1 | 2.0 | 47.7 |
-
-## 6. The frontier so far
-
-The same accounting against the held-out fit, every measured configuration, with
-dominated points removed (a point is kept if it is smaller *and* better than
-everything cheaper):
-
-| bytes | `V` | `k` | mean bits | fit ≤64 | fit ≤128 | kB/pt to next |
+| bytes | `V` | `k` | bits/id | fit ≤64 | fit ≤128 | kB/pt to next |
 |---:|---:|---:|---:|---:|---:|---:|
-| 19,041 | 4096 | 8 | 51.904 | 77.2 % | 98.0 % | 2.0 |
-| 20,257 | 4096 | 16 | 51.462 | 77.8 % | 98.1 % | 9.2 |
-| 21,176 | 4096 | 24 | 51.333 | 77.9 % | 98.1 % | 4.4 |
-| 22,049 | 4096 | 32 | 51.245 | 78.1 % | 98.1 % | 4.7 |
-| 23,928 | 4096 | 48 | 50.889 | 78.5 % | 98.2 % | 5.5 |
-| 26,145 | 4096 | 64 | 50.527 | 78.9 % | 98.3 % | **1.1** |
-| 26,597 | 6144 | 4 | 50.384 | 79.3 % | 98.3 % | 2.3 |
-| 28,181 | 6144 | 8 | 49.674 | 80.0 % | 98.4 % | 3.5 |
-| 29,909 | 6144 | 16 | 49.317 | 80.5 % | 98.5 % | 5.8 |
-| 32,213 | 6144 | 32 | 48.959 | 80.9 % | 98.5 % | 4.4 |
-| 36,637 | 8192 | 6 | 48.282 | 81.9 % | 98.7 % | — (bits only) |
-| 37,515 | 8192 | 8 | 48.240 | 81.9 % | 98.7 % | 4.3 |
-| 38,793 | 8192 | 12 | 48.019 | 82.2 % | 98.7 % | 3.2 |
-| 39,755 | 8192 | 16 | 47.727 | 82.5 % | 98.8 % | 7.6 |
-| 41,273 | 8192 | 24 | 47.535 | 82.7 % | 98.8 % | 13.0 |
-| 42,571 | 8192 | 32 | 47.481 | 82.8 % | 98.8 % | 24.8 |
-| 45,049 | 8192 | 48 | 47.399 | 82.9 % | 98.8 % | 13.2 |
-| 47,691 | 8192 | 64 | 47.285 | 83.1 % | 98.8 % | 31.6 |
-| 54,009 | 8192 | 96 | 47.108 | 83.3 % | 98.9 % | 80.2 |
-| 62,027 | 8192 | 128 | 46.964 | 83.4 % | 98.9 % | — |
+| 14,022 | 4,096 | 8 | 49.105 | 80.4 % | 98.3 % | 12.2 |
+| 14,659 | 4,096 | 16 | 48.982 | 80.5 % | 98.3 % | 11.6 |
+| 16,983 | 4,096 | 48 | 48.704 | 80.7 % | 98.4 % | 3.9 |
+| 18,113 | 4,096 | 64 | 48.531 | 81.0 % | 98.4 % | 9.2 |
+| 20,824 | 6,144 | 4 | 48.661 | 81.3 % | 98.5 % | 0.7 |
+| 21,624 | 6,144 | 8 | 47.542 | 82.3 % | 98.6 % | 2.4 |
+| 22,517 | 6,144 | 16 | 47.162 | 82.7 % | 98.6 % | 2.0 |
+| 23,490 | 6,144 | 24 | 46.731 | 83.2 % | 98.7 % | 2.2 |
+| 23,775 | 6,144 | 32 | 46.650 | 83.3 % | 98.7 % | 9.9 |
+| 26,483 | 6,144 | 64 | 46.278 | 83.6 % | 98.8 % | 4.8 |
+| 29,422 | 8,192 | 8 | 46.018 | 84.2 % | 98.9 % | 5.4 |
+| 30,499 | 8,192 | 12 | 45.782 | 84.4 % | 98.9 % | 0.7 |
+| 30,571 | 8,192 | 16 | 45.676 | 84.5 % | 98.9 % | 4.1 |
+| 31,800 | 8,192 | 24 | 45.523 | 84.8 % | 98.9 % | 2.0 |
+| 32,085 | 8,192 | 32 | 45.217 | 85.0 % | 99.0 % | 9.6 |
+| 35,049 | 8,192 | 64 | 44.952 | 85.3 % | 99.0 % | 19.9 |
+| 39,293 | 8,192 | 96 | 44.926 | 85.5 % | 99.0 % | 30.2 |
+| 43,794 | 8,192 | 128 | 44.701 | 85.6 % | 99.1 % | — |
 
-The shipped code has been measured at three points, and one of them is the
-operating point: bytes from the packed file, fit under the shipped convention
-(the terminator is free, §7):
-
-| point | kB | fit ≤64 | note |
-|---|---:|---:|---|
-| 4096/16 | 16.7 | 80.0 % | below the reference's 20.3 kB at 77.8 % |
-| 8192/16 | 32.7 | 84.1 % | against 39.8 kB at 82.5 % |
-| 8192/32 | **34.2** | **84.8 %** | the operating point, against 42.6 kB at 82.8 % |
-
-At the operating point the shipped file is **8.4 kB smaller and 2.0 points
-better** than the arithmetic reference; at 8192/16 it is 7.1 kB and 1.6 points,
-and at 4096/16 3.5 kB and 2.2 points.  Part of each margin is the terminator:
-the arithmetic row has to code the stop, and the Huffman row cannot be made to.
-
-**Read the axes with care.**  The bytes in the table above are the
-**arithmetic** model's (§5.4) and the fit is the **arithmetic** ideal length,
-stop included; the two are consistent with each other, and neither is the
-shipped code's.  So that table is the frontier of the *reference*, and the
-shipped design's frontier lies down and to the left of it.  Its shape — the
-knee, the cheap stretch, the dead zone — carries over; the numbers do not.
-[`README.md`](../README.md) plots these points, with the three measured
-shipped files marked as hollow points.
+Fit ≤128 is saturated (98.3–99.0 % everywhere), so every trade here is a 64-bit
+trade, and **the frontier is the measured Huffman code, not a reference**: the
+arithmetic accounting that used to stand in for it has been retired, because the
+format no longer contains an arithmetic coder (§4) and a table nobody can ship
+was being read as if it were the model.
 
 Four things follow.
 
-* **The cheap stretch is 20–39 kB at 1–6 kB per fit point**, and it is the `V`
-  step out of 4096 plus the low-`k` 6144 and 8192 configurations.  Below 20 kB
-  you are on 4096 with a coarse `k`; above 40 kB each further point costs 8, 13,
-  25, 32 and finally 80 kB per point.
-* **The best value on the whole curve is the corner at 26 kB**: 4096 / `k = 64`
-  → 6144 / `k = 4` costs 452 B for +0.4 pt (1.1 kB/pt) because the bigger word
-  list pays for itself twice — better tokens *and* a `k` that can be coarser.
-* **`V = 6144` dominates the upper half of the 4096 sweep.**  Its *worst* point
-  (`k = 4`, 26.6 kB, 79.3 %) matches the best 4096 point that costs less
-  (31.9 kB at `k = 96`, 79.3 %) at 5.3 kB cheaper, and 6144 at `k = 16`
-  (29.9 kB, 80.5 %) beats 4096's best overall (39.5 kB at `k = 128`, 79.6 %) by
-  0.9 points for 9.6 kB less.
-* **Fit ≤128 is saturated** (98.0–98.9 % everywhere), so every trade here is a
-  64-bit trade.
+* **The cheap stretch is 20.8–23.8 kB, at 0.6–2.4 kB a point.**  6144/4 →
+  6144/8 → 6144/16 → 6144/24 are four files inside 2.7 kB that buy 1.9 points.
+  Above that the price steps up to 9.9 kB a point (23,775 → 26,483 B) and then
+  to 5.4 and 19.9 at the far end, because the `k²` top stage and the `k`-wide
+  labels take over from the word list.
+* **The best single step on the curve is 6144/4 → 6144/8**: 20,824 → 21,624 B
+  buys 1.0 points at 0.8 kB/pt, the cheapest point per point anywhere (§6's
+  step table).  The whole 4,096 → 6,144 jump, 14,659 → 21,624 B, buys 1.8
+  points at 3.9 kB/pt, because the bigger word list pays twice: better tokens
+  *and* a `k` that can be coarser.
+* **`V = 6,144` is the cheapest way to 81.3 %.**  6144/4 costs 20,824 B; 4,096
+  cannot get there at all below 21,845 B (4096/96, 81.7 %), and 4096/64 reaches
+  only 81.0 % for 18,113 B — 2.7 kB less for 0.3 points fewer, in band.
+* **`V = 8,192` is worth its word list from 29 kB up.**  8192/8 (29,422 B,
+  84.2 %) beats 6144/64 (26,483 B, 83.6 %) by 0.6 points for 2.9 kB — 4.9 kB/pt,
+  in the band — and nothing below 29 kB reaches 84 %.
 
-### The frontier along `k` — the interior slices
+### The frontier along `k` — the measured slices
 
-`scripts/k_frontier.py` sweeps `k` at fixed `V` with the same accounting and the
-same held-out set.  These are the same points as the frontier table above, kept
-separate because the *local slope* is what prices a change made inside a model
-(the shared clusters, the reserved stop cell, the quarters).  They are the
-**reference's** slopes: the shipped code's own `k` curve is in §7, and it turns
-over at 32 where this one still flattens after 16.  The reason is Huffman
-rounding — each per-cluster tree sees fewer tokens as `k` grows — so the two
-curves have different knees and the measured one sets the operating point.
+The same files, read along `k` at fixed `V`.  The local slope is what prices a
+change made *inside* a model (the shared clusters, the quarters), and it is the
+number the other notes charge against.
 
-`V = 4096`, stride 10 (`n = 42,268`):
+`V = 4,096`:
 
-| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+| `k` | model file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|
-| 8 | 51.904 | 77.2 % | 98.0 % | 19,041 |
-| 16 | 51.462 | 77.8 % | 98.1 % | 20,257 |
-| 24 | 51.333 | 77.9 % | 98.1 % | 21,176 |
-| 32 | 51.245 | 78.1 % | 98.1 % | 22,049 |
-| 48 | 50.889 | 78.5 % | 98.2 % | 23,928 |
-| 64 | 50.527 | 78.9 % | 98.3 % | 26,145 |
-| 96 | 50.203 | 79.3 % | 98.3 % | 31,864 |
-| 128 | 49.919 | 79.6 % | 98.4 % | 39,457 |
+| 8 | 14,022 B | 49.105 | 80.4 % | 98.3 % |
+| 16 | 14,659 B | 48.982 | 80.5 % | 98.3 % |
+| 24 | 15,376 B | 48.882 | 80.5 % | 98.4 % |
+| 32 | 15,661 B | 48.866 | 80.5 % | 98.4 % |
+| 48 | 16,983 B | 48.704 | 80.7 % | 98.4 % |
+| 64 | 18,113 B | 48.531 | 81.0 % | 98.4 % |
+| 96 | 21,845 B | 47.928 | 81.7 % | 98.5 % |
+| 128 | 26,346 B | 47.763 | 81.9 % | 98.5 % |
 
-`V = 6144`:
+`V = 6,144`:
 
-| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+| `k` | model file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|
-| 4 | 50.384 | 79.3 % | 98.3 % | 26,597 |
-| 8 | 49.674 | 80.0 % | 98.4 % | 28,181 |
-| 16 | 49.317 | 80.5 % | 98.5 % | 29,909 |
-| 32 | 48.959 | 80.9 % | 98.5 % | 32,213 |
-| 64 | 48.626 | 81.3 % | 98.6 % | 36,821 |
-| 96 | 48.322 | 81.6 % | 98.6 % | 42,840 |
+| 4 | 20,824 B | 48.661 | 81.3 % | 98.5 % |
+| 8 | 21,624 B | 47.542 | 82.3 % | 98.6 % |
+| 16 | 22,517 B | 47.162 | 82.7 % | 98.6 % |
+| 24 | 23,490 B | 46.731 | 83.2 % | 98.7 % |
+| 32 | 23,775 B | 46.650 | 83.3 % | 98.7 % |
+| 64 | 26,483 B | 46.278 | 83.6 % | 98.8 % |
+| 96 | 30,471 B | 46.247 | 83.7 % | 98.8 % |
 
-`V = 8192`:
+`V = 8,192`:
 
-| `k` | mean bits | fit ≤64 | fit ≤128 | bytes |
+| `k` | model file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|
-| 4 | 48.995 | 81.2 % | 98.6 % | 35,419 |
-| 6 | 48.282 | 81.9 % | 98.7 % | 36,637 |
-| 8 | 48.240 | 81.9 % | 98.7 % | 37,515 |
-| 12 | 48.019 | 82.2 % | 98.7 % | 38,793 |
-| 16 | 47.727 | 82.5 % | 98.8 % | 39,755 |
-| 24 | 47.535 | 82.7 % | 98.8 % | 41,273 |
-| 32 | 47.481 | 82.8 % | 98.8 % | 42,571 |
-| 48 | 47.399 | 82.9 % | 98.8 % | 45,049 |
-| 64 | 47.285 | 83.1 % | 98.8 % | 47,691 |
-| 96 | 47.108 | 83.3 % | 98.9 % | 54,009 |
-| 128 | 46.964 | 83.4 % | 98.9 % | 62,027 |
+| 4 | 28,366 B | 46.579 | 83.6 % | 98.8 % |
+| 6 | 29,404 B | 46.846 | 83.4 % | 98.8 % |
+| 8 | 29,422 B | 46.018 | 84.2 % | 98.9 % |
+| 12 | 30,499 B | 45.782 | 84.4 % | 98.9 % |
+| 16 | 30,571 B | 45.676 | 84.5 % | 98.9 % |
+| 24 | 31,800 B | 45.523 | 84.8 % | 98.9 % |
+| 32 | 32,085 B | 45.217 | 85.0 % | 99.0 % |
+| 48 | 33,919 B | 45.221 | 85.0 % | 99.0 % |
+| 64 | 35,049 B | 44.952 | 85.3 % | 99.0 % |
+| 96 | 39,293 B | 44.926 | 85.5 % | 99.0 % |
+| 128 | 43,794 B | 44.701 | 85.6 % | 99.1 % |
 
 | step | Δbits | Δbytes | kB/bit | Δ fit ≤64 | kB per point |
 |---|---:|---:|---:|---:|---:|
-| 4096: 8→16 | −0.442 | +1,216 | 2.8 | +0.6 | 2.0 |
-| 4096: 16→24 | −0.129 | +919 | 7.1 | +0.1 | 9.2 |
-| 4096: 24→32 | −0.088 | +873 | 9.9 | +0.2 | 4.4 |
-| 4096: 32→48 | −0.356 | +1,879 | 5.3 | +0.4 | 4.7 |
-| 4096: 48→64 | −0.362 | +2,217 | 6.1 | +0.4 | 5.5 |
-| 4096: 64→96 | −0.324 | +5,719 | 17.7 | +0.4 | 14.3 |
-| 4096: 96→128 | −0.284 | +7,593 | 26.7 | +0.3 | 25.3 |
-| 6144: 4→8 | −0.710 | +1,584 | 2.2 | +0.7 | 2.3 |
-| 6144: 8→16 | −0.357 | +1,728 | 4.8 | +0.5 | 3.5 |
-| 6144: 16→32 | −0.358 | +2,304 | 6.4 | +0.4 | 5.8 |
-| 6144: 32→64 | −0.333 | +4,608 | 13.8 | +0.4 | 11.5 |
-| 6144: 64→96 | −0.304 | +6,019 | 19.8 | +0.3 | 20.1 |
-| 8192: 4→6 | −0.713 | +1,218 | 1.7 | +0.7 | 1.7 |
-| 8192: 6→8 | −0.042 | +878 | 20.9 | +0.0 | — |
-| 8192: 8→12 | −0.221 | +1,278 | 5.8 | +0.3 | 4.3 |
-| 8192: 12→16 | −0.292 | +962 | 3.3 | +0.3 | 3.2 |
-| 8192: 16→24 | −0.192 | +1,518 | 7.9 | +0.2 | 7.6 |
-| 8192: 24→32 | −0.054 | +1,298 | 24.0 | +0.1 | 13.0 |
-| 8192: 32→48 | −0.082 | +2,478 | 30.2 | +0.1 | 24.8 |
-| 8192: 48→64 | −0.114 | +2,642 | 23.2 | +0.2 | 13.2 |
-| 8192: 64→96 | −0.177 | +6,318 | 35.7 | +0.2 | 31.6 |
-| 8192: 96→128 | −0.144 | +8,018 | 55.7 | +0.1 | 80.2 |
+| 8,192: 4→6 | +0.267 | +1,038 | — | -0.2 | — |
+| 8,192: 6→8 | -0.828 | +18 | 0.0 | +0.8 | 0.0 |
+| 8,192: 8→12 | -0.236 | +1,077 | 4.6 | +0.2 | 5.4 |
+| 8,192: 12→16 | -0.106 | +72 | 0.7 | +0.1 | 0.7 |
+| 8,192: 16→24 | -0.153 | +1,229 | 8.0 | +0.3 | 4.1 |
+| 8,192: 24→32 | -0.306 | +285 | 0.9 | +0.1 | 2.0 |
+| 8,192: 32→48 | +0.004 | +1,834 | — | +0.1 | 28.7 |
+| 8,192: 48→64 | -0.269 | +1,130 | 4.2 | +0.2 | 4.6 |
+| 8,192: 64→96 | -0.026 | +4,244 | 163.4 | +0.2 | 19.9 |
 
-Five things follow.
+Four things follow.
 
-* **In the reference, `k = 16` is the floor, at both vocabularies.**  Fit *falls*
-  below it — 77.8 → 77.2 % at 4096 and 82.5 → 81.9 → 81.2 % from 16 down to 6
-  and 4 at 8192 — so there is a genuine optimum rather than "the lowest
-  affordable `k`".
-  At 8192, `k = 6` is the same fit as `k = 8` for 878 B less, and `k = 4` is a
-  full point worse.  The earlier open question ("`k = 8` may be better still")
-  is answered: it is not.
-* **Below `k = 16` the curve is as cheap as the `V` direction** (1.7–3.3 kB/pt
-  at 8192) because a very coarse clustering is genuinely broken, and the repair
-  is worth paying for.  Above 16 it is a plateau and then a dead zone: 16 → 64
-  buys 0.6 points for 7.9 kB (13 kB/pt), 64 → 96 buys 0.2 for 7.3 kB
-  (32 kB/pt), and 96 → 128 buys 0.1 for 8.0 kB (80 kB/pt).
-* **The apparent cheap segment at 32→48 was noise.**  At `n = 4,227` it looked
-  like 2.8 kB/pt, inviting a story about a cheap stretch; at `n = 42,268` it is
-  4.7, in line with its neighbours.  The 10× held-out set was run for exactly
-  this reason: with 4,227 identifiers, adjacent fit differences of 0.2–0.7 pt
-  are ±0.9 pt, so segment *slopes* were never reliable to better than a factor
-  of two.  Absolute fit rates also fell 0.2–0.9 pt at every `k`.
-* **The knee is the `k²` block taking over from the memberships, and it moves
-  with `V`.**  At 4096 the block is 1.0 kB at `k = 32`, 4.1 at 64 and 16.4 at
-  128, so the curve is still paying about 5 kB/pt up to 64 and 14.3 beyond it.
-  At 8192 the memberships are already 8.2 kB at `k = 16` and every step above it
-  costs 7.6–13 kB/pt.  The block table, not the memberships, dominates the top
-  of the curve.
-* **The envelope is a ramp, not a staircase — and the earlier claim was an
-  artefact.**  Reading only the two `k`-sweeps, the frontier looked
-  discontinuous: 4096's best point (31.9 kB, 79.3 %) against 8192's worst
-  (35.4 kB, 81.2 %) was a 1.9-point jump for 3.5 kB.  That comparison put the
-  *top* of one `k`-curve (where `k` is worth nothing) against the *bottom* of
-  the next.  With `V = 6144` measured in between, the jump disappears: the
-  envelope passes 79.3 % at 26.6 kB and 81.2 % at 32.2 kB on the way to 81.9 %
-  at 36.6 kB.
-
-**This is a slice, not the frontier.**  The sweep answers what the *next*
-kilobyte buys **at fixed `V`**, which is the right comparison for a candidate
-that adds bytes to an existing model but the wrong one for "should this model be
-bigger".  Used that way the two pictures agree: the k-curve is interior to the
-`V`-envelope, and its local slope (4.7 kB/pt in the middle of the 4096 sweep) is
-the opportunity cost of spending a kilobyte *inside* a model rather than
-replacing it.
+* **The knee is at `k = 32` and it is shallow.**  16 → 32 buys 0.5 points for
+  1,514 B (2.9 kB/pt); 32 → 64 buys 0.3 for 2,964 B (9.9 kB/pt); 96 is another
+  4.2 kB for 0.2.  So a change that costs a kilobyte *inside* the model must buy
+  about 0.3 points to be worth making, and one that costs 5 kB must buy a point.
+* **The old turnover at `k = 32` was an artefact of the terminator.**  With the
+  stop inside the bottom trees, each top tree carried a right cluster for it and
+  the rounding at fine `k` ate the gain; with the STOP leaf carrying it for free
+  the curve is monotone through 96.  The operating point stays at 32 because
+  that is where the price per point leaves the cheap band, not because the curve
+  turns over.
+* **Below `k = 8` the curve is unstable.**  8192/6 is worse than 8192/4 and
+  4096/24 no better than 4096/16: k-means lands in a different local optimum from
+  seed to seed at coarse `k`, and one degenerate cluster of 16 words at 8192/8
+  produces the deepest leaf anywhere on the grid, 29 (§3).  Nothing below `k = 12` is worth quoting to
+  better than half a point.
+* **Every point round-trips.**  42,268 held-out identifiers per file decode
+  through the packed bytes with zero failures.
 
 ### `V` against `k` at matched size
 
-Once the rule table is charged, the earlier "`V` is 2–6× cheaper than `k`" claim
-softens but survives:
-
-* the `V` step at matched `k` is **3.6 kB/pt** (4096→6144, `k = 16`),
-  **4.9** (6144→8192, `k = 16`) and **5.5** (6144→8192, `k = 32`);
-* the `k` step above 16 at 8192 is **7.6 / 13.0 / 24.8 / 13.2** kB/pt
-  (16→24→32→48→64), then 31.6 to 96 and 80.2 to 128.
-
-So a bigger word list is still the cheaper way to buy a point, but by 1.5–4×
-against the 8–25 kB/pt the `k` direction costs above 16, not by the 2–6× claimed
-when the rule table was omitted.  Measured in the packed file the `V` prices hold
-(3.5 and 5.4 kB per bit, §7) but the `k` prices collapse, because the shipped
-curve turns over at 32: 16 → 24 costs 2.9 kB/pt, 24 → 32 costs 1.2, and past 32
-the step buys nothing at all.  That is a property of the Huffman code, not of the
-accounting: per-cluster trees see fewer tokens as `k` grows, and past 32 the
-noisier lengths cost as much as the finer partition buys.  Why `V` is different
+At `k = 32`, the word list buys 2.2 bits for 8.1 kB from 4,096 to 6,144 (3.7 kB
+per bit) and 1.4 bits for 8.3 kB from 6,144 to 8,192 (5.8 kB per bit).  Inside a
+model, `k` costs 2.9 kB per fit point up to 32 and 9.9 beyond it.  So a bigger
+word list is still the cheaper way to buy a point — by 1.5–2× over the cheap
+stretch of the `k` direction, and by 3× over the far end — but the gap is much
+narrower than the "2–6×" the formula accounting claimed.  Why `V` is different
 is mechanical: a bigger word list shortens identifiers (held-out mean length
-falls 4.70 → 4.05 tokens from `V = 4096` to `8192`) and the 64-bit budget is
-dominated by the *long* identifiers, so `V` attacks the part of the distribution
-the threshold measures; a finer `k` only shaves the conditional entropy of
+4.70 → 4.05 tokens from 4,096 to 8,192) and the 64-bit budget is dominated by
+the *long* identifiers, so `V` attacks the part of the distribution the
+threshold measures, while a finer `k` only shaves the conditional entropy of
 tokens already inside an identifier.
 
 ## 7. The size oracle
 
 The structure in §1 and the oracle answer different questions.  The structure
-says **what is stored**; the oracle says **how many bytes it takes**.  The oracle
-is the more general of the two, because once built it measures whatever structure
-it is given — the arithmetic shape, the Huffman shape, the flat variant, the
-quarter code — from the same script and the same held-out set.  The three tables
-in §1 are the special case that ships.  The byte figures above are arithmetic and
-formula-driven, and formulas have drifted three times: the 53.5 kB total that
-double-charged a Huffman bottom stage, the missing word→left-cluster map, and a
-"bracket vs length table" claim that did not survive re-reading.  The next step
-is therefore to stop pricing the model by formula and measure it.  Six steps:
+says **what is stored**; the oracle says **how many bytes it takes**, and it
+measures whatever structure it is given — the factored code, the flat variant,
+the quarter code, a second map — from one script and one held-out set.  The
+byte figures above are the oracle's; the formulas that preceded it had drifted
+three times (a double-charged bottom stage, a missing label map, a "bracket
+versus length table" claim that did not survive re-reading), which is why the
+model is no longer priced by formula anywhere in this note.
 
 1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, write the
    YAML model, pack it to the binary form of
    [`MODEL_FORMAT.md`](MODEL_FORMAT.md), report actual bytes per section, decode
-   a held-out identifier and assert losslessness, and report the code's real
-   bits/identifier from the decoded artefact.  From then on every published byte
-   comes from this, not from a formula — and the packing rule is the codec of
+   held-out identifiers and assert losslessness, and report the code's real
+   bits/identifier from the decoded artefact.  The packing rule is the codec of
    H12, so the oracle and the published file share one implementation.
 2. One **inventory table** in this note: object / who stores it / how / bytes at
-   4096/16, 8192/16, 8192/64 / derivable at load? / charged where.  The
-   checklist is rules, unigram, left map, right map, block, bottom codebook, top
-   codebook, program code, terminator, padding.  §5.1 is the first cut of it.
+   4096/16, 8192/16, 8192/32 / derivable at load?  §5.1 is it.
 3. The **depth store**: measure the maximum code depth in every bottom and top
-   tree on the grid.  That sets the bits per depth (4, 5 or 6 — a 5-bit field
-   assumes no tree exceeds depth 31), whether any tree must be length-limited
-   (which costs bits), and whether the top stage is `k²` packed depths or
+   tree on the grid.  That sets the bits per depth, whether any tree must be
+   length-limited, and whether the top stage is `k(k+1)` packed depths or
    something cheaper.  It also confirms that the depth is carried per word: the
    leaf-list-free `2 + log₂k` form fails because a depth-1 leaf can only sit at
    an end of its subtree, so the Huffman depth sequence need not be realisable
    in an arbitrary order.
 4. **Re-derive** every table from the oracle: the frontier here,
-   `CLUSTER_QUARTERS.md`
-   (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`, `SHARED_CLUSTERS` and
-   the shared-cluster, reserved-cell and quarter pricing, `PRUNE_WORDS`,
-   `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  The dictionary term must
-   be charged in `shared_clusters.py`, `quarter_accounting.py` and the
-   corresponding comparisons, which still quote code-side bytes; their verdicts
-   are unaffected (they are within-`V`), but any cross-`V` price must carry the
-   term.
-5. **Fit-rate convention.**  Re-measure the fit under the shipped criterion of
-   §5.3 — the zero-weight stop, all trailing zeros free — for the *factored*
-   code at every grid point, and settle the `k` and shared-cluster choices on
-   those numbers rather than on arithmetic bits.  It has already overturned
-   `q = 2` (the quarters are worth 0.10 bits and 0.13 fit points for 1,184 B once
-   the terminator is free, so `q = 1` ships — `CLUSTER_QUARTERS.md`) and moved
-   `k` from 16 to 32, where the measured curve turns over (§7).  The
-   flat-versus-factored mix-up of §5.3 is closed too: `--flat` measures the flat
-   code at the same point under the same convention (43.120 bits / 87.1 %
-   against the factored 45.790 / 84.1 %, for +93 kB).
+   `CLUSTER_QUARTERS.md` (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`,
+   `SHARED_CLUSTERS`, `PRUNE_WORDS`, `DICTIONARY_RULES` and `SMALL_DICT`'s price
+   row.  The dictionary term must be charged in `shared_clusters.py`,
+   `quarter_accounting.py` and the corresponding comparisons, which still quote
+   code-side bytes; their verdicts are unaffected (they are within-`V`), but any
+   cross-`V` price must carry the term.
+5. **The fit-rate convention** of §5.3, applied at every point.  It has already
+   overturned `q = 2` — once the terminator is free the quarters are worth 0.12
+   bits and 0.1–0.3 fit points for 1,184–1,664 B, i.e. 10–14 kB a bit, so
+   `q = 1` ships (`CLUSTER_QUARTERS.md`) — and it moved the operating point from
+   `k = 16` to `k = 32`.
 6. **Retire** the superseded numbers: `README.md`'s status line, and any table
    not produced by the oracle.
 
-The outcome is a single number per model, traceable to a file the decoder can
-read.
+The outcome is a model stated as one `(V, k, q)` triple and one file.
 
-**What the oracle measured** (one map, zero-weight terminators, canonical codes
+**What the oracle measured** (one map, zero-weight terminator, canonical codes
 from the packed file — `MODEL_FORMAT.md` §3), shipped `q = 1`:
 
 | point | model file | + library | bits/id | fit ≤ 64 | fit ≤ 128 |
 |---|---:|---:|---:|---:|---:|
-| 4096/16 | 14,683 B | 16.7 kB | 49.083 | 80.0 % | 98.3 % |
-| 8192/16 | 30,612 B | 32.7 kB | 45.790 | 84.1 % | 98.8 % |
-| **8192/32** | **32,126 B** | **34.2 kB** | **45.221** | **84.8 %** | **98.9 %** |
-| 8192/64 | 35,090 B | 37.1 kB | 45.347 | 84.5 % | 98.9 % |
+| 4096/16 | 14,659 B | 16.7 kB | 48.982 | 80.5 % | 98.3 % |
+| 8192/16 | 30,571 B | 32.6 kB | 45.676 | 84.5 % | 98.9 % |
+| **8192/32** | **32,085 B** | **34.1 kB** | **45.217** | **85.0 %** | **99.0 %** |
+| 8192/64 | 35,049 B | 37.1 kB | 44.952 | 85.3 % | 99.0 % |
 
-The quarter code is the same family with a map one bit wider and the top stage
-doubled: at 8192/16 it is 31,796 B / 45.687 / 84.3 %, and at the operating point
-33,790 B / 45.272 / 84.7 % — dearer in bytes and not cheaper in bits, so it is
-not shipped (fourth finding below).
-
-**The `k` curve, measured.**  The same file at `V = 8192` over the `k` sweep the
-arithmetic frontier used to explore, shipped convention, seed 1:
+**The `k` curve, measured**, at `V = 8,192`, seed 1:
 
 | `k` | model file | bits/id | fit ≤ 64 | step from the row above |
 |---:|---:|---:|---:|---|
-| 8 | 29,463 B | 46.102 | 83.73 % | — |
-| 12 | 30,540 B | 45.812 | 84.10 % | +1,077 B, +0.37 pt, 2.9 kB/pt |
-| 16 | 30,612 B | 45.790 | 84.14 % | +72 B, +0.04 pt, 1.9 kB/pt |
-| 24 | 31,841 B | 45.370 | 84.54 % | +1,229 B, +0.40 pt, 3.0 kB/pt |
-| **32** | **32,126 B** | **45.221** | **84.78 %** | +285 B, +0.23 pt, 1.2 kB/pt |
-| 48 | 33,960 B | 45.345 | 84.62 % | +1,834 B, −0.15 pt |
-| 64 | 35,090 B | 45.347 | 84.51 % | +1,130 B, −0.11 pt |
+| 8 | 29,422 B | 46.018 | 84.2 % | — |
+| 12 | 30,499 B | 45.782 | 84.4 % | +1,077 B, +0.2 pt |
+| 16 | 30,571 B | 45.676 | 84.5 % | +72 B, +0.1 pt, 0.7 kB/pt |
+| 24 | 31,800 B | 45.523 | 84.8 % | +1,229 B, +0.3 pt, 4.1 kB/pt |
+| **32** | **32,085 B** | **45.217** | **85.0 %** | +285 B, +0.2 pt, 1.4 kB/pt |
+| 48 | 33,919 B | 45.221 | 85.0 % | +1,834 B, +0.0 pt |
+| 64 | 35,049 B | 44.952 | 85.3 % | +1,130 B, +0.3 pt, 3.8 kB/pt |
+| 96 | 39,293 B | 44.926 | 85.5 % | +4,244 B, +0.2 pt, 21 kB/pt |
 
-The curve turns over at `k = 32`.  Past it the fit stops improving — at seed 1
-`k = 48` is 0.16 points *worse* than 32, at seed 2 it is 0.12 points better, so
-the two are within seed noise while the file grows by 1.8 kB — and 48 to 64 adds
-another 1.1 kB for nothing.  The gain from 16 to 32 is 0.64 points for 1,514 B,
-2.4 kB/pt against the 3.9 kB/pt the same code charges for the 4096 → 8192 step,
-and it is not noise: +269 identifiers net against 16 at seed 1 and +189 at
-seed 2, where the same step costs 3.4 kB/pt.  So the operating point is
-**`V = 8192, k = 32`**: 32,126 B, 45.221 bits, 84.8 %.  The flattening is the
-bias–variance of the per-cluster
-trees: each cluster's Huffman build sees fewer tokens as `k` grows, so past 32
-the noisier lengths cost as much as the finer partition buys.
+The operating point is **`V = 8,192, k = 32`**: 32,085 B, 45.217 bits, 85.0 % in
+64 bits, 99.0 % in 128.  `k = 48` is a dud at seed 1 (no gain for 1.8 kB) and
+`k = 64` is back in band, which is the seed noise these single-seed points
+carry: the honest reading is a flat stretch from 32 to 64, 3.0 kB for 0.3
+points, and a dead zone after that.
 
-**The `V` curve, measured.**  At its best measured `k` each word list gives
-2,277 B / 65.706 bits at `V = 512` (`k = 32`), 15,685 B / 48.926 at 4,096 (32),
-23,523 B / 46.781 at 6,144 (24) and 32,126 B / 45.221 at 8,192 (32) — and the
-word list is 39 %, 63 %, 65 % and 66 % of those files.  The steps cost 3.5 and
-5.4 kB per bit, against the 3.9 the `k` direction charges, so the ladder is
-running out.  The next rung, `V = 12,288`, needs ~8.2 kB more rules (2.8 B per
-word, the measured rate) plus 2.6 kB of depths and 2.6 kB of labels — 13.3 kB —
-and the marginal value of words is falling (16.8, 2.2, 1.6 bits per step), so it
-cannot buy more than ~1.5 bits: 8.9 kB per bit or worse, well above the
-frontier's 3.9.  Extrapolated, not built; `WORDLIST_BUDGET.md` has the ladder.
-(The frontier tables above quote 4096/16, the point the arithmetic accounting
-named; at 4,096 the measured curve prefers `k = 32`, which is `−0.157 ± 0.012`
-bits paired and +0.35 fit points for 1,002 B — 6.4 kB per bit, outside the band,
-so the two are a wash and the older point is kept for continuity.)
+**The `V` curve, measured**, at `k = 32`:
 
-Every section of those files is on the §5.1 table, and 42,268 held-out
-identifiers per point round-trip through the *packed* file with no failures.
+| `V` | model file | bits/id | fit ≤ 64 | word list share |
+|---:|---:|---:|---:|---:|
+| 511 | 2,269 B | 65.449 | 60.4 % | 39 % |
+| 4,095 | 15,661 B | 48.866 | 80.5 % | 63 % |
+| 6,143 | 23,775 B | 46.650 | 83.3 % | 65 % |
+| 8,191 | 32,085 B | 45.217 | 85.0 % | 66 % |
 
-Four more things came out of building it, none of which the formulas could
-have shown:
+The steps cost 3.7 and 5.8 kB per bit, against the 2.9–9.9 the `k` direction
+charges per fit point, so the ladder is running out rather than exhausted.  The
+next rung, `V = 12,288`, needs ~11 kB more rules at the measured 2.6 B per rule,
+plus 2.6 kB of depths and 2.6 kB of labels — 16 kB — and the marginal value of
+words is falling, so it cannot buy more than ~1.5 bits: 11 kB per bit or worse,
+well above the frontier's 4–10.  Extrapolated, not built;
+[`WORDLIST_BUDGET.md`](WORDLIST_BUDGET.md) has the ladder.
+
+Four more things came out of building it, none of which the formulas could have
+shown:
 
 * **The terminator had to move to the top stage.**  A two-stage code cannot put
-  the all-zeros path on the stop's right cluster without recoding the top stage
-  (+1 bit on every other quarter, since the stop's quarter is not the cheapest),
+  the all-zeros path on the stop's right cluster without recoding the top stage,
   so each top tree gets a zero-weight STOP leaf instead.  Cost: one depth per top
-  tree, 10 B; saving: the terminator, 2.6 bits per identifier.
-* **The published 47.891 bits/identifier reproduces exactly.**  The same build —
-  two maps, the stop's natural weight — gives 47.892 bits/id counted the old way,
-  summed codeword lengths with the stop charged, so the oracle and
-  `CLUSTER_QUARTERS.md`'s measurement agree.  Counted the shipped way that build
-  is 45.297, i.e. the free terminator and the stripped zeros are worth **2.60
-  bits**; driving the stop's weight to zero is another 0.03 (45.263); and the
-  one-map file pays 0.42 back for its 4,096 B, which is where 45.687 comes from.
-* **One map is worth its constraint, and more so as `k` grows.**  At `k = 16` two
-  maps cost 4,096 B and buy 0.47 bits/identifier (45.790 → 45.317 at `q = 1`;
-  0.42 at `q = 2`), which on the frontier's ≈5.5 kB/bit is 2.6 kB worth of bits
-  for 4.1 kB.  At the operating point the decision is not close: the second map
-  is 5,120 B (37,246 against 32,126 B) for **0.03 bits** (45.221 → 45.190) and
-  no fit change, i.e. 170 kB per bit.  The constraint's price falls with `k`
-  because a word's successor and predecessor profiles converge as the clusters
-  narrow — the same finding as `SHARED_CLUSTERS.md`, now in the packed file.
-* **The quarter code does not pay once the terminator is free.**  At 8192/16 it
-  costs 1,184 B for 0.10 bits and 0.13 fit points (53 identifiers net), which is
-  9.5 kB/pt against the shipped frontier's 3.9, and the other grid points are
-  worse.  The arithmetic accounting credited it 1.10 bits and 0.9 points because
-  both codes were paying for the stop there; the STOP leaf gives both that for
-  free, so what remains is word-stage granularity alone
-  (`CLUSTER_QUARTERS.md`).
+  tree; saving: the whole terminator.
+* **The corpus's stop token is not a symbol of the file.**  Its row of the
+  adjacency matrix is the **start state** (the first token's distribution) and
+  its column does not exist, because nothing is coded after the end.  So the
+  matrix is `V0 × (V0−1)`, the bottom trees carry no terminator, and the
+  dictionary loses 36 B because every child bound is one smaller
+  (`MODEL_FORMAT.md` §1).  Measured against the same build with the stop kept,
+  the file is 41 B smaller and the code is 0.9 bits/identifier better at
+  `V = 512`, `k = 8` (66.04 against 66.93).
+* **One map is worth its constraint, and more so as `k` grows.**  A file with a
+  second map adds one label per word — 2,048 B at 4096/16, 4,096 B at 8192/16,
+  5,120 B at 8192/32 — and buys 0.009 / 0.548 / 0.319 bits per identifier:
+
+  | point | one map | two maps | the map costs | for | per bit | fit ≤64 |
+  |---|---:|---:|---:|---:|---:|---:|
+  | 4096/16 | 14,659 B | 16,707 B | 2,048 B | 0.009 bits | 228 kB | 80.5 → 80.6 % |
+  | 8192/16 | 30,571 B | 34,667 B | 4,096 B | 0.548 bits | 7.5 kB | 84.5 → 85.1 % |
+  | 8192/32 | 32,085 B | 37,205 B | 5,120 B | 0.319 bits | 16.0 kB | 85.0 → 85.3 % |
+
+  The frontier sells bits for 3–5 kB (§6), so the second map is 1.5–2.5× too
+  dear at `k = 16` and 3–5× too dear at `k = 32`, and its price is rising: the
+  bits it buys fall as `k` grows while the map grows with it.  The constraint is
+  therefore not a compromise to be weighed — it is what makes a fine `k`
+  affordable, and the measurement says so at both 8192 points
+  ([`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md)).
+* **The quarter code does not pay once the terminator is free.**  The arithmetic
+  accounting credited it 1.10 bits and 0.9 points because both codes were paying
+  for the stop there; with the STOP leaf the same build is worth 0.12 bits and
+  0.1 points, for 1,664 B — 14 kB a bit, three times the frontier's own price.
+  An accounting that charges a terminator to the word step will over-reward
+  every scheme that refines the word step
+  ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)).
 
 ## 8. What it shows
 
-* **The rule table is nearly two thirds of the model** — 21.1 of 34.2 kB at the
-  operating point, well ahead of the depths and the map (5.1 and 5.1 kB).  Zipf
-  coding already takes 20 % off the fixed-width index stream; the empirical
-  optimum is only a further 5 % and would have to be stored.  The real lever is a
-  smaller vocabulary, which is the `V`-against-`k` trade above.
-* **The frontier is 19 kB / 77 %, 30 kB / 81 %, 40 kB / 83 %** on the arithmetic
-  reference — comfortably inside the "50 kB-ish is acceptable if it rescues the
-  64-bit set" band, and 2× the 20 kB goal.  The shipped code sits below and to
-  the left of it: **34.2 kB at 84.8 %** for the point where the reference is
-  42.6 kB at 82.8 %.
+* **The rule table is two thirds of the model** — 21.1 of 32.1 kB at the
+  operating point, well ahead of the depths and the map (5.1 kB each).  The
+  ladder is within 5 % of the empirical entropy of the index stream, so there is
+  nothing left there; the real lever is a smaller vocabulary, which is the
+  `V`-against-`k` trade above.
+* **The frontier is 14.7 kB / 80.5 %, 23.5 kB / 83.2 %, 32.1 kB / 85.0 %,
+  39.3 kB / 85.5 %** — the last point 2× the 20 kB goal, and all of them inside
+  the "50 kB-ish is acceptable if it rescues the 64-bit set" band.
 * **Size is not what costs the 64-bit set — clustering is.**  The full-table
-  ceilings are 85–94 %; the shipped models fit 84.8 % (8192/32) and 84.1 %
-  (8192/16).  The remaining gap is the membership and block structure, not the
-  word list — and the `k` curve turns over at 32, where 1.5 kB buys 0.6 points
-  and past which nothing reliable is left to buy.
-* **The next two objects are the map and the depths** (5.1 and 5.1 kB at the
-  operating point).  `V · ⌈log₂ k / 8⌉` doubles by `k = 64`, so the map is the
-  term that makes a fine `k` expensive; it is what the shared cluster assignment
-  buys down.  The depth store is measured now, not assumed: 5 bits everywhere on
-  the grid, and the top stage grows from 170 B at `k = 16` to 2,600 B at
-  `k = 64`.
+  ceilings are 85–94 %; the shipped models fit 85.0 % (8192/32) and 84.5 %
+  (8192/16).  The remaining gap is the membership structure, not the word list.
+* **The next two objects are the map and the depths** (5.1 kB each at the
+  operating point).  `V · ⌈log₂ k / 8⌉` doubles by `k = 64`, so the map is what
+  makes a fine `k` expensive, and it is what the shared cluster assignment buys
+  down.  The depths are 5 bits because one tree's depths span 18 levels; the
+  weight bias of `MODEL_FORMAT.md` §3 holds every tree to 15 levels and makes the
+  field 4 bits — 1,156 B at no measured fit cost, measured but not yet adopted.
 
 ## Reproducing
 
 ```sh
-# the size oracle: build, write the YAML, pack, decode, report (§7)
-python3 scripts/model_size.py --dir work/tw4096ns --k 16 --stride 10
+# the size oracle: build, write the YAML, pack, decode, report (§6, §7)
 python3 scripts/model_size.py --dir work/tw8192ns --k 32 --stride 10   # the shipped point
-for k in 8 12 16 24 32 48 64; do                                       # the k curve
-  python3 scripts/model_size.py --dir work/tw8192ns --k $k --stride 10
+for d in "tw4096ns 8 16 24 32 48 64 96 128" "tw6144ns 4 8 16 24 32 64 96" \
+         "tw8192ns 4 6 8 12 16 24 32 48 64 96"; do                    # the grid
+  set -- $d; dir=$1; shift
+  for k in "$@"; do
+    python3 scripts/model_size.py --dir work/$dir --k $k --stride 10
+  done
+done
+for d in "tw512ns 8" "tw512ns 16" "tw512ns 32"; do                   # the V ladder
+  set -- $d
+  python3 scripts/model_size.py --dir work/$1 --k $2 --stride 10
 done
 python3 scripts/model_size.py --dir work/tw8192ns --k 16 --q 2 \
         --stride 10          # the quarter code, priced but not shipped
-python3 scripts/model_size.py --dir work/tw8192ns --k 16 \
-        --assignment two --stride 10   # a second map, for the price
-python3 scripts/model_size.py --dir work/tw8192ns --k 16 --flat   # §5.3 yardstick
-for d in "tw512ns 8" "tw512ns 32" "tw4096ns 32" "tw6144ns 24" "tw6144ns 48"; do
-  set -- $d                                                        # the V ladder
-  python3 scripts/model_size.py --dir work/$1 --k $2 --stride 10
-done
 python3 scripts/model_size.py --dir work/tw8192ns --k 32 \
-        --assignment two --stride 10   # the map at the operating point
-python3 scripts/model_size.py --self-test      # the MODEL_FORMAT.md §5 example
+        --assignment two --stride 10   # a second map, at the operating point
+python3 scripts/model_size.py --dir work/tw8192ns --k 16 --flat   # §5.2 yardstick
+python3 scripts/model_size.py --dir work/tw8192ns --k 32 --depth-bias  # §3's 4-bit field
+python3 scripts/model_size.py --self-test      # the MODEL_FORMAT.md §6 example
 
-# model size, with the rule table priced from the directory
-for d in work/tw4096ns work/tw6144ns work/tw8192ns; do
-  python3 scripts/model_budget.py --dirs $d --ks 16,32,64 --index-code zipf --code 2000
-done
+# the rule-pair grid of §4 and MODEL_FORMAT.md §4
+python3 scripts/rule_encoding.py --dir work/tw8192ns
 
-# the k-sweeps (bytes in the full inventory by default; --code-side for the
-# Huffman codebook accounting used in SHARED_CLUSTERS.md)
-python3 scripts/k_frontier.py --dir work/tw4096ns --ks 8,16,24,32,48,64,96,128 --stride 10
-python3 scripts/k_frontier.py --dir work/tw6144ns --ks 4,8,16,32,64,96 --stride 10
-python3 scripts/k_frontier.py --dir work/tw8192ns --ks 4,6,8,12,16,24,32,48,64,96,128 --stride 10
-
-# creation order vs unigram order
+# creation order vs frequency order
 python3 scripts/wordlist_order.py --dirs work/tw4096ns,work/tw6144ns,work/tw8192ns
 
-# the scatter plot in README.md (reads the frontier table above)
+# the scatter plot in README.md (reads the frontier table of §6)
 python3 scripts/frontier_plot.py --doc docs/MODEL_BUDGET.md --out docs/frontier.svg
 ```
 
-## Pre-grid record
+## Pre-grid record (historical, not comparable)
 
 Before the 10-ecosystem corpus the frontier was measured on the older
 vocabularies (`V = 2 104 / 4 478 / 11 758`) at stride 40 (`n = 5 739`) and priced
-with the codebook accounting discussed above.  Those numbers are **not**
-comparable with the tables in this note — different corpus, vocabulary and
-accounting — and are kept only as the record of what was believed at the time:
+with the codebook accounting that has since been retired.  Those numbers are
+**not** comparable with the tables in this note — different corpus, vocabulary
+and accounting — and are kept only as the record of what was believed at the
+time; nothing below or elsewhere is derived from them:
 
 | size | `V` | `k` | mean bits | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|
@@ -805,5 +659,10 @@ memberships, not a better model.
   paid for by storing the distribution.
 * Entropy-coding the *index stream* beyond the two-parameter Zipf prior.
 * A cluster → members index: derivable at load time, not charged.
-* Charging a Huffman codebook *and* the arithmetic tables for one model — they
-  are alternatives (see "The arithmetic alternative").
+* Pricing the model with arithmetic code lengths — retired everywhere.  The
+  format is a Huffman code, the rule table is a static geometric ladder, and a
+  size that no decoder could reach was being read as if it were the model
+  (§7, step 6).
+* A 4-bit depth field without the weight bias — the span is 18 levels at the
+  operating point, so the field would have to hold a depth of 18.  The biased
+  build of `MODEL_FORMAT.md` §3 is measured but not yet in the layout.
