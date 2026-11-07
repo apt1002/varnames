@@ -152,8 +152,12 @@ labels (see `README.md`).
       unaffordable at the canonical vocabularies, which is what C28 is for.
       `docs/CODING_OVERHEAD.md`, `scripts/words_per_identifier.py`.
 
-- [x] **C26. One cluster assignment for both sides.** *Adopted at the canonical
-      grid.* `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`.
+- [x] **C26. One cluster assignment for both sides.** *Adopted at `k = 32`,
+      neutral at `k = 64`* — five seeds on the 10x held-out set show +0.34 pt
+      over the interpolated frontier at `k = 32` and −0.04 pt at `k = 64`, so
+      the earlier single-seed `+0.08` at `k = 64` does not hold.
+      `docs/SHARED_CLUSTERS.md`, `scripts/shared_clusters.py`,
+      `scripts/c26_closeout.py`.
 - [x] **C27. Reserved stop clusters.** *Rejected — cheap but inert; the exact
       boundary table it would replace cannot pay for itself.  The sample-0
       dictionaries stay plain.* `docs/NEWLINE_CLUSTER.md`,

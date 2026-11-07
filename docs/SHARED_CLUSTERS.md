@@ -1,10 +1,11 @@
 # One cluster assignment for both sides
 
-Status: **adopted at the canonical grid**, where it sits at or above the
-asymmetric frontier at matched total bytes.  A first measurement at the testing
-vocabulary (`V = 512`) rejected it; that measurement is a statement about a
-cheap model, not about the constraint, and it now lives in
-[`SMALL_DICT.md`](SMALL_DICT.md) with the rest of the testing-point numbers.
+Status: **adopted at `k = 32`; neutral at `k = 64`.**  Over five seeds on the
+10x held-out set the shared model sits 0.34 pt above the asymmetric frontier at
+matched total bytes when `k = 32`, and exactly on it when `k = 64`.  A first
+measurement at the testing vocabulary (`V = 512`) rejected it; that measurement
+is a statement about a cheap model, not about the constraint, and it now lives
+in [`SMALL_DICT.md`](SMALL_DICT.md) with the rest of the testing-point numbers.
 The decision rule that reads the result is spelled out below.
 
 ## The question
@@ -108,7 +109,8 @@ within 0.2 bits.  Keep the 1:1 default; the concatenation is not a handicap.)
 ### At matched `k` it loses; at matched bytes it wins
 
 At matched `k` the constraint costs 0.19 bits at `k = 32` and 0.33-0.52 bits at
-`k = 64`, with fit<=64 down 0.1, 0.6 and 0.5 points.  That is not the question
+`k = 64` (0.27 and 0.43 on the 10x set), with fit<=64 down 0.1, 0.6 and 0.5
+points.  That is not the question
 the decision rule asks: it is about **matched total bytes**, and the asymmetric
 model does not exist at 14.8, 18.4 or 33.8 kB.  Placing each shared point
 against the asymmetric frontier interpolated to the same size:
@@ -119,13 +121,8 @@ against the asymmetric frontier interpolated to the same size:
 | 4096, `k = 64` | 18,416 | 78.5% | 78.4% (between `k = 32` and 64) | +0.08 pt |
 | 8192, `k = 64` | 33,776 | 82.9% | 82.0% (between `V = 4096` and 8192 at `k = 64`) | **+0.93 pt** |
 
-All three sit at or above the frontier, two comfortably and one at the
-noise boundary.  The rule's tolerance is +-0.3 pt, so all three pass: the shared
-point is *not below* the asymmetric frontier anywhere measured, and at `V = 8192`
-it is a clear 0.9 points above it.
-
-Why the trade pays here: a point of fit<=64 costs 4.3-4.5 kB on this frontier,
-so the 2.5-6.1 kB the shared assignment frees is worth 0.6-1.4 pt, against a
+Why the trade can pay: a point of fit<=64 costs 4.3-4.5 kB on this frontier, so
+the 2.5-6.1 kB the shared assignment frees is worth 0.6-1.4 pt, against a
 constraint that costs 0.1-0.6 pt.  In a model of under two kilobytes the same
 percentage saving is 256 B — half a point — against a constraint that costs more
 than a point, so the identical trade is a loss.  The verdict is a statement about
@@ -133,17 +130,39 @@ the size of the model, not about the constraint, and it must be re-measured, not
 scaled: the testing-point run is recorded in
 [`SMALL_DICT.md`](SMALL_DICT.md#shared-cluster-assignment-worktw512ns-k--16).
 
+### The close-out: five seeds on the 10x held-out set
+
+A margin of a tenth of a point cannot be carried by one seed, so both
+`V = 4096` cells were re-measured with five seeds on the 10x held-out set
+(stride 10, 42,268 identifiers), re-interpolating the frontier per seed
+(`scripts/c26_closeout.py`, which also counts the identifiers that cross the
+64-bit line in each direction):
+
+| cell | margin over 5 seeds | paired SE | shared − asymmetric bits | crossings at 64 bits |
+|---|---:|---:|---:|---:|
+| 4096, `k = 32` | **+0.343 pt** | 0.068 | +0.274 ± 0.039 | +64 / −91 |
+| 4096, `k = 64` | **−0.036 pt** | 0.055 | +0.429 ± 0.041 | +73 / −124 |
+
+At `k = 32` the shared model is comfortably above the interpolated frontier:
++0.34 pt at 5σ, with 64 identifiers gained and 91 lost at the 64-bit line (a net
+loss in that narrow sense, because the model also moves the whole distribution).
+At `k = 64` there is no advantage at all — the margin is zero to within the
+noise, and slightly negative — so the seed-1 `+0.08 pt` does not hold.  The
+`V = 8192, k = 64` point is still a single seed and should be re-measured the
+same way before it is quoted as a win.
+
 ### Verdict
 
-**Adopt the shared assignment at the canonical grid** (one label as both `lcl`
-and `rcl`, `w = 1`), keeping the `k^2` block: `D` asymmetry is 0.5-1.4 in
-Frobenius ratio, so it cannot be halved.  It buys 15-17% of the model for
-0.19-0.52 bits, which is a *gain* on the bytes-for-fit frontier at every
-canonical point measured.  Two caveats to carry forward: the `k = 64` at
-`V = 4096` margin (+0.08 pt) is inside the noise, so that cell is "no worse"
-rather than "better"; and the two-clause rule should be stated as the frontier
-placement test used here, not as "fit at matched `k`", which reads as a rejection
-of a scheme that is in fact above the frontier.
+**Adopt the shared assignment at `k = 32`** (one label as both `lcl` and `rcl`,
+`w = 1`), keeping the `k^2` block: `D` asymmetry is 0.5-1.4 in Frobenius ratio,
+so it cannot be halved.  At the small `k` the 2.5 kB it frees is worth about
+half a point of fit, which is more than the constraint costs; at `k = 64` the
+freed 3 kB is worth the same and the constraint costs the same, so the two
+cancel and the scheme is **neutral**.  Two caveats to carry forward: the
+`k = 32` margin relies on extrapolating the frontier below `k = 32` (there is no
+smaller asymmetric point at `V = 4096`), and the two-clause rule should be
+stated as the frontier placement test used here, not as "fit at matched `k`",
+which reads as a rejection of a scheme that is in fact above the frontier.
 
 ## Implementation
 
