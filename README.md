@@ -1,4 +1,4 @@
-# varnames — a corpus of programming-language identifiers
+# varnames — a model of programming-language identifiers
 
 **Goal.** Construct a **bijection from programming-language identifiers to the
 integers**, one that can be *expressed compactly* — on the order of 20 KB
