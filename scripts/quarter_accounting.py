@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cluster quarters, step 1: the pure accounting check (`docs/ENCODING.md` §5).
+"""Cluster quarters, step 1: the pure accounting check (`docs/CLUSTER_QUARTERS.md`).
 
 No sampling and no held-out set.  The question is what the three code layouts
 cost *in bits*, computed exactly from the counts, so that the experiment is
@@ -22,7 +22,7 @@ grouping considered (an imposed partition would put the expensive unequal merge
 
 Bits are the total Huffman cost over every transition of the counted corpus,
 divided by the number of identifiers.  Bytes use the accounting of
-`docs/ENCODING.md` §5.
+`docs/CLUSTER_QUARTERS.md`.
 
 Usage:
     quarter_accounting.py --dir work/tw512ns --k 16 --qs 2,4 --kappa 300
@@ -195,7 +195,7 @@ def main():
     print(f"{'CF':<18} {(cf_top + cf_bot) / N:>9.3f} "
           f"{(cf_top + cf_bot - flat_cost) / N:>8.3f} {cfb / 8:>8.0f}")
     print(f"  cluster step {cf_top / N:.3f}, word step {cf_bot / N:.3f} bits/id")
-    print("model bytes are ENCODING.md section 5's accounting; the flat column "
+    print("model bytes are CLUSTER_QUARTERS.md's accounting; the flat column "
           "is a yardstick, not a shippable table.")
 
 

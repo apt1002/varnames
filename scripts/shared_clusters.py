@@ -20,7 +20,7 @@ Controls reported for each `k`:
                     the ~V log2 k bits the shared assignment frees
     shared(k)       one assignment, weight w
 
-Bytes use the accounting of `docs/ENCODING.md` section 5: bit-coded parts in
+Bytes use the accounting of `docs/CLUSTER_QUARTERS.md`: bit-coded parts in
 bits/8, stored numbers at one byte each (the quantisation of
 `model_fit_rates.py`).  Membership is `V log2 k` bits per side.
 

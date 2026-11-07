@@ -99,7 +99,9 @@ size. With a large model we could do much better, but that's not the point; the
 question is how well we can do with a small model. Both halves are measured:
 the fit rate on held-out identifiers
 ([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and the model size in bytes
-with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)).
+with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). The
+model itself is a portable file, versioned and human-readable, whose format is
+specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md).
 Fitting an additional 1% of identifiers into 64 bits seems to cost between 2K
 and 6K in the interesting model size range; it costs more for larger models.
 
@@ -166,7 +168,7 @@ Along the way, we tried a lot of things that didn't work:
   co-clustering at equal store
   ([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)).
 - **Cluster quarters `q = 4`.** No better than `q = 2` for 3.2× the bytes
-  ([`docs/ENCODING.md`](docs/ENCODING.md) §5).
+  ([`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)).
 
 ## Layout
 
@@ -203,9 +205,12 @@ varnames/
 │   ├── CODING_OVERHEAD.md               # words per identifier + Huffman vs arithmetic
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
+│   ├── MODEL_FORMAT.md                  # the portable YAML model + its binary form
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
-│   ├── ENCODING.md                      # the encoding: stop token, published tables, cluster quarters
+│   ├── ENCODING.md                      # the encoding: stop token, published tables
+│   ├── CLUSTER_QUARTERS.md              # quarters: buy back the factorisation loss (q = 2)
+│   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
@@ -342,8 +347,8 @@ matters is the fraction of identifiers that fits in 64 bits, and what that
 fraction costs in kilobytes. Reports therefore quote bits **and** the fit rate,
 and anything that trades one for the other is priced against the local frontier
 slope in kB per point of fit (see the tables in
-[`docs/ENCODING.md`](docs/ENCODING.md) §5). Bits alone are also the wrong
-success metric when the report is about *generating* identifiers: the "hit rate"
+[`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)). Bits alone are also the
+wrong success metric when the report is about *generating* identifiers: the "hit rate"
 of a generator measures memorisation of the training corpus, not compression.
 
 ## Licensing, provenance and authorship

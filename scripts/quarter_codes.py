@@ -191,7 +191,7 @@ def main():
     bits['assoc'] = mfr.bits_assoc(seqs, m_assoc['logc'], m_assoc['logD'],
                                    m_assoc['logden'], lcl, rcl)
 
-    # ---- model bytes, ENCODING.md section 5 --------------------------------
+    # ---- model bytes, CLUSTER_QUARTERS.md --------------------------------
     def bytes_for(kk):
         """CF's accounting: `kk` left clusters, `kk` leaves in the top tree."""
         return (kk * (2 * (kk - 1) + kk * np.log2(kk))

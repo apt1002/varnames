@@ -54,8 +54,8 @@ The lengths are near-optimal: `len(s) ≈ −log₂ p(s)`, and the excess — th
 redundancy — is bounded by about the largest leaf probability plus a small
 constant.  That bound is why a Huffman code is affordable on the
 cluster-conditional distributions here, which are very skewed; the measured
-rounding is 0.024–0.038 bits per token (`CODING_OVERHEAD.md`).  `ENCODING.md` §5
-uses the same bound to price the quarter code.
+rounding is 0.024–0.038 bits per token (`CODING_OVERHEAD.md`).
+`CLUSTER_QUARTERS.md` uses the same bound to price the quarter code.
 
 What has to be published is the **lengths**, not the codewords.  Given one length
 per symbol, the code is assigned canonically: sort the symbols by
@@ -158,7 +158,9 @@ because they look as if they should:
 ### 5.1 The three tables, byte by byte
 
 Estimates, not serialised bytes: the rule table is priced in §4, the depth and
-map counts in §3.  The size oracle in §7 replaces them with measured bytes.
+map counts in §3.  The size oracle in §7 replaces them with measured bytes; the
+byte-level layout they price is specified in
+[`MODEL_FORMAT.md`](MODEL_FORMAT.md).
 
 | object | who stores it | how | 4096/16 | 8192/16 | 8192/64 | derivable at load? |
 |---|---|---|---:|---:|---:|---|
@@ -275,7 +277,8 @@ tree per left cluster over all `V` words — whose codebook is `W`, about 245 kB
 in the bracket form and ~105 kB as the depth table.  It is an upper bound on
 what a Huffman code can do at this cell, not the shipped design.  The
 **factored** code that ships measures 48.987 bits / 81.9 % (CF) and
-47.891 / 82.8 % (CQF `q = 2`) with the stop charged (`ENCODING.md` §5); its
+47.891 / 82.8 % (CQF `q = 2`) with the stop charged (`CLUSTER_QUARTERS.md`);
+its
 zero-stop figure has not been measured and should come out ~2 bits better.  So
 "32.5 kB gets 85.3 %" is not a sentence this note can support yet — 32.5 kB is
 the factored model's size, 85.3 % is the flat model's fit.  The oracle measures
@@ -326,7 +329,7 @@ everything cheaper):
 | 62,027 | 8192 | 128 | 46.964 | 83.4 % | 98.9 % | — |
 
 The shipped code has been measured at the operating point only.  Its size is an
-estimate (§5.1); its fit charges the stop (`ENCODING.md` §5):
+estimate (§5.1); its fit charges the stop (`CLUSTER_QUARTERS.md`):
 
 | point | kB | fit ≤64 | note |
 |---|---:|---:|---|
@@ -507,11 +510,13 @@ double-charged a Huffman bottom stage, the missing word→left-cluster map, and 
 "bracket vs length table" claim that did not survive re-reading.  The next step
 is therefore to stop pricing the model by formula and measure it.  Six steps:
 
-1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, serialise
-   the model in the published format (§1), report actual bytes per section,
-   decode a held-out identifier and assert losslessness, and report the code's
-   real bits/identifier from the decoded artefact.  From then on every published
-   byte comes from this, not from a formula.
+1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, write the
+   YAML model, pack it to the binary form of
+   [`MODEL_FORMAT.md`](MODEL_FORMAT.md), report actual bytes per section, decode
+   a held-out identifier and assert losslessness, and report the code's real
+   bits/identifier from the decoded artefact.  From then on every published byte
+   comes from this, not from a formula — and the packing rule is the codec of
+   H12, so the oracle and the published file share one implementation.
 2. One **inventory table** in this note: object / who stores it / how / bytes at
    4096/16, 8192/16, 8192/64 / derivable at load? / charged where.  The
    checklist is rules, unigram, left map, right map, block, bottom codebook, top
@@ -524,7 +529,8 @@ is therefore to stop pricing the model by formula and measure it.  Six steps:
    leaf-list-free `2 + log₂k` form fails because a depth-1 leaf can only sit at
    an end of its subtree, so the Huffman depth sequence need not be realisable
    in an arbitrary order.
-4. **Re-derive** every table from the oracle: the frontier here, `ENCODING` §5
+4. **Re-derive** every table from the oracle: the frontier here,
+   `CLUSTER_QUARTERS.md`
    (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`, `SHARED_CLUSTERS` and
    the shared-cluster, reserved-cell and quarter pricing, `PRUNE_WORDS`,
    `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  The dictionary term must

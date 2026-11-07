@@ -225,7 +225,8 @@ CQF recovers **18% (`q = 2`) and 30% (`q = 4`)** of the flat → CF penalty *at
 this vocabulary*.  Both the penalty (3.878 bits because 16 clusters is coarse)
 and the fraction are properties of the coarse grid; at `V = 4096` the penalty is
 2.3–3.0 bits and the recovered fraction is 35–43%.  The extrapolation from these
-two fractions was wrong in both terms — see `ENCODING.md` §5, which now carries
+two fractions was wrong in both terms — see `CLUSTER_QUARTERS.md`, which
+carries
 the grid numbers only.
 
 ## The code comparison at the testing point

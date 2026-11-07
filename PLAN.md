@@ -101,9 +101,16 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 - [x] **C27. Reserved stop clusters.** *Rejected.*
       `docs/NEWLINE_CLUSTER.md`.
 - [x] **C28. Cluster quarters.** *Adopted at `q = 2`; rejected at `q = 4`.*
-      `docs/ENCODING.md` §5.
+      `docs/CLUSTER_QUARTERS.md`.
 - [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
-      model term.*  `docs/ENCODING.md` §6.
+      model term.*  `docs/CODESIGN.md`.
+- [ ] **C30. Show the clusters on the factor clouds.** *Planned.*  Colour
+      `scripts/factor_cloud.py` by the shared assignment, so the co-clustering
+      can be seen rather than inferred.  `docs/CLUSTER_WORDS.md`,
+      `docs/HELLINGER_FACTORISATION.md`.
+- [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
+      model.*  The two clouds of the adopted model, coloured by cluster, as
+      illustration.  `README.md`.
 
 ## D. Corpus preprocessing
 
@@ -158,9 +165,13 @@ be steered toward it.  Design intent, scope and audiences:
       `docs/MODEL_BUDGET.md`, `docs/SMALL_DICT.md`.
 - [x] **H9. Restructure the documentation.** *Done.*  `README.md`.
 - [x] **H10. Reconcile the codebook accounting.** *Settled.*
-      `docs/ENCODING.md` §5, `docs/MODEL_BUDGET.md`.
+      `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_BUDGET.md`.
 - [ ] **H11. A complete review of the model-size accounting.** *Planned — the
       six-step size oracle.*  `docs/MODEL_BUDGET.md` ("The size oracle").
+- [ ] **H12. Encode and decode the model file.** *Planned — the YAML format is
+      specified; the YAML ⇄ binary codec and the measurement of the binary are
+      the work.  Feeds the oracle (H11) and the published table-building tools
+      (E10).*  `docs/MODEL_FORMAT.md`.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 
