@@ -91,13 +91,18 @@ row (left-context) and column (right-context) behaviour legitimately differ.
 frequent contexts meet constantly) and sparse for large `N` (rare pairs are
 nearly unique):
 
-| `T` | `N` | `nnz` | density |
-|---:|---:|---:|---:|
-| 100000 | 159 | 20,061 | 79.4% |
-| 50000 | 316 | 64,434 | 64.5% |
-| 20000 | 911 | 292,630 | 35.3% |
-| 10000 | 2,102 | 736,006 | 16.7% |
-| 5000 | 4,478 | 1,514,392 | 7.6% |
+| `T` | `N` | `nnz` | density | largest count |
+|---:|---:|---:|---:|---:|
+| 100000 | 278 | 55,297 | 71.6% | 198,881 |
+| 20000 | 1,788 | 753,302 | 23.6% | 144,214 |
+| 5000 | 8,038 | 3,331,843 | 5.2% | 42,195 |
+| 1000 | 40,168 | 9,818,809 | 0.61% | 18,293 |
+
+(Measured on `work/camel/merged.txt`, the 10-ecosystem corpus: 4,226,707
+identifiers, 81,455,598 positions in total.  Because `N` grows much faster than
+the number of occurring pairs, the density falls by two orders of magnitude
+across the table — the matrix is not an object one can store densely at any
+useful vocabulary.)
 
 A structural zero is **not** an impossibility: it only says the pair was not
 seen.  The next section fills those cells.
