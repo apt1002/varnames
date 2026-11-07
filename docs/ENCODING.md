@@ -299,14 +299,23 @@ Notes on the accounting:
   `2(V−k)` is **two bits per internal node** across all `k` bottom trees, not
   "two bytes per rule", and `V log V` is the leaf list.
 
-  This is a *compressed* store, and it needs a tree walk at load time.  §3's one
-  byte per code length is the **static** store of the same information, and it is
-  competitive: the bracket form pays `log₂V + 2` bits per leaf (the +2 amortises
-  one internal node per leaf), the table pays `8 + log₂k` (a length plus its
-  cluster map).  They cross at `V/k = 64`; above that the static table is smaller
-  — by 0.5 kB at 4096/32, 3 kB at 8192/16 — and it needs no processing beyond the
-  canonical assignment.  So the figures below are the *reference* (smallest
-  known) store, while a shipped artifact would carry the length table.
+  It is **not the form to ship**, and it is not the smallest.  The bracket form
+  pays `log₂V + 2` bits per leaf: the +2 amortises one internal node per leaf,
+  and the `log₂V` names every leaf by its word index.  A **depth table** pays
+  `log₂⌈max depth⌉ + log₂k` bits per leaf — 9 bits at `V = 8192, k = 16`
+  (5 for a depth ≤ 31, 4 for the map) against 15 — and needs no tree walk.
+
+  The reason the leaf list cannot simply be dropped, for `2 + log₂k`, is that the
+  shape fixes the depths **in depth-first order** and an arbitrary leaf order
+  need not admit that depth sequence: a depth-1 leaf can only sit at an end of
+  its subtree, so a word in the middle of the list cannot take the shortest code.
+  Permuting equal-depth leaves and reflecting subtrees only reaches orders the
+  shape already admits; it cannot manufacture one.  So the depth has to be
+  carried **per word**, not derived from the shape — `log₂ depth + log₂k` is
+  available, `2 + log₂k` is not.
+
+  The figures below are therefore an *upper* bound on the codebook; the shipped
+  store is the packed depth table, and `MODEL_BUDGET.md` prices it.
 * **One term is missing: the word→left-cluster map.**  The top stage is indexed
   by the left cluster of the *current* word, and neither formula charges the
   `V log₂k` bits that map needs; the leaf list only implies the *right*-cluster

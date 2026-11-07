@@ -314,36 +314,34 @@ gave 53.5 kB where the arithmetic model is 39.8 kB; the difference, 13.7 kB, is
 one bottom-stage codebook plus a double-charged 2 kB of code.
 
 The factorised codebook is priced in [`ENCODING.md`](ENCODING.md) §5 (`CF` and
-`CQF`: 8.0 kB at 4096/32, 19.4 kB at 8192/64).  Its bottom-stage `2(V−k)` is
-not a fudge for "two bytes": it is the **bracket skeleton** of the bottom trees
-— every internal node is one `(` and one `)`, so two bits each, and a tree with
-`L` leaves has `L−1` internal nodes — and the `V log₂V` beside it is the
-depth-first **leaf list**.  The skeleton alone gives every code length; the list
-alone gives the assignment; together they reconstruct the tree.
+`CQF`: 8.0 kB at 4096/32, 19.4 kB at 8192/64).  That is the **bracket form**:
+`2(V−k)` is the skeleton (one `(` and one `)` per internal node, two bits each,
+`L−1` internal nodes for `L` leaves) and `V log₂V` is the depth-first leaf list.
+It is an information-theoretic reference, not the shipped store — it pays
+`log₂V + 2` bits per leaf.
 
-§3's one byte per code length is a **different store of the same information**,
-not a bigger price for the same object, and at the grid it is the cheaper one:
-the bracket form pays `log₂V` bits per leaf where a length table pays 8 bits
-plus `log₂k` for the map.  The crossover is `V/k = 64`; above it the table wins
-by 0.5 kB at 4096/32, 3 kB at 8192/16 and 1 kB at 8192/64 with two maps, and by
-2.9 / 7.0 kB with C26's shared assignment (one map serves both sides).  What
-both figures omit is the **word→left-cluster** map (another `V log₂k` bits)
-unless the assignment is shared.
+The shipped store is a **depth table**: `log₂⌈max depth⌉` bits per leaf, which
+is ~5 bits per tree if no tree exceeds depth 31, plus the cluster map.  At
+`V = 8192, k = 16` that is 9 bits per leaf — 5,120 B of depths plus 4,096 B of
+map, against the 16,640 B the arithmetic tables spend (unigram + two maps +
+block).  (The leaf-list-free `2 + log₂k` form is not available: the shape fixes
+the depths in depth-first order, and an arbitrary leaf order need not admit that
+depth sequence — a depth-1 leaf can only sit at an end of its subtree.  So the
+depth is carried per word.)
 
-The upshot is that the two shapes cost the **same** bytes at the operating
-point, not different ones: one byte per symbol either way (a length in one, a
-quantised probability in the other), plus the same maps and the same block.
-The codebook only looks smaller than the tables because §5 prices the
-*compressed* bracket form, and only looks bigger once its left map is charged.
-So the Huffman choice is not a size argument at all — it is worth ~1–2 bits per
-identifier for the free terminator (`CODING_OVERHEAD.md`), at equal size.
-Neither omission moves C28's increments (`q = 2` costs +1.1 kB at `k = 32`,
-`q = 4` 3.2× that), which is what that verdict rests on.
+So the Huffman shape is **smaller**, not equal: 21.1 (rules) + 5.1 (depths)
++ 4.1 (one map) + 0.2 (top) + 2.0 (code) = **32.5 kB**, against 39.8 kB for the
+arithmetic model with two maps (35.7 kB with one shared map).  What the
+arithmetic model buys for its extra 3 kB is nothing but the ability to evaluate
+`P(b|a)` at load time.
 
 On bits, the Huffman code with the adopted zero-weight stop measured **−1.0
 bit/identifier** and **+1.5 pt of fit** over the arithmetic reference at both
 checked cells (`CODING_OVERHEAD.md`: 8192/16 goes 47.727 → 45.027 bits, 82.5 →
-85.3 %).
+85.3 %).  The depth figures are estimates until `scripts/model_size.py` (PLAN
+H11) serialises the real model and reports the maximum depth per tree; the
+increments C28 rests on (`q = 2` costs +1.1 kB at `k = 32`, `q = 4` 3.2× that)
+are unaffected.
 
 ## What it shows
 

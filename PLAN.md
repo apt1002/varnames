@@ -336,13 +336,15 @@ old numbers remain reproducible without it.
       below).  Formulas drift; a serialised artefact cannot.  So the review is
       not another audit of the same arithmetic — it replaces the arithmetic with
       a measurement.
-      **The prize.** With the bracket skeleton (2 bits per internal node) plus
-      the cluster map (`log₂k` bits per word) and a *derivable* leaf order, the
-      codebook costs `2 + log₂k` bits per leaf instead of the 16 bits (unigram +
-      two maps + block) the arithmetic model spends: 6.1 kB against 16.6 kB at
-      `V = 8192, k = 16`, giving a ~29 kB model at the measured zero-stop fit
-      (~85 %) instead of 39.8 kB at 82.5 %.  Everything below exists to confirm
-      or kill that number.
+      **The prize.** A codebook stored as a *packed depth table*
+      (`log₂⌈max depth⌉` bits per leaf) plus the cluster map costs 9 bits per
+      leaf at `V = 8192, k = 16`, against the 16.25 the arithmetic model spends
+      (unigram + two maps + block): 9.2 kB against 16.6 kB, so a **32.5 kB**
+      model at the measured zero-stop fit (~85 %) instead of 39.8 kB at 82.5 %.
+      (A leaf-list-free `2 + log₂k` form is not available: the shape fixes the
+      depths in depth-first order and an arbitrary leaf order need not admit
+      that sequence, so the depth must be carried per word.)  Everything below
+      exists to confirm or kill the 32.5 kB.
       **Order.**
       1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`,
          serialise the model in the proposed on-disk format, report actual bytes
@@ -353,12 +355,14 @@ old numbers remain reproducible without it.
          how / bytes at 4096/16, 8192/16, 8192/64 / derivable at load? / charged
          where.  The checklist is rules, unigram, left map, right map, block,
          bottom codebook, top codebook, program code, terminator, padding.
-      3. The **ordering question** (the one assumption behind `2 + log₂k`):
-         measure `Σ w·d` for the Huffman length multiset assigned in (a) weight
-         order — optimal, (b) creation order — the free rule, (c) canonical by
-         id.  If (b) is within ~0.05 bit/identifier of (a), the leaf list is
-         unnecessary; if not, the static length table (`8 + log₂k`) is the
-         fallback and the extra bits are the price of not storing a permutation.
+      3. The **depth store**: measure the maximum code depth in every bottom
+         and top tree on the grid.  That sets the bits per depth (4, 5 or 6 —
+         a 5-bit field assumes no tree exceeds depth 31), whether any tree must
+         be length-limited (which costs bits), and whether the top stage is
+         `k²` packed depths or something cheaper.  It also confirms that the
+         depth is carried per word: the leaf-list-free `2 + log₂k` form fails
+         because a depth-1 leaf can only sit at an end of its subtree, so the
+         Huffman depth sequence need not be realisable in an arbitrary order.
       4. **Re-derive** every table from the oracle: `MODEL_BUDGET` (frontier),
          `ENCODING` §5 (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`,
          `SHARED_CLUSTERS` and the C26–C28 pricing, `PRUNE_WORDS`,
