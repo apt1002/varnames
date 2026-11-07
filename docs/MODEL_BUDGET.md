@@ -670,6 +670,10 @@ word, the measured rate) plus 2.6 kB of depths and 2.6 kB of labels — 13.3 kB 
 and the marginal value of words is falling (16.8, 2.2, 1.6 bits per step), so it
 cannot buy more than ~1.5 bits: 8.9 kB per bit or worse, well above the
 frontier's 3.9.  Extrapolated, not built; `WORDLIST_BUDGET.md` has the ladder.
+(The frontier tables above quote 4096/16, the point the arithmetic accounting
+named; at 4,096 the measured curve prefers `k = 32`, which is `−0.157 ± 0.012`
+bits paired and +0.35 fit points for 1,002 B — 6.4 kB per bit, outside the band,
+so the two are a wash and the older point is kept for continuity.)
 
 Every section of those files is on the §5.1 table, and 42,268 held-out
 identifiers per point round-trip through the *packed* file with no failures.

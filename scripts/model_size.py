@@ -1073,10 +1073,12 @@ def main():
     if args.json:
         with open(args.json, 'w') as f:
             json.dump(dict(dir=args.dir, V=V, k=k, q=q,
+                           seed=args.seed,
                            assignment=args.assignment,
                            stop_weight=args.stop_weight,
                            reserve_stop=args.reserve_stop,
                            sections=sections, total=len(buf),
+                           total_two_maps=len(buf) + extra_map,
                            plain=len(plain), yaml=len(text),
                            terminator_problems=problems,
                            bits_written=float(written.mean()),
