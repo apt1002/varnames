@@ -28,15 +28,15 @@ Words start as the single characters plus `\n`; the wordlist starts empty.
 
 Repeat `NUM_PAIRS` times:
 
-1. find the most common length-2 substring `uv` of **words** in the corpus;
-2. add the new word `(uv)`;
-3. append `(uv)` to the wordlist;
-4. replace every occurrence of `uv` by `(uv)` (other occurrences of `u` and `v`
+1. find the most common length-2 substring `uv` in the corpus, where `u` and
+   `v` are *words*;
+2. append `(uv)` to the wordlist;
+3. replace every occurrence of `uv` by `(uv)` (other occurrences of `u` and `v`
    are untouched).
 
 An occurrence of `(uv)` is **not** an occurrence of `u` — counts never look
 inside brackets.  Building the dictionary turns the corpus from a multiset of
-strings into a multiset of *tokenised* strings.
+strings into a multiset of *tokenised* strings: strings of words.
 
 ## 3. Tokenising an unseen string
 
@@ -57,14 +57,14 @@ the probability of its length-2 substrings,
     P(u₀ … u_n) = ∏_{i=0}^{n} P(u_{i+1} | u_i) ,
 
 and the compressed size of a string is `−log₂` of its probability.  The **corpus
-size** `CS` is the total compressed size.  With `L(z) = z·log z` (any base;
-`L(0) = 0`) it is the unsmoothed bigram model's
+size** `CS` is the total compressed size. An equivalent definition of `CS` is
 
     CS = S1 − S2 ,   S1 = Σ_u L(N(u)) ,   S2 = Σ_{u,v} L(N(u,v)) .
 
-The identity is proved in §10.  Two immediate readings: `CS = N·H(next | word)`
-(total tokens times conditional entropy per token), and `CS / N(\n)` is the
-average bits per string.  Smaller `CS` is better.
+With `L(z) = z·log₂ z` (`L(0) = 0`). This identity is proved in §10.
+Two immediate readings: `CS = N·H(next | word)` (total tokens times conditional
+entropy per token), and `CS / N(\n)` is the average bits per string.  Smaller
+`CS` is better.
 
 ## 5. The effect of one merge
 
@@ -87,15 +87,15 @@ With `Δ = CS' − CS` (a merge that improves compression has `Δ < 0`),
 
     ΔS1 = L(N(u)−N(u,v)) − L(N(u))  +  L(N(v)−N(u,v)) − L(N(v))  +  L(N(u,v))
 
-    ΔS2 =  −L(N(u,v))                                       (u,v)  -> gone
-        + Σ_{x≠v} [ L(N(x,u) − A(x)) − L(N(x,u)) ]         (x,u)  decremented
+    ΔS2 =  −L(N(u,v))                                        (u,v)  -> gone
+        + Σ_{x≠v} [ L(N(x,u) − A(x)) − L(N(x,u)) ]           (x,u)  decremented
         +       [ L(N(v,u) − A(v) − B(u) + Q) − L(N(v,u)) ]  (v,u)  both decrements
-        + Σ_{y≠u} [ L(N(v,y) − B(y)) − L(N(v,y)) ]         (v,y)  decremented
-        + Σ_{a≠v} L(A(a))                                  (a,w)  created
-        +       L(A(v) − Q)                                (v,w)
-        +       L(B(u) − Q)                                (w,u)
-        + Σ_{b≠u} L(B(b))                                  (w,b)  created
-        +       L(Q)                                       (w,w)  created
+        + Σ_{y≠u} [ L(N(v,y) − B(y)) − L(N(v,y)) ]           (v,y)  decremented
+        + Σ_{a≠v} L(A(a))                                    (a,w)  created
+        +       L(A(v) − Q)                                  (v,w)
+        +       L(B(u) − Q)                                  (w,u)
+        + Σ_{b≠u} L(B(b))                                    (w,b)  created
+        +       L(Q)                                         (w,w)  created
 
 The `Σ` is over the current vocabulary; `w` is new, so it never appears in the
 "decremented" sums.  Reading the lines: the pair `(u,v)` disappears

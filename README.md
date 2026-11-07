@@ -11,10 +11,9 @@ identifier as an integer and can recover it.
 the corpus, the models and the reports below exist to test whether a compact
 bijection is reachable at all. This is research, not yet a finished codec.
 
-What is reachable today: at the canonical grid the best model we have codes
-held-out identifiers at **~48 bits**, fits **~83%** of them in 64 bits and
-**~98%** in 128 bits, for a model of **~40 kB** (word list, block matrix and
-code together). That is short of the 20 kB goal, and the gap is where the
+What is reachable today: the best model we have codes held-out identifiers at
+**~48 bits**, fits **~83%** of them in 64 bits and **~98%** in 128 bits, for a
+model of **~40 kB**. That is short of the 20 kB goal, and the gap is where the
 remaining research sits — the measured frontier, and what it costs to move along
 it, is in [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
 [`docs/ENCODING.md`](docs/ENCODING.md).
@@ -41,8 +40,9 @@ Exceptionally long or rare identifiers do not fit in the budget; it is left to
 the caller to decide how to handle these cases. We think it would be sensible to
 reject them, or to encode them using a hash function and decode them using a
 hash map. The 64-bit budget is a little restrictive: at the current operating
-point about one identifier in six cannot be encoded, though they tend to be
-pretty ugly ones. The 128-bit budget is enough for almost any identifier.
+point about one identifier in six in the training corpus cannot be encoded,
+though they tend to be pretty ugly ones. The 128-bit budget is enough for
+almost any identifier.
 
 Compressing long identifiers into small integers is an exercise in information
 theory. The bulk of the work is statistics, not programming. What you will find
@@ -62,8 +62,8 @@ The experimental strategy is as follows:
   [`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md).
 - **Build word lists** — the "words" the model is made of. The adopted word
   list is a **pair-merge dictionary**: start from the character alphabet and
-  greedily merge the most frequent adjacent pair, so that every entry is a
-  string paired from two earlier symbols and the decoder can replay the rules.
+  greedily merge the most frequent adjacent pair, so that every word is a
+  string paired from two earlier words. The decoder can replay the rules.
   See [`docs/DICTIONARY_RULES.md`](docs/DICTIONARY_RULES.md) for the rule
   choice, [`docs/TREE_WORDS.md`](docs/TREE_WORDS.md) for the dictionary model
   and the merge theory, and [`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md) for
