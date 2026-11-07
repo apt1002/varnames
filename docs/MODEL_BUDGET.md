@@ -400,8 +400,8 @@ stop included; the two are consistent with each other, and neither is the
 shipped code's.  So that table is the frontier of the *reference*, and the
 shipped design's frontier lies down and to the left of it.  Its shape — the
 knee, the cheap stretch, the dead zone — carries over; the numbers do not.
-[`README.md`](../README.md) plots these points, with the one measured shipped
-point marked.
+[`README.md`](../README.md) plots these points, with the three measured
+shipped files marked as hollow points.
 
 Four things follow.
 
@@ -425,7 +425,11 @@ Four things follow.
 `scripts/k_frontier.py` sweeps `k` at fixed `V` with the same accounting and the
 same held-out set.  These are the same points as the frontier table above, kept
 separate because the *local slope* is what prices a change made inside a model
-(the shared clusters, the reserved stop cell, the quarters).
+(the shared clusters, the reserved stop cell, the quarters).  They are the
+**reference's** slopes: the shipped code's own `k` curve is in §7, and it turns
+over at 32 where this one still flattens after 16.  The reason is Huffman
+rounding — each per-cluster tree sees fewer tokens as `k` grows — so the two
+curves have different knees and the measured one sets the operating point.
 
 `V = 4096`, stride 10 (`n = 42,268`):
 
@@ -494,9 +498,10 @@ separate because the *local slope* is what prices a change made inside a model
 
 Five things follow.
 
-* **`k = 16` is the floor, at both vocabularies.**  Fit *falls* below it —
-  77.8 → 77.2 % at 4096 and 82.5 → 81.9 → 81.2 % from 16 down to 6 and 4 at
-  8192 — so there is a genuine optimum rather than "the lowest affordable `k`".
+* **In the reference, `k = 16` is the floor, at both vocabularies.**  Fit *falls*
+  below it — 77.8 → 77.2 % at 4096 and 82.5 → 81.9 → 81.2 % from 16 down to 6
+  and 4 at 8192 — so there is a genuine optimum rather than "the lowest
+  affordable `k`".
   At 8192, `k = 6` is the same fit as `k = 8` for 878 B less, and `k = 4` is a
   full point worse.  The earlier open question ("`k = 8` may be better still")
   is answered: it is not.
