@@ -197,14 +197,10 @@ trees were kept long enough to be audited (see "Hardening").
 * **Identifier extraction** is lexical: after scrubbing, everything matching
   `[A-Za-z_][A-Za-z0-9_]*` is kept, then sorted and de-duplicated
   (`LC_ALL=C sort -u`). Files containing NUL bytes are skipped as binary.
-* **Ruby (network).** A uniform random sample of 10,000 gems was drawn from the
-  full RubyGems catalogue (`https://rubygems.org/versions`, ~219,777 gems),
-  taking the latest version of each. 9,023 archives downloaded (~1.9 GB); 8,423
-  unpacked and scanned (226,878 files).
-* **Rust (network).** The first 2,500 crates by download count on crates.io
-  (~374 MB of `.crate` archives, ~2.4 GB unpacked).
-* **Python / Go / JavaScript / Perl (offline).** Harvested from sources already
-  installed on the host, so they cost no network bandwidth.
+
+Per-ecosystem provenance — what was downloaded, how much, and the popularity
+proxy used to rank packages — is recorded under *Composition* above and
+*Per-language harvest reports* below.
 
 ## Hardening: the literal-leak audit
 
@@ -513,5 +509,7 @@ by running the three stages (fetch → unpack → extract) and dropping the resu
 
 Identifiers are extracted as facts from openly published package sources and
 locally installed open-source software. Individual packages carry their own
-licenses. This repository contains only the derived token lists, not the
-original source code.
+licences. This repository contains only the derived token lists, not the
+original source code. The lists themselves are dedicated to the public domain
+under CC0-1.0, to the extent we hold rights in them; the terms for the rest of
+the repository are in *Licensing, provenance and authorship* in `README.md`.
