@@ -19,9 +19,10 @@ adjacent pair of words (`docs/TREE_WORDS.md` §2).  Two things the rule does
   would minimise `Δ = CS' − CS` over candidate pairs; the frequency rule is a
   cheap proxy for it.
 
-Both departures from the "obvious" rules cost something in principle, so both
-were measured: the exact `Δ` rule in "Adopted: greedy by frequency", and run
-words in "Rejected: the run word".  Neither is worth its price.
+Each departure gives up something in principle, so each was measured against
+its obvious alternative: the exact `Δ` rule in "Adopted: greedy by frequency",
+and run words in "Rejected: the run word".  Neither alternative is worth its
+price.
 
 Everything is measured as **corpus size** `CS = S1 − S2` in bits (base 2),
 `S1 = Σ_u L(N(u))`, `S2 = Σ_{u,v} L(N(u,v))`, `L(z) = z log₂ z`, computed on the
