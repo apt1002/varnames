@@ -93,7 +93,7 @@ Three properties of the shipped code matter for the accounting:
   cannot match.
 * **The terminator leaves still cost a leaf each.**  The stop is one of the `V`
   words and takes a leaf in its cluster's tree; every top tree pays one extra
-  depth for its STOP leaf (330 B rather than 320 B over the 16 trees at the
+  depth for its STOP leaf (660 B rather than 640 B over the 32 trees at the
   operating point).  They are in the model; they are just not in the
   identifiers.
 

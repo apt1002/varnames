@@ -13,7 +13,7 @@ because the terminator was most of what the quarters were buying.  The model fil
 still carries the grouping as one label per word when `q > 1`
 (`MODEL_FORMAT.md`) — the right clusters are subtrees of the Huffman build, not
 of the canonical tree a depth-only file implies, so the grouping cannot be read
-off the tree — which costs 1.2 kB at the operating point ("The structural cost"
+off the tree — which costs 1.7 kB at the operating point ("The structural cost"
 below).  Measured by `scripts/model_size.py` at the operating point (`8192/32`),
 the shipped `q = 1` file is **32,126 B** and fits **84.8 %** of held-out
 identifiers in 64 bits; `q = 2` is 33,790 B and 84.7 %, so at the operating point
@@ -341,10 +341,11 @@ and the full arithmetic model it belongs to, are in
 within one `V`, so the rule table cancels and the omission does not move the
 ordering.)
 
-**The operating point: `V = 8192, k = 16`.**  The frontier measurement moved the
-cheap model down to a coarse `k` at the largest vocabulary, which changes CQF's
-economics because the top stage is `k x kq` — at `k = 16, q = 2` it is 16 × 32
-leaves:
+**The point the accounting liked: `V = 8192, k = 16`.**  The frontier measurement
+moved the cheap model down to a coarse `k` at the largest vocabulary, which
+changes CQF's economics because the top stage is `k x kq` — at `k = 16, q = 2` it
+is 16 × 32 leaves (the shipped build, `k = 32, q = 1`, is 32 trees of 32 leaves
+plus the STOP leaf):
 
 | scheme | bits/id | fit ≤64 | bytes |
 |---|---:|---:|---:|
@@ -357,7 +358,7 @@ leaves:
 Paired against CF: arithmetic `−1.260 ± 0.005` bits / `+0.6 ± 0.0` pt; CQF `q = 2`
 `−1.095 ± 0.006` / `+0.9 ± 0.1` pt; CQF `q = 4` `−1.167 ± 0.006` / `+1.0 ± 0.1`.
 
-So at the operating point CQF `q = 2` costs **252 bytes** in this accounting and
+So at 8192/16 CQF `q = 2` costs **252 bytes** in this accounting and
 buys 0.9 points over CF, or **0.3 points over arithmetic decoding at
 0.84 kB/pt**.  On the accounting's price it is the cheapest fit point in the
 whole study — cheaper than anything the `k` or `V` directions offer — and `q = 4`
@@ -523,8 +524,9 @@ finer.  That asymmetry is where the gain comes from.
 
 It does not need a second **map**.  Each word carries one label, its right
 cluster, and its left cluster is that label divided by `q`.  So the file stores
-one label per word in `⌈log₂ kq⌉` bits rather than `⌈log₂ k⌉` — 5 instead of 4 at
-the operating point, 1,024 B — plus 160 B of extra top depths, and the two counts
+one label per word in `⌈log₂ kq⌉` bits rather than `⌈log₂ k⌉` — 5 instead of 4
+at 8192/16, 6 instead of 5 at the operating point, 1,024 B either way — plus the
+extra top depths, 160 B at `k = 16` and 640 B at `k = 32`, and the two counts
 `k` and `q`.  What is paid for is the width, not a second table.
 
 **The width is not avoidable.**  It is tempting to name a right cluster by a

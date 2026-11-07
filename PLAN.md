@@ -100,11 +100,12 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/SHARED_CLUSTERS.md`.
 - [x] **C27. Reserved stop clusters.** *Rejected.*
       `docs/NEWLINE_CLUSTER.md`.
-- [x] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.  It
-      costs 1,184 B at the operating point, not the accounting's 252 B: the file
-      stores one label per word (its right cluster), because this build's right
-      clusters are subtrees of the Huffman tree and the file derives the
-      canonical one.*
+- [x] **C28. Cluster quarters.** *Overturned: `q = 1` ships.*  Adopted at
+      `q = 2` on the arithmetic accounting, rejected once the file was measured
+      under the shipped convention: the quarters buy 0.10 bits and 0.13 fit
+      points for 1,184 B at 8192/16, and at the operating point 8192/32 they
+      cost 1,664 B and lose both.  The terminator was most of what they were
+      buying, and the zero-weight STOP leaf now gives it away.
       `docs/CLUSTER_QUARTERS.md`.
 - [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
       model term.*  `docs/CODESIGN.md`.
