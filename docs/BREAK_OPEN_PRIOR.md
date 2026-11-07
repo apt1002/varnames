@@ -11,7 +11,10 @@ whose shape `P_mar` treats every vocabulary item alike.  But the words are
 to single characters.  That structure is information the independence prior
 throws away.  This note designs a prior that uses it — *breaking open the pair*.
 
-**This is a design note; it is not yet wired into the model.**  It fixes the two
+**This is a design note, and the design is rejected.**  It is not wired into
+the model.  The independence prior `P_mar` stays.  §8 measures the alternative
+and §8.7 re-measures it at the canonical grid, where it is 10–11 bits worse at
+the best `kappa` and 13–14 points worse on the 64-bit fit.  It fixes the two
 errors of the first draft: the recursion is an *estimation rule* for a missing
 count (not a free-floating "seed"), and it is defined by building the matrix
 **bottom-up** so that its normalisation is available when it is needed.
@@ -67,8 +70,10 @@ Two special cases fall out of "break the **later** word":
   no later one; breaking a single side would be asymmetric.  Break **both**, so
   the prior of a self-loop `(w,w)` is `alpha·P(rc(w), lc(w))` (§4 fixes this for
   a newly created `w`).
-* **Run words.**  A flat `(u^k)` is one **`k`-ary** node, not a chain of binary
-  merges, so it has `lc = rc = u`: breaking it drops straight to `u`.
+* **Run words (retired).**  A flat `(u^k)` is one **`k`-ary** node, not a chain
+  of binary merges, so it has `lc = rc = u`: breaking it drops straight to `u`.
+  The run rule has since been deleted — every `dict.txt` rule is now `P a b` —
+  so this case is historical and nothing below depends on it.
 
 ## 3. The recursion, top-down (for intuition)
 
@@ -226,8 +231,9 @@ train/test binomial thinning), not by row similarity.  Concretely:
 
 ### Details, now settled
 
-(This experiment is judged against the **run-aware dictionary baseline** of
-`docs/TREE_WORDS.md` §9.1 / `docs/WORD_COMPRESSIBILITY.md`.)
+(This experiment is judged against the **pair-merge dictionary baseline** of
+`docs/TREE_WORDS.md` §9.1 / `docs/WORD_COMPRESSIBILITY.md`.  These builds
+predate the deletion of the run rule, which is why run words appear below.)
 
 * **`M_ref(w,w)` = `alpha·P(v,u)`.**  Both endpoints of the self-loop are the
   *same* word `w = (uv)`, so "break the later word" is undefined and breaking one
@@ -243,7 +249,8 @@ train/test binomial thinning), not by row similarity.  Concretely:
 * **`alpha`** — its best value, and whether it must depend on `NUM_PAIRS`: every
   new word adds a row and a column, so a fixed per-cell `alpha` inflates the
   total prior mass as the vocabulary grows.  Swept below (§8).
-* **Run words are `k`-ary with `lc = rc = u`.**  A flat run word `(u^k)` is one
+* **Run words are `k`-ary with `lc = rc = u`** (historical — the run rule is
+  gone).  A flat run word `(u^k)` is one
   **`k`-ary** merge of `k` copies of `u` (one word per length), *not*
   `k−1` nested binary merges.  So `lc((u^k)) = rc((u^k)) = u`: breaking it once
   drops to `u`, its row/column priors use `P(u,·)` / `P(·,u)`, and its self-loop
@@ -270,8 +277,8 @@ below is **mean bits per held-out identifier, lower is better**.*
 per-level counts `N_r` come from a *trace* that `tree_words.build_dictionary`
 records in the same pass that grows the dictionary: for every pair merge it
 stores the left/right neighbours of each merged occurrence (the stop token at a
-line boundary, so the counts are the *cyclic* ones), and after every run step the
-cyclic count matrix.  One expensive pass therefore yields every level, and the
+line boundary, so the counts are the *cyclic* ones), and, in the builds that had
+one, the cyclic count matrix after every run step.  One expensive pass therefore yields every level, and the
 prior is then rebuilt for a new `alpha` in ~10 s.
 
 Checked (`--selfcheck`, and the trace pass at stride 20, which reproduces the
@@ -290,7 +297,8 @@ Run words are `k`-ary with `lc = rc = u`: their row and column priors are
 
 Dictionary and counts both come from the dictionary's own training sample
 (stride 20); the held-out identifiers are `merged_validation` (stride 20,
-disjoint from training), scored under the first-order word Markov model
+disjoint from training; §8.7 re-runs the comparison at stride 10,
+`n = 42,268`), scored under the first-order word Markov model
 `P_ref(b|a) = M(a,b) / Σ_y M(a,y)`, with `alpha = kappa·V`.  The `unobs%` column
 is the share of held-out bigram tokens whose *training* count is zero — exactly
 the cells the prior is there to fill.
@@ -305,7 +313,7 @@ the thinning approximation.
 
 ### 8.3 Results
 
-`mar` = independence `P_mar` (the run-aware-dictionary baseline); `break` = the
+`mar` = independence `P_mar` (the pair-merge-dictionary baseline); `break` = the
 break-open prior of §4; `breakz` = the same shape rescaled to total prior mass
 `alpha` (see §8.4).  Best row per model in **bold**.
 
@@ -347,7 +355,8 @@ break-open prior of §4; `breakz` = the same shape rescaled to total prior mass
 §7 asked whether `alpha` must shrink as `NUM_PAIRS` grows.  It must: the break
 rule gives every new word a full row *and* column of prior, so the total prior
 mass is `alpha · Σ_w [marg(rc(w)) + marg(lc(w))]`, and that factor grows with the
-vocabulary — **7.7×** (`tw96`), **14.2×** (`tw512`), **23.8×** (`tw2040`).  The
+vocabulary — **7.7×** (`tw96`), **14.2×** (`tw512`), **23.8×** (`tw2040`),
+**29–65×** (`tw4096ns`), **40–66×** (`tw8192ns`).  The
 best `kappa` consequently drifts downwards as the vocabulary grows (3000 → 300 →
 10 for `break`), so §8.3 does *not* compare the two priors at equal mass.
 
@@ -410,10 +419,10 @@ best `kappa` consequently drifts downwards as the vocabulary grows (3000 → 300
 ### 8.6 Verdict
 
 **Do not adopt the break-open prior as specified.**  It is 3.5–8.2 bits worse
-than the independence prior at `tw96`/`tw512`/`tw2040`, it is worse precisely on
-the unobserved cells, the deficit grows with the vocabulary as well as with
-sparsity, and neither mass-matching nor any mixture with the marginal recovers
-it.  §6's "plausible but modest" row-similarity signal was real, but it is not
+than the independence prior at `tw96`/`tw512`/`tw2040` and **10.1–10.9 bits**
+worse at the canonical grid (§8.7), it is worse precisely on the unobserved
+cells, the deficit grows with the vocabulary as well as with sparsity, and
+neither mass-matching nor any mixture with the marginal recovers it.  §6's "plausible but modest" row-similarity signal was real, but it is not
 the signal that decides.
 
 The last conceivable rescue — interpolating the child row with the marginal,
@@ -423,7 +432,64 @@ The last conceivable rescue — interpolating the child row with the marginal,
 `lambda = 1`, and even a 1% weight on the break shape hurts), and findings 1 and
 3–5 locate the loss in the *shape* on exactly the unobserved cells the prior is
 meant to fill, so a per-row `lambda_w` has no failure mode left to repair.  The
-prior stays the independence `P_mar` over the run-aware dictionary.
+prior stays the independence `P_mar` over the pair-merge dictionary.
+
+### 8.7 At the canonical grid (10-ecosystem corpus)
+
+Re-measured for H6 on `work/tw4096ns` and `work/tw8192ns`, same protocol
+(dictionary and counts from the build's own 5 % sample; held-out
+`merged_validation` at stride 10, `n = 42,268`), modes `mar` and `break`
+(`breakz` is within 0.1 bits of `break` and is not repeated).  The `break − mar`
+column is the deficit at that `kappa`; bold marks the best row of each prior.
+
+**`V = 4,096`, 29.9 % of held-out bigram tokens unobserved**
+
+| kappa | mar | break | break − mar | prior mass / α (break) |
+|---:|---:|---:|---:|---:|
+| 10 | 53.680 | **58.851** | +5.17 | 65.2 |
+| 30 | 50.965 | 58.750 | +7.79 | 44.1 |
+| 100 | 48.911 | 59.626 | +10.72 | 34.9 |
+| 300 | **48.635** | 61.333 | +12.70 | 31.4 |
+| 1000 | 50.173 | 63.971 | +13.80 | 29.9 |
+| 3000 | 52.239 | 66.455 | +14.22 | 29.4 |
+
+**`V = 8,192`, 36.7 % unobserved**
+
+| kappa | mar | break | break − mar | prior mass / α (break) |
+|---:|---:|---:|---:|---:|
+| 10 | 50.466 | **57.324** | +6.86 | 66.2 |
+| 30 | 47.860 | 57.505 | +9.65 | 50.8 |
+| 100 | **46.448** | 58.696 | +12.25 | 43.9 |
+| 300 | 46.874 | 60.636 | +13.76 | 41.4 |
+| 1000 | 48.458 | 63.210 | +14.75 | 40.3 |
+| 3000 | 49.981 | 65.294 | +15.31 | 40.0 |
+
+At the best `kappa` the deficit is **10.1 bits at 4096 and 10.9 at 8192**
+(48.635 / 46.448 against 58.750 / 57.324), and on the 64-bit fit it is
+**12.8 / 13.6 points** (83.8 / 87.1 % against 71.0 / 73.5 %).  The pre-grid
+deficits were 3.5, 5.6 and 8.2 bits at `tw96` / `tw512` / `tw2040`, so the growth
+with vocabulary is not only confirmed but steepened, and the mass inflation
+(29–66× against the 23.8× at `tw2040`) tracks it.
+
+The mixture test, re-run at 4096 (`--mix`, `kappa = 10…1000`): **`lambda = 1`
+wins at every `kappa`**, and the loss from a 1 % weight on the break shape is
+0.005–0.008 bits (48.916 against 48.911 at `kappa = 100`), so the shape has no
+weight worth carrying.  The unobserved cells — the ones the prior exists to fill
+— are still the worst ones: 11.32 bits against `mar`'s 8.34 at 8192,
+`kappa = 300`.
+
+**Verdict: unchanged, and stronger.**  The grid result is not a borderline call
+that a different `kappa` might rescue; the best break point is 10 bits behind
+the best independence point, and the gap widens with `V`.
+
+```sh
+python3 scripts/break_open_prior.py --dir work/tw4096ns --score-stride 10 \
+  --kappas 10,30,100,300,1000,3000 --modes mar,break --save-trace /tmp/tw4096_trace.npy
+python3 scripts/break_open_prior.py --dir work/tw8192ns --score-stride 10 \
+  --kappas 10,30,100,300,1000,3000 --modes mar,break --save-trace /tmp/tw8192_trace.npy
+python3 scripts/break_open_prior.py --dir work/tw4096ns --load-trace /tmp/tw4096_trace.npy \
+  --score-stride 10 --mix --kappas 10,30,100,300,1000
+```
 
 ## 9. Withdrawing the prior on absorbed row/column mass (tried, rejected)
 

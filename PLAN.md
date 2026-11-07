@@ -292,9 +292,12 @@ old numbers remain reproducible without it.
       `MATRIX_COMPRESSION`, `PRUNE_WORDS`, `STRUCTURAL_ZEROS`,
       `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled five seeds at each of
       `k = 32, 64`), `NEWLINE_CLUSTER`, `ENCODING` §5 (C28 on the 10× held-out
-      set).  **Remaining:** `BREAK_OPEN_PRIOR` (needs a new held-out run),
-      `ENCODING` §6, and the testing-point numbers in `SMALL_DICT` (which exist
-      only to exercise scripts).  **`BUDGET64_STUDY` done:** coverage, the
+      set).  **Remaining:** `ENCODING` §6 and the testing-point numbers in
+      `SMALL_DICT` (which exist only to exercise scripts).  **`BREAK_OPEN_PRIOR`
+      done:** re-run at `V = 4096` and `8192` on the 10× held-out set — the
+      prior is 10.1/10.9 bits and 12.8/13.6 fit points worse at the best
+      `kappa`, the deficit grows with `V`, the prior-mass inflation reaches
+      29–66×, and `lambda = 1` still wins the mixture test.  **`BUDGET64_STUDY` done:** coverage, the
       length boundary, the failure markers and the generative view re-measured
       at 4096/32, 6144/16 and 8192/16 with their full-table ceilings.
       **`MODEL_BUDGET` done:** priced on the arithmetic inventory once
