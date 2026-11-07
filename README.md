@@ -12,14 +12,16 @@ the corpus, the models and the reports below exist to test whether a compact
 bijection is reachable at all. This is research, not yet a finished codec.
 
 What is reachable today: the best model we have codes held-out identifiers at
-**45.8 bits**, fits **84.1%** of them in 64 bits and **98.8%** in 128 bits, for a
-model file of **30,612 bytes** (32.7 kB with the library code). That is short of
-the 20 kB goal, and the gap is where the remaining research sits — the measured
-frontier, and what it costs to move along it, is in
+**45.2 bits**, fits **84.8%** of them in 64 bits and **98.9%** in 128 bits, for a
+model file of **32,126 bytes** (34.2 kB with the library code) at 8192 words and
+32 clusters, where the measured bytes-for-fit curve turns over. That is short of
+the 20 kB goal, and the gap is where the remaining research sits —
+the measured frontier, and what it costs to move along it, is in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
 [`docs/ENCODING.md`](docs/ENCODING.md). The shipped figures are measured from the
 packed model file by `scripts/model_size.py`; the arithmetic reference, which
-stores probabilities instead of code lengths, is 39.8 kB at 82.5%.
+stores probabilities instead of code lengths, is 42.6 kB at 82.8% for the same
+`(V, k)`.
 
 ## The product
 
@@ -114,8 +116,8 @@ The figure plots the frontier table in
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
 furthest bottom-left. Filled points are the arithmetic reference for each
 word list (the small numbers are `k`); the hollow points are the three measured
-shipped files (4096/16, 8192/16 and 8192/64), which sit below and left of the
-reference curve.
+shipped files (4096/16, 8192/16 and 8192/32, the operating point), which sit
+below and left of the reference curve.
 
 We tried two main strategies, and found that the second one is much better:
 

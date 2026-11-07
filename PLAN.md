@@ -180,12 +180,13 @@ be steered toward it.  Design intent, scope and audiences:
 - [x] **H11. A complete review of the model-size accounting.** *Steps 1–3 done;
       4–6 open.*  `scripts/model_size.py` builds at `(V, k, q)`, writes the YAML,
       packs the binary, reports the bytes per section and round-trips held-out
-      identifiers through the packed file.  Measured at 8192/16: 30,612 B,
-      45.790 bits/id, 84.1 % in 64 bits.  It also forced a design fix — the
-      terminator moved to a zero-weight STOP leaf in the top stage — priced the
-      one-map constraint (0.42 bits for 4,096 B), and overturned `q = 2`: the
-      quarters buy 0.10 bits and 0.13 fit points for 1,184 B once the terminator
-      is free, so the shipped file is `q = 1`.  The `--flat` yardstick is
+      identifiers through the packed file.  Measured at the operating point
+      8192/32: 32,126 B, 45.221 bits/id, 84.8 % in 64 bits.  It also forced a
+      design fix — the terminator moved to a zero-weight STOP leaf in the top
+      stage — priced the one-map constraint (0.5 bits for 4,096 B), overturned
+      `q = 2` (the quarters buy 0.10 bits and 0.13 fit points for 1,184 B once
+      the terminator is free), and moved `k` from 16 to 32, where the measured
+      curve turns over.  The `--flat` yardstick is
       measured too, at three grid points: it buys 2.7–3.6 fit points for 38–385
       kB, so the factored code is the cheaper one on the frontier.  Still open:
       the inventory table from the measured sections, the re-derivation of every

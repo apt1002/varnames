@@ -156,7 +156,7 @@ table.
 
 Measured, not estimated: `scripts/model_size.py` writes the model, packs it in
 this order and reports the bytes of each section.  The figures are at
-`V = 8192, k = 16, q = 1`, the operating point, with the packed rule table.
+`V = 8192, k = 32, q = 1`, the operating point, with the packed rule table.
 
 | section | encoding | bytes |
 |---|---|---:|
@@ -166,17 +166,17 @@ this order and reports the bytes of each section.  The figures are at
 | rules length | a varint, because the rule stream is not self-delimiting | 3 |
 | `rules` | 2 × (V − 64) child indices, Zipf-arithmetic-coded | 21,145 |
 | `alphabet` | `len(alphabet)` bytes, ids 1–63 | 63 |
-| `memberships` | `⌈log₂ k⌉` = 4 bits each, packed | 4,096 |
+| `memberships` | `⌈log₂ k⌉` = 5 bits each, packed | 5,120 |
 | depth width | one byte, in bits | 1 |
 | `bottom_trees` | `V` depths at that width, right cluster by right cluster, ascending symbol id inside | 5,120 |
-| `top_trees` | `k(k + 1)` = 272 depths at the same width | 170 |
+| `top_trees` | `k(k + 1)` = 1,056 depths at the same width | 660 |
 | CRC-32 | of everything above | 4 |
-| **total** | | **30,612** |
+| **total** | | **32,126** |
 
 Two encodings of the section that dominates, the rule table:
 
 * **plain** — `⌈log₂ V⌉` bits per child, 13 at `V = 8,192`: 26,416 B, and the
-  whole file 35,883 B.  Simple, obviously correct, and the form the round-trip
+  whole file 37,397 B.  Simple, obviously correct, and the form the round-trip
   tests use.
 * **packed** — the child index is coded with the Zipf model of
   `MODEL_BUDGET.md` §4 (index `< i`, probability `∝ (j+1)^−0.7`, truncated to the
@@ -189,20 +189,20 @@ is bit *i* mod 8 of byte *i* // 8, and bit 0 of the code is the first bit an
 encoder writes, so the padding of `ENCODING.md` §2 is the run of zeros *above*
 the code.  Integers are little-endian.
 
-The rest of the file is 9,467 B, so the model is **30.6 kB** — against the
-32.7 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
-part of the model.  The YAML of §2 is 176,548 B at the same point: it is the
-portable form, and the binary is what the budget measures.
+The rest of the file is 10,981 B, so the model is **32.1 kB** — against the
+34.2 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
+part of the model.  The YAML of §2 is 181,575 B at the same point — 5.7 times
+as large: it is the portable form, and the binary is what the budget measures.
 
-A model with `q > 1` pays 1.2 kB at this point: one more bit per label (5 bits
-instead of 4, since a right cluster is one of twice as many), and twice the top
-depths (330 B instead of 170 B, the STOP leaf included).  It is the label that
+A model with `q > 1` pays 1.7 kB at this point: one more bit per label (6 bits
+instead of 5, since a right cluster is one of twice as many), and twice the top
+depths (1,300 B instead of 660 B, the STOP leaf included).  It is the label that
 dominates, and it is not avoidable: a depth list cannot say which symbols share
 a tree, and no position in the tree can stand in for it (§7).  Measured, the
 quarters do not repay it (`CLUSTER_QUARTERS.md`).
 
 The depth width is **5 bits measured, not assumed**: the deepest bottom tree is
-21 at `V = 8192, k = 16` and the deepest top tree 13, and the same 5 bits holds
+21 at `V = 8192, k = 32` and the deepest top tree 19, and the same 5 bits holds
 on the whole measured grid.  A build that exceeded depth 31 would have to be
 length-limited or use 6 bits, which costs 1 kB; neither is needed.
 

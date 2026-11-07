@@ -186,38 +186,39 @@ because they look as if they should:
 in the layout of [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3 and reports each
 section, so every number below is a byte count from a file the decoder read
 back.  The columns are the shipped code, `q = 1`, so the map is `⌈log₂ k⌉` bits
-wide.
+wide; the right-hand column is the operating point of §7.
 
-| object | who stores it | how | 4096/16 | 8192/16 | 8192/64 | derivable at load? |
+| object | who stores it | how | 4096/16 | 8192/16 | 8192/32 | derivable at load? |
 |---|---|---|---:|---:|---:|---|
 | word list — rules | the decoder | Zipf-coded child indices | 9,825 | 21,145 | 21,145 | no |
 | bottom — depths | the decoder | `V` depths, 5-bit field | 2,560 | 5,120 | 5,120 | no |
-| bottom — cluster map | the decoder | `V` labels, 4 or 6 bits | 2,048 | 4,096 | 6,144 | no |
-| top — depths | the decoder | `k(k+1)` depths, 5-bit field | 170 | 170 | 2,600 | no |
+| bottom — cluster map | the decoder | `V` labels, 4 or 5 bits | 2,048 | 4,096 | 5,120 | no |
+| top — depths | the decoder | `k(k+1)` depths, 5-bit field | 170 | 170 | 660 | no |
 | header, alphabet, CRC | the decoder | magic, version, varints, 63 bytes | 80 | 81 | 81 | — |
 | terminator | — | the all-zeros paths | 0 | 0 | 0 | yes |
 | padding | — | high zero bits of the integer | 0 | 0 | 0 | yes |
 | cluster → words index | — | from the map | 0 | 0 | 0 | yes |
 | canonical codes | — | from the depths | 0 | 0 | 0 | yes |
 | program code | the library | — | 2,048 | 2,048 | 2,048 | — |
-| **total** | | | **16,731** | **32,660** | **37,138** |
+| **total** | | | **16,731** | **32,660** | **34,174** |
 
 The depth field is **5 bits measured**: the deepest word tree on the grid is 21
-and the deepest top tree 22, both well inside 31, so nothing needs length
-limiting and the 6-bit contingency is closed (`MODEL_FORMAT.md` §3).
+and the deepest top tree 22 (at `k = 64`), both well inside 31, so nothing needs
+length limiting and the 6-bit contingency is closed (`MODEL_FORMAT.md` §3).
 
 Three differences from the earlier estimate of this table are worth naming,
 because each was a formula that had drifted: the top stage carries the STOP leaf
 (hence `k(k+1)` depths, not `k²`), the header is charged at all, and the depth
 field's cost is counted per depth rather than per bracket byte.  The earlier
-estimate's 16.6 / 32.5 / 36.9 kB become 16.7 / 32.7 / 37.1 kB measured.  The
-rules section, which is nearly two thirds of the file, came out within 0.3 % of
+estimate's 16.6 / 32.5 / 36.9 kB become 16.7 / 32.7 / 34.2 kB measured.  The
+rules section, which is over three fifths of the file, came out within 0.3 % of
 the Zipf pricing of §4 — the one formula that held.
 
-The quarter code's own share would be 672 / 1,184 / 3,584 B at the three points
-— the map one bit wider and the top stage doubled — and it is not shipped:
-measured, it buys 0.10 bits and 0.13 points at 8192/16 (`CLUSTER_QUARTERS.md`,
-§7).
+The quarter code's own share would be 672 / 1,184 / 1,664 B at the three points
+— the map one bit wider and the top stage doubled — and it is not shipped.
+Measured, it buys 0.10 bits and 0.13 points for 1,184 B at 8192/16, and at the
+operating point `k = 32` it is 0.05 bits and 0.08 points *worse* for 1,664 B
+(`CLUSTER_QUARTERS.md`, §7).
 
 ### 5.2 The arithmetic alternative
 
@@ -385,14 +386,13 @@ operating point: bytes from the packed file, fit under the shipped convention
 | point | kB | fit ≤64 | note |
 |---|---:|---:|---|
 | 4096/16 | 16.7 | 80.0 % | below the reference's 20.3 kB at 77.8 % |
-| 8192/16 | **32.7** | **84.1 %** | the operating point, against 39.8 kB at 82.5 % |
-| 8192/64 | 37.1 | 84.5 % | against 47.7 kB at 83.1 % |
+| 8192/16 | 32.7 | 84.1 % | against 39.8 kB at 82.5 % |
+| 8192/32 | **34.2** | **84.8 %** | the operating point, against 42.6 kB at 82.8 % |
 
-At the operating point the shipped file is **7.1 kB smaller and 1.6 points
-better** than the arithmetic reference; at 4096/16 it is 3.5 kB and 2.2 points
-better, and at 8192/64 10.6 kB and 1.4 points.  Part of each margin is the
-terminator: the arithmetic row has to code the stop, and the Huffman row cannot
-be made to.
+At the operating point the shipped file is **8.4 kB smaller and 2.0 points
+better** than the arithmetic reference; at 8192/16 it is 7.1 kB and 1.6 points,
+and at 4096/16 3.5 kB and 2.2 points.  Part of each margin is the terminator:
+the arithmetic row has to code the stop, and the Huffman row cannot be made to.
 
 **Read the axes with care.**  The bytes in the table above are the
 **arithmetic** model's (§5.4) and the fit is the **arithmetic** ideal length,
@@ -598,8 +598,9 @@ is therefore to stop pricing the model by formula and measure it.  Six steps:
    §5.3 — the zero-weight stop, all trailing zeros free — for the *factored*
    code at every grid point, and settle the `k` and shared-cluster choices on
    those numbers rather than on arithmetic bits.  It has already overturned
-   `q = 2`: the quarters are worth 0.10 bits and 0.13 fit points for 1,184 B
-   once the terminator is free, so `q = 1` ships (`CLUSTER_QUARTERS.md`).  The
+   `q = 2` (the quarters are worth 0.10 bits and 0.13 fit points for 1,184 B once
+   the terminator is free, so `q = 1` ships — `CLUSTER_QUARTERS.md`) and moved
+   `k` from 16 to 32, where the measured curve turns over (§7).  The
    flat-versus-factored mix-up of §5.3 is closed too: `--flat` measures the flat
    code at the same point under the same convention (43.120 bits / 87.1 %
    against the factored 45.790 / 84.1 %, for +93 kB).
@@ -616,34 +617,62 @@ from the packed file — `MODEL_FORMAT.md` §3), shipped `q = 1`:
 |---|---:|---:|---:|---:|---:|
 | 4096/16 | 14,683 B | 16.7 kB | 49.083 | 80.0 % | 98.3 % |
 | 8192/16 | 30,612 B | 32.7 kB | 45.790 | 84.1 % | 98.8 % |
+| **8192/32** | **32,126 B** | **34.2 kB** | **45.221** | **84.8 %** | **98.9 %** |
 | 8192/64 | 35,090 B | 37.1 kB | 45.347 | 84.5 % | 98.9 % |
 
-The quarter code is the same file with a map one bit wider and the top stage
-doubled: 15,355 / 31,796 / 38,674 B, 49.060 / 45.687 / 45.296 bits, 80.1 /
-84.3 / 84.7 % — cheaper in bits, dearer in bytes, and not shipped (fourth
-finding below).
+The quarter code is the same family with a map one bit wider and the top stage
+doubled: at 8192/16 it is 31,796 B / 45.687 / 84.3 %, and at the operating point
+33,790 B / 45.272 / 84.7 % — dearer in bytes and not cheaper in bits, so it is
+not shipped (fourth finding below).
+
+**The `k` curve, measured.**  The same file at `V = 8192` over the `k` sweep the
+arithmetic frontier used to explore, shipped convention, seed 1:
+
+| `k` | model file | bits/id | fit ≤ 64 | step from the row above |
+|---:|---:|---:|---:|---|
+| 8 | 29,463 B | 46.102 | 83.73 % | — |
+| 12 | 30,540 B | 45.812 | 84.10 % | +1,077 B, +0.37 pt, 2.9 kB/pt |
+| 16 | 30,612 B | 45.790 | 84.14 % | +72 B, +0.04 pt, 1.9 kB/pt |
+| 24 | 31,841 B | 45.370 | 84.54 % | +1,229 B, +0.40 pt, 3.0 kB/pt |
+| **32** | **32,126 B** | **45.221** | **84.78 %** | +285 B, +0.23 pt, 1.2 kB/pt |
+| 48 | 33,960 B | 45.345 | 84.62 % | +1,834 B, −0.15 pt |
+| 64 | 35,090 B | 45.347 | 84.51 % | +1,130 B, −0.11 pt |
+
+The curve turns over at `k = 32`.  Past it the fit stops improving — at seed 1
+`k = 48` is 0.16 points *worse* than 32, at seed 2 it is 0.12 points better, so
+the two are within seed noise while the file grows by 1.8 kB — and 48 to 64 adds
+another 1.1 kB for nothing.  The gain from 16 to 32 is 0.64 points for 1,514 B,
+2.4 kB/pt against the 3.9 kB/pt the same code charges for the 4096 → 8192 step,
+and it is not noise: +269 identifiers net against 16 at seed 1 and +189 at
+seed 2, where the same step costs 3.4 kB/pt.  So the operating point is
+**`V = 8192, k = 32`**: 32,126 B, 45.221 bits, 84.8 %.  The flattening is the
+bias–variance of the per-cluster
+trees: each cluster's Huffman build sees fewer tokens as `k` grows, so past 32
+the noisier lengths cost as much as the finer partition buys.
 
 Every section of those files is on the §5.1 table, and 42,268 held-out
 identifiers per point round-trip through the *packed* file with no failures.
 
-Four things came out of building it, none of which the formulas could have
-shown:
+Four more things came out of building it, none of which the formulas could
+have shown:
 
 * **The terminator had to move to the top stage.**  A two-stage code cannot put
   the all-zeros path on the stop's right cluster without recoding the top stage
   (+1 bit on every other quarter, since the stop's quarter is not the cheapest),
   so each top tree gets a zero-weight STOP leaf instead.  Cost: one depth per top
-  tree, 10 B.  Saving: the terminator, 2.6 bits per identifier.
-* **The published 47.891 bits/identifier reproduces exactly.**  The same build
-  with two maps and the stop's natural weight gives 47.892 bits/id counted the
-  old way, so the oracle and `CLUSTER_QUARTERS.md`'s measurement agree; the
-  difference from the quarter code's 45.687 is the terminator (2.6 bits), the
-  one-map constraint (0.4) and the zero weight (0.03).
+  tree, 10 B; saving: the terminator, 2.6 bits per identifier.
+* **The published 47.891 bits/identifier reproduces exactly.**  The same build —
+  two maps, the stop's natural weight — gives 47.892 bits/id counted the old way,
+  summed codeword lengths with the stop charged, so the oracle and
+  `CLUSTER_QUARTERS.md`'s measurement agree.  Counted the shipped way that build
+  is 45.297, i.e. the free terminator and the stripped zeros are worth **2.60
+  bits**; driving the stop's weight to zero is another 0.03 (45.263); and the
+  one-map file pays 0.42 back for its 4,096 B, which is where 45.687 comes from.
 * **One map is worth its constraint at this `k`.**  Two maps cost 4,096 B and buy
-  0.47 bits/identifier (45.790 → 45.317); on the frontier's ≈5.5 kB/bit that is
-  2.6 kB worth of bits for 4.1 kB, so the one-map file wins — the same verdict
-  as `SHARED_CLUSTERS.md` at `k = 32`, measured now at the operating point (the
-  quarter code was the same: 0.42 bits for 4,096 B).
+  0.47 bits/identifier (45.790 → 45.317 at `q = 1`; 0.42 at `q = 2`); on the
+  frontier's ≈5.5 kB/bit that is 2.6 kB worth of bits for 4.1 kB, so the one-map
+  file wins — the same verdict as `SHARED_CLUSTERS.md` at `k = 32`, measured now
+  at the operating point.
 * **The quarter code does not pay once the terminator is free.**  At 8192/16 it
   costs 1,184 B for 0.10 bits and 0.13 fit points (53 identifiers net), which is
   9.5 kB/pt against the shipped frontier's 3.9, and the other grid points are
@@ -654,22 +683,22 @@ shown:
 
 ## 8. What it shows
 
-* **The rule table is two thirds of the model** — 21.1 of 30.6 kB at the
-  operating point, well ahead of the depths and the map (5.1 and 4.1 kB).  Zipf
+* **The rule table is nearly two thirds of the model** — 21.1 of 34.2 kB at the
+  operating point, well ahead of the depths and the map (5.1 and 5.1 kB).  Zipf
   coding already takes 20 % off the fixed-width index stream; the empirical
   optimum is only a further 5 % and would have to be stored.  The real lever is a
   smaller vocabulary, which is the `V`-against-`k` trade above.
 * **The frontier is 19 kB / 77 %, 30 kB / 81 %, 40 kB / 83 %** on the arithmetic
   reference — comfortably inside the "50 kB-ish is acceptable if it rescues the
   64-bit set" band, and 2× the 20 kB goal.  The shipped code sits below and to
-  the left of it: **30.6 kB at 84.1 %** for the point where the reference is
-  39.8 kB at 82.5 %.
+  the left of it: **34.2 kB at 84.8 %** for the point where the reference is
+  42.6 kB at 82.8 %.
 * **Size is not what costs the 64-bit set — clustering is.**  The full-table
-  ceilings are 85–94 %; the shipped models fit 84.1 % (8192/16) and 84.5 %
-  (8192/64).  The remaining gap is the membership and block structure, not the
-  word list — and `k = 64` spends 4.5 kB over `k = 16` to buy 0.4 points,
-  12 kB/pt against the frontier's 3.9.
-* **The next two objects are the map and the depths** (4.1 and 5.1 kB at the
+  ceilings are 85–94 %; the shipped models fit 84.8 % (8192/32) and 84.1 %
+  (8192/16).  The remaining gap is the membership and block structure, not the
+  word list — and the `k` curve turns over at 32, where 1.5 kB buys 0.6 points
+  and past which nothing reliable is left to buy.
+* **The next two objects are the map and the depths** (5.1 and 5.1 kB at the
   operating point).  `V · ⌈log₂ k / 8⌉` doubles by `k = 64`, so the map is the
   term that makes a fine `k` expensive; it is what the shared cluster assignment
   buys down.  The depth store is measured now, not assumed: 5 bits everywhere on
@@ -680,8 +709,10 @@ shown:
 
 ```sh
 # the size oracle: build, write the YAML, pack, decode, report (§7)
-for d in work/tw4096ns work/tw8192ns; do
-  python3 scripts/model_size.py --dir $d --k 16 --stride 10   # the shipped q = 1
+python3 scripts/model_size.py --dir work/tw4096ns --k 16 --stride 10
+python3 scripts/model_size.py --dir work/tw8192ns --k 32 --stride 10   # the shipped point
+for k in 8 12 16 24 32 48 64; do                                       # the k curve
+  python3 scripts/model_size.py --dir work/tw8192ns --k $k --stride 10
 done
 python3 scripts/model_size.py --dir work/tw8192ns --k 16 --q 2 \
         --stride 10          # the quarter code, priced but not shipped
