@@ -310,12 +310,6 @@ old numbers remain reproducible without it.
       `SMALL_DICT` was already on the current corpus (`n = 4,227` is stride 100
       of the same 422,680-line held-out set), so only its frontier-price row
       needed updating.
-- [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
-      `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
-      pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
-      comparisons still quote code-side bytes.  The verdicts are unaffected
-      (they are within-`V`), but any cross-`V` price must carry the term.
-      `docs/MODEL_BUDGET.md` ("The two model shapes").
 - [x] **H10. Reconcile the codebook accounting.** *Settled* — `ENCODING.md` §5's
       `2(V−k)` is the **bracket skeleton** of the bottom trees (two bits per
       internal node: one `(` and one `)`; `L` leaves have `L−1` nodes), and its
@@ -366,7 +360,12 @@ old numbers remain reproducible without it.
       4. **Re-derive** every table from the oracle: `MODEL_BUDGET` (frontier),
          `ENCODING` §5 (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`,
          `SHARED_CLUSTERS` and the C26–C28 pricing, `PRUNE_WORDS`,
-         `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  H8 folds into this.
+         `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  This step absorbs
+         the old H8: the dictionary term must be charged in
+         `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
+         comparisons, which still quote code-side bytes.  Their verdicts are
+         unaffected (they are within-`V`), but any cross-`V` price must carry
+         the term.
       5. **Fit-rate convention.**  The shipped criterion is Huffman with the
          zero-weight stop; re-check the choices that were made on arithmetic
          bits (`k = 16`, `q = 2`, C26 at `k = 32`) under it, and say which
