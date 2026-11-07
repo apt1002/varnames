@@ -73,15 +73,12 @@ The experimental strategy is as follows:
   [`docs/ADJACENCY_MATRIX.md`](docs/ADJACENCY_MATRIX.md); the
   [`docs/STRUCTURAL_ZEROS.md`](docs/STRUCTURAL_ZEROS.md) note records why the
   prior's structural zeros can be ignored.
-- **Cluster words with similar statistics** — K-means on the Hellinger
-  embedding of each word's distribution, on the left and on the right, giving a
-  `k × k` block matrix in place of the `V × V` table. See
+- **Cluster words with similar statistics** — It is cheaper to store a
+  cluster × cluster adjacency matrix than a word × word matrix. See
   [`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md), with
   [`docs/CLUSTER_LOSS.md`](docs/CLUSTER_LOSS.md) for where the loss lives and
   [`docs/SHARED_CLUSTERS.md`](docs/SHARED_CLUSTERS.md) for using one cluster
-  assignment on both sides. Alternatives that were measured and lost:
-  [`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md),
-  [`docs/MATRIX_COMPRESSION.md`](docs/MATRIX_COMPRESSION.md).
+  assignment on both sides.
 - **Build a cheap model of the probability distributions** — price the word
   list, the tables and the code in bytes, and find the size that buys the most
   fit. See [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
@@ -100,39 +97,27 @@ size. With a large model we could do much better, but that's not the point; the
 question is how well we can do with a small model. Both halves are measured:
 the fit rate on held-out identifiers
 ([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and the model size in bytes
-with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). The
-frontier is a ramp, not a staircase, and it is priced in **kB per point of
-fit** — 2–6 kB/pt through the useful 20–32 kB stretch, 13–48 kB/pt above 40 kB,
-and 0.47 kB/pt at the testing vocabulary, which is why the two are never
-compared (see the third house rule below).
+with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)).
+Fitting an additional 1% of identifiers into 64 bits seems to cost between 2K
+and 6K in the interesting model size range; it costs more for larger models.
 
 We tried two main strategies, and found that the second one is much better:
 
 - Rejected: encode each character conditionally on the context that precedes it
-  — the longest-suffix **successor model**. It compresses, but at equal model
-  size the word model wins, and making it compact costs 1–2 bits per character.
-  See [`docs/SUCCESSOR_MODEL.md`](docs/SUCCESSOR_MODEL.md) and the character-level
+  — the longest-suffix **successor model**. See
+  [`docs/SUCCESSOR_MODEL.md`](docs/SUCCESSOR_MODEL.md) and the character-level
   fixed-budget numbers in [`docs/CODE_LENGTHS.md`](docs/CODE_LENGTHS.md).
 - Adopted: tokenise the string into words, and define a **Markov model on the
-  words**. The cycle of tokens (with a stop token) is coded as one bigram
-  chain; the held-out comparison against the character model, at equal
-  dictionary size, is in
-  [`docs/WORD_COMPRESSIBILITY.md`](docs/WORD_COMPRESSIBILITY.md).
+  words**. See [`docs/WORD_COMPRESSIBILITY.md`](docs/WORD_COMPRESSIBILITY.md).
 
 In the above, "word" means any string that is commonly used in identifiers; many
 are in fact English words or abbreviations but many are not.
 
 We explored many ways of defining "word". It turns out that the list of words is
 the most important part of the model, and it therefore accounts for the majority
-of the model size: at matched model size, enlarging the word list beats
-sharpening the cluster table by 1–3 bits per identifier
-([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md)). The best idea for the
-rejected strategy was different from the best idea for the adopted strategy: a
-character model can use an arbitrary set of **common substrings** as its
-vocabulary, because it stores them explicitly, whereas a word model must be able
-to *derive* its list from a few rules — hence the pair-merge dictionary, whose
-merge theory (the score never rises, `Δ < 0`, when a pair is merged) is in
-[`docs/TREE_WORDS.md`](docs/TREE_WORDS.md) §9.
+of the model size. See ([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md))
+for details of the compromise. The best idea for the rejected strategy was
+different from the best idea for the adopted strategy (cited above).
 
 In both strategies, we found that there is a huge benefit from clustering words
 with similar statistics. This reduces the model size a lot, but worsens
@@ -146,7 +131,7 @@ Along the way, we tried a lot of things that didn't work:
 
 - **Runs as words.** A rule that merges a character with a copy of itself, to
   absorb `ooo`-style padding cheaply. Forbidden outright: at the vocabularies in
-  use it costs nothing to drop it, and the run machinery goes with it
+  use it costs nothing to drop it, and the run machinery is dropped with it
   ([`docs/DICTIONARY_RULES.md`](docs/DICTIONARY_RULES.md),
   §"Removing run words altogether").
 - **Boundary words.** Adding `v\n` as a dictionary word so the model can see
@@ -165,8 +150,8 @@ Along the way, we tried a lot of things that didn't work:
   of a block model. Beaten at matched store
   ([`docs/MATRIX_COMPRESSION.md`](docs/MATRIX_COMPRESSION.md)).
 - **The square-root (Hellinger) factorisation of the table.** 3.5–4 bits behind
-  co-clustering at equal store, and it only overtakes at ~6% of `V²`
-  ([`docs/CLUSTER_WORDS.md`](docs/CLUSTER_WORDS.md) §"how the loss scales").
+  co-clustering at equal store
+  ([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)).
 - **Cluster quarters `q = 4`.** No better than `q = 2` for 3.2× the bytes
   ([`docs/ENCODING.md`](docs/ENCODING.md) §5).
 
