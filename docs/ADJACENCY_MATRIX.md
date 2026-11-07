@@ -49,11 +49,17 @@ of contexts.  Sizes on the current corpus (`work/camel/merged.txt`):
 
 | `T` | `N` (contexts) | max length |
 |---:|---:|---:|
-| 100000 | 159 | 5 |
-| 50000 | 316 | 8 |
-| 20000 | 911 | 11 |
-| 10000 | 2,102 | 14 |
-| 5000 | 4,478 | 18 |
+| 100000 | 278 | 5 |
+| 50000 | 613 | 6 |
+| 20000 | 1,788 | 9 |
+| 10000 | 3,935 | 13 |
+| 5000 | 8,038 | 14 |
+| 2000 | 20,198 | 15 |
+| 1000 | 40,168 | 30 |
+| 500 | 80,869 | 44 |
+
+(Rows count the empty string.  Below `T = 2000` the longest entry is a padding
+run of `o`, not a word — see [`CASE_NORMALISATION.md`](CASE_NORMALISATION.md).)
 
 ## 3. The empty context (backoff)
 
@@ -136,10 +142,70 @@ exactly.  Instead, fix it by **predictive** performance.
 (`p_train = 0.5`), fits the `sqrtcnt` model (see
 [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) to
 `M_train + kappa·N·P_mar(train)`, and scores the test counts as cross-entropy in
-bits per held-out event (lower is better; mean over 5 splits).  The test set
+bits per held-out event (lower is better; mean over 3 splits).  The test set
 contains pairs *unseen in train*, so this is the criterion that can reward the
 prior.  The sweep is over `kappa` directly, so the fitted mass is `alpha =
 kappa·N` at every `N`.
+
+Re-checked on the 10-ecosystem corpus at both ends of the grid
+(`work/camel/merged.txt`, 73.0M transitions):
+
+| `T` (`N`) | best `kappa` | best `alpha` | CE\* at best | CE `kappa=300` | CE `kappa=1000` | CE `kappa=0` | CE indep. |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100000 (278) | 1500 | 4.2×10⁵ | 13.73332 | 13.73435 | 13.73354 | 13.73582 | 15.03257 |
+| 5000 (8 038) | 700 | 5.6×10⁶ | 21.87699 | 21.94077 | 21.88038 | 22.66604 | 23.33078 |
+
+(\*cross-entropy of the test table under the model, bits/event; "CE indep." is
+the no-latent-structure baseline `P_mar(train)`; the `std` over the 3 splits is
+0.0001–0.0012, so the differences between `kappa = 700` and `1000` are about 1σ
+at the small end and ~3σ at the large end.)
+
+* The prior helps, and the benefit **grows with sparsity** — 0.0025
+  bits/event at `N = 278` (within noise) to 0.79 bits/event at `N = 8 038`.
+  Every `kappa > 0` beats `kappa = 0`, and the independence model is far worse
+  than either (1.3 and 1.45 bits/event).
+* The optimum is prior mass **per context**, not per cell: the best `kappa` is
+  700–1500 across a 29× range of `N`, effectively a constant ≈10³.  A *single*
+  fixed `kappa` transfers across sizes.
+
+**Recommendation for the factorisation: a fixed `alpha = 1000·N`
+(`kappa = 1000`).**  It is within 0.0002 bits/event of the optimum at `N = 278`
+and 0.003 at `N = 8 038`, and needs no per-corpus tuning.  `choose_kappa.py`
+remains available to re-check it.  Caveat: with a single corpus we cannot
+separate the `N`- from the corpus-size dependence, so ≈10³ is an empirical
+constant for this corpus.
+
+### The two `kappa`s are different knobs
+
+The **shipped word model** also carries a `kappa` (`alpha = kappa·V`, applied to
+the word × word matrix before clustering), and its measured optimum is **300**,
+not 1000 — [`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) sweeps it at both
+ends of the grid: 42.15 bits/identifier at 300 against 42.27 at 1000 (`V = 4 096`)
+and 39.95 against 40.31 (`V = 8 192`).
+
+That is not a contradiction; the two numbers optimise different things:
+
+| | this section (factorisation) | shipped word model |
+|---|---|---|
+| object | rank-`L` `sqrtcnt` fit of `M` | `k`-means block model + coding |
+| criterion | held-out pair cross-entropy | held-out bits per identifier |
+| prior share of the counts | 11 % at 1000 (`N = 8 038`) | 5.7 % at 300, 19 % at 1000 (`V = 4 096`, `T = 21.7 M`) |
+| optimum | 700–1 500 | 300 |
+
+Scoring identifiers rather than pairs punishes the prior harder, because the
+prior's mass is spread over the whole matrix and each identifier touches only
+5–6 transitions: at `kappa = 1000` the reference is 19 % independence-shaped and
+the block model's within-cell detail is diluted.  The cost of one value serving
+both is small either way — 0.1–0.4 bits/identifier if the product used 1000, and
+0.0002–0.003 bits/event on this section's own criterion if it used 300 — so the
+choice is settled by the product: **`kappa = 300` for the word model,
+`kappa = 1000` for the factorisation analyses in this note**, and every table
+states which one it used.  As everywhere else in the project, `kappa` is a
+counting fix rather than a third design knob.
+
+**Pre-expansion record** (2.07M-identifier corpus, five thresholds; the
+unobserved-cell column counts cells, not contexts, which the current script no
+longer reports):
 
 | `T` (`N`) | cells unobs. | best `kappa` | best `alpha` | CE\* best | CE `kappa=0` | CE indep. |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -149,23 +215,6 @@ kappa·N` at every `N`.
 | 10000 (2102) | 83% | 1000 | 2.1×10⁶ | 18.6564 | 18.9291 | 20.1605 |
 | 5000 (4478) | 92% | 700 | 3.1×10⁶ | 20.5217 | 21.0966 | 21.9917 |
 
-(\*cross-entropy of the test table under the model, bits/event; "CE indep." is
-the no-latent-structure baseline `P_mar(train)`.)
-
-* The prior helps, and the benefit **grows with sparsity** — from 0.001
-  bits/event at `N = 159` (within noise) to 0.57 bits/event at `N = 4478`.
-  Every `kappa > 0` beats `kappa = 0`.
-* The optimum is prior mass **per context**, not per cell: the best `kappa` is
-  700–1500 across a 28× range of `N`, effectively a constant ≈10³.  A *single*
-  fixed `kappa` transfers across sizes.
-
-**Recommendation: a fixed `alpha = 1000·N` (`kappa = 1000`).**  It is within
-0.01 bits/event of the per-`N` optimum everywhere in the table (and is the
-optimum itself at `N = 159` and `N = 2102`), and needs no per-corpus tuning.
-`choose_kappa.py` remains available to re-check it on a new corpus.  Caveat: with
-a single corpus we cannot separate the `N`- from the corpus-size dependence, so
-≈10³ is an empirical constant for this corpus.
-
 ## 8. Reproducing
 
 ```sh
@@ -174,9 +223,9 @@ python3 scripts/pair_matrix.py work/camel/merged.txt \
         work/common10000/common_substrings.txt --outdir work/common10000 \
         --lsvd 2,4,8,16,32,64
 
-# re-check kappa by held-out likelihood
+# re-check kappa by held-out likelihood (grid outdirs: /tmp/cs100000, /tmp/cs5000)
 python3 scripts/choose_kappa.py work/camel/merged.txt \
-        --outdirs work/common10000 --L 16 --reps 5 \
+        --outdirs /tmp/cs5000 --L 16 --reps 3 \
         --kappas 0,300,700,1000,1500,3000
 
 # the κ-parameterised KL tables

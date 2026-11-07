@@ -144,6 +144,8 @@ clusters?  Sweeping `k` upward at `V = 4,096` (same harness, `kappa = 300`,
 | 64 | 12,288 | 0.07 % | 50.623 | +8.42 |
 | 128 | 24,576 | 0.15 % | 49.996 | +7.80 |
 | 256 | 73,728 | 0.44 % | 48.958 | +6.76 |
+| 512 | 270,336 | 1.61 % | 47.422 | +5.22 |
+| 1,024 | 1,056,768 | 6.30 % | 45.644 | +3.44 |
 
 What the curve says:
 
@@ -156,7 +158,8 @@ What the curve says:
   ~1 bit of the full table needs `k ≈ V/2`, i.e. `store ≈ V²/4` (25 % of the
   cells) — the pre-expansion sweep below reaches that corner and finds +2.0
   bits at 25 % of the cells, not +1.  At the practical operating point
-  (0.03–0.4 % of `V²`) the loss is 6.8–9.4 bits.
+  (0.03–0.4 % of `V²`) the loss is 6.8–9.4 bits, and even at 1.6 % of the cells
+  (`k = 512`, 270,336 numbers) it is still 5.2 bits, at 6.3 % (`k = 1,024`) 3.4.
 * **So the loss is essentially unavoidable for the block-constant model.**  It is
   not the choice of `k` that hurts; it is the restriction itself.  Clustering
   cannot be both small and accurate, which is the case for compressing the
@@ -166,11 +169,20 @@ What the curve says:
   not fall further with `k` in the range swept (1.4 → 2.0 bits from `k = 16` to
   64 at `V = 4,096`), so a finer table buys its bits in the block values, not by
   making the factorisation exact.
+* **`sqrtcnt` closes the gap and crosses it, but only at ~6 % of the matrix.**
+  The matched factorisation is 4.0 bits behind the block model at `k = 16`
+  (55.623 vs 51.580), 2.8 behind at `k = 64` (53.710 vs 50.623), 0.87 behind at
+  `k = 512` (`L = 33`, store 270,336: 48.288 vs 47.422) and **0.40 ahead at
+  `k = 1,024`** (`L = 129`, store 1,056,768: 45.246 vs 45.644).  So the
+  crossing sits between 1.6 % and 6.3 % of the cells — an order of magnitude
+  above the operating point, and in a region where the model is still 3.4 bits
+  off the full table and costs a megabyte.  Where the project actually operates,
+  the block model is the better way to spend numbers.
 
 Pre-expansion record (legacy `tw2040`, `V = 2,104`, full table 45.765): `k = 26
 → 1,052` covers 0.11 % → 25.1 % of `V²`, with assoc 57.33 → 47.78 (+11.57 →
 +2.01) and 1-sided 54.90 → 46.80.  That is where the "≈V/2 for ~2 bits"
-statement comes from; the grid sweep reaches only 0.44 % of `V²`, so the
+statement comes from; the grid sweep reaches only 1.6 % of `V²`, so the
 large-storage end of the curve is still the small-vocabulary measurement.  The
 same table shows `sqrtcnt` overtaking `assoc` only beyond `k ≈ 420` (51.84 vs
 50.98 at 420; 47.96 vs 48.58 at 840; 47.05 vs 47.78 at 1,052) — both still
