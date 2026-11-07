@@ -292,9 +292,11 @@ old numbers remain reproducible without it.
       `MATRIX_COMPRESSION`, `PRUNE_WORDS`, `STRUCTURAL_ZEROS`,
       `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled five seeds at each of
       `k = 32, 64`), `NEWLINE_CLUSTER`, `ENCODING` §5 (C28 on the 10× held-out
-      set).  **Remaining:** `BUDGET64_STUDY`, `BREAK_OPEN_PRIOR` (needs a new
-      held-out run), `ENCODING` §6, and the testing-point numbers in
-      `SMALL_DICT` (which exist only to exercise scripts).
+      set).  **Remaining:** `BREAK_OPEN_PRIOR` (needs a new held-out run),
+      `ENCODING` §6, and the testing-point numbers in `SMALL_DICT` (which exist
+      only to exercise scripts).  **`BUDGET64_STUDY` done:** coverage, the
+      length boundary, the failure markers and the generative view re-measured
+      at 4096/32, 6144/16 and 8192/16 with their full-table ceilings.
       **`MODEL_BUDGET` done:** priced on the arithmetic inventory once
       (rules + unigram + memberships + block + 2 kB code), which retires the
       code-side-plus-dictionary sum that double-charged a Huffman bottom stage;
