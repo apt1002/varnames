@@ -115,11 +115,11 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 - [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
       model.*  The two clouds of the adopted model, coloured by right cluster,
       as illustration.  `README.md`.
-- [ ] **C32. Right clusters as canonical subtrees.** *Planned — an option worth
-      1.0 kB.*  Split the canonical tree at `q − 1` positions and re-code each
-      part, so the model file names right clusters by position instead of
-      storing a label per word.  Needs its own fit measurement and byte count.
-      `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_FORMAT.md`.
+- [x] **C32. Naming right clusters by position.** *Rejected.*  A position in the
+      stored tree marks a block of its leaves, so it cannot express the
+      survivors the build stopped at; forcing blocks would be an imposed
+      partition, which loses the gain it was meant to save.  The label per word
+      is inherent (`docs/CLUSTER_QUARTERS.md` §"The structural cost").
 
 ## D. Corpus preprocessing
 

@@ -8,8 +8,9 @@ leaves to `q·k` and leaves the encoding untouched (`ENCODING.md` §§2–4); th
 accounting, the measurements and the price are below.  The model file carries
 them as one label per word (`MODEL_FORMAT.md`), which costs 1.2 kB at the
 operating point: this build's right clusters are subtrees of the Huffman tree,
-not of the canonical tree a depth-only file implies, so a split position in the
-stored tree cannot name them ("The structural cost" below).
+not of the canonical tree a depth-only file implies, so the grouping cannot be
+read off the tree and the file pays a label per word ("The structural cost"
+below).
 
 The factorised model needs `P(right cluster | left cluster)` before
 `P(word | right cluster)`.
@@ -358,19 +359,16 @@ adopting CQF at all; the `k = 32` point above is the second-best case, and above
 `k = 32` it is not worth the tables.
 
 The 252 bytes are real in this accounting's terms and not in the model file's.
-The accounting stores each tree's topology, a bracket string plus a leaf list, so
-a right cluster is a subtree of what is stored and `q − 1` positions name it.  A
-file stores depths instead — a third of the size (`MODEL_BUDGET.md` §3) — and a
-depth list plus the canonical rule reconstructs the *canonical* tree, whose
-subtrees are not this build's right clusters.  The published file therefore
-stores one label per word: one bit more than a left-cluster label (5 against 4 at
-the operating point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is
-the shipped price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at
-the cheap end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic
-reference on bytes *and* above it on fit (33.7 kB / 82.8 % against 39.8 kB /
-82.5 %).  Recovering the 252 B needs a build that splits the canonical tree
-rather than stopping the Huffman build early, which is a different code and
-unmeasured.
+That accounting stores each tree as a bracket string plus its leaves in
+depth-first order, so the grouping is *in* the file: the whole change costs
+256 B of extra top-stage labels and brackets, less 4 B of bottom brackets.  A
+published file stores depths instead — a third of the size (`MODEL_BUDGET.md`
+§3) — and depths do not say which symbols share a tree, so it carries one label
+per word: one bit more than a left-cluster label (5 against 4 at the operating
+point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is the shipped
+price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at the cheap
+end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic reference
+on bytes *and* above it on fit (33.7 kB / 82.8 % against 39.8 kB / 82.5 %).
 
 **The noise, measured.** These are proportions over 42,268 identifiers, so the
 right yardstick is the *paired* per-identifier difference (same held-out
@@ -491,28 +489,39 @@ one label per word in `⌈log₂ kq⌉` bits rather than `⌈log₂ k⌉` — 5 
 the operating point, 1,024 B — plus 160 B of extra top depths, and the two counts
 `k` and `q`.  What is paid for is the width, not a second table.
 
-Two ways of avoiding that kilobyte were considered.
+**The width is not avoidable.**  It is tempting to name a right cluster by a
+position in the tree — the boundary between two runs of its leaves, `q − 1`
+positions per left cluster, about 26 B — and the size accounting can price the
+change that way only because it stores the tree's *topology*: a bracket string
+plus its leaves, in which any grouping is already explicit.  Two things rule the
+shortcut out for the published file.
 
-* **Name each right cluster by its position in a stored tree.**  If the file
-  stored the tree's *topology* — a bracket string plus its leaves in depth-first
-  order, which is what the size accounting prices — then a right cluster would
-  be a subtree, and `q − 1` split positions per left cluster (~26 B) would name
-  where it starts and ends: "the first 312 leaves of this tree, in code order,
-  are right cluster 2".  That is the 252 B in the accounting.  The published file
-  stores *depths* instead, a third of the size, and a reader turns those depths
-  into the canonical tree, whose subtrees are not this build's right clusters.
-  A check on simulated cluster builds found about a quarter of the right
-  clusters to be unbroken blocks of the canonical leaf order, and fewer still to
-  be subtrees of it.  So positions do not name them, and the file pays the
-  extra bit.
-* **Make the label set shared, so `k` becomes `kq` on both sides.**  That is the
-  plain factored model at twice the clusters: 42,571 B against 39,755 B at
-  `V = 8192`, for +0.3 points on the arithmetic reference.  It needs no format
-  change at all, and it costs 2.4× the shipped bytes for about a third of the
-  gain (0.3 arithmetic points against 0.9 measured).
+* **Depths cannot carry the grouping.**  The file stores depths, a third of the
+  size, and a reader rebuilds the *canonical* tree from them.  The right clusters
+  are subtrees of the *Huffman* build, and the canonical tree has the same shape
+  with different leaves: about a quarter of the right clusters come out as
+  unbroken blocks of its leaf order, and fewer still as subtrees of it.  So a
+  position in the stored tree does not mark them.
+* **A position would change the code, not describe it.**  Even if the blocks
+  lined up, a block boundary is a *partition*: it merges unequal masses inside a
+  right cluster, which is exactly the loss the truncation avoids (step 3 of the
+  experiment above).  The right clusters have to be the survivors the build
+  stopped at, and those are decided by the weights, not by where a boundary
+  falls.
 
-So the asymmetry costs **1,184 B**: one more bit per word, plus 160 B of top
-depths — against 252 B in the accounting and 2,816 B for the symmetric route.
+So the label is the price of an arbitrary grouping, and arbitrary is what the
+quarter code needs.  `MODEL_FORMAT.md` §7 records it as settled.
+
+Two alternatives were priced, and neither is the shipped file:
+
+* **252 B, in the accounting above.**  Topology plus leaves; the grouping is
+  explicit, at the cost of making the file three times bigger (`MODEL_BUDGET.md`
+  §3).
+* **2,816 B, with the label set made symmetric.**  `k` becomes `kq` on both
+  sides, the plain factored model at twice the clusters: 42,571 B against
+  39,755 B at `V = 8192`, for +0.3 points on the arithmetic reference.  It needs
+  no format change at all, and it costs 2.4× the shipped bytes for about a third
+  of the gain (0.3 arithmetic points against 0.9 measured).
 
 **Outcome.** On bits and bytes, against the rule in step 6: `q = 2` wins and
 `q = 4` loses, so **`q = 2` is adopted**.  At the operating point
