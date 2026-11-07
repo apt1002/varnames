@@ -141,6 +141,13 @@ renormalised distribution, and that changes what the code costs.
 | 4,096, 32 | 51.245 | 49.368 | **48.339** | **−1.029** | 79.7 % → **81.3 %** |
 | 8,192, 16 | 47.727 | 46.031 | **45.027** | **−1.004** | 83.8 % → **85.3 %** |
 
+The Huffman columns are summed codeword lengths for the **flat** code — one tree
+per left cluster over all `V` words, `k·V` lengths — which is the upper bound
+`MODEL_BUDGET.md` §5.3 prices against the shipped factored code.  Measuring the
+*written* bits instead of the lengths (last 1, trailing zeros free) gives 43.120
+bits per identifier for that same flat code at 8192/16; the factored code is
+45.790 for a file ninety-three kilobytes smaller.
+
 * The renormalisation is worth **1.760 / 1.785 bits/identifier** (0.308 / 0.353
   bits/token), so the ideal cost of the words is `49.368 − 1.760 = 47.61` and
   `46.031 − 1.785 = 44.25`; the Huffman rounding on top is 0.73 / 0.78
@@ -195,7 +202,7 @@ lengths suggests.
   and `MODEL_BUDGET.md` §5.2 is where it shows: arithmetic publishes the
   probabilities (unigram, cluster maps, block: 39.8 kB at `V = 8192, k = 16`),
   while the prefix code publishes the lengths those probabilities imply
-  (32.5 kB; 36.9 kB with both maps counted alike, still 3 kB less).  Bits are
+  (30.6 kB measured; 34.7 kB with both maps counted alike, still 5 kB less).  Bits are
   level, bytes are not, and the terminator only helps the prefix code.
 * Correction to two conclusions above, in hindsight.  "Not a size argument" is
   false once the published object is priced, and "use one tree over the joint,

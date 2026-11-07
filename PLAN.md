@@ -177,12 +177,26 @@ be steered toward it.  Design intent, scope and audiences:
 - [x] **H9. Restructure the documentation.** *Done.*  `README.md`.
 - [x] **H10. Reconcile the codebook accounting.** *Settled.*
       `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_BUDGET.md`.
-- [ ] **H11. A complete review of the model-size accounting.** *Planned — the
-      six-step size oracle.*  `docs/MODEL_BUDGET.md` ("The size oracle").
-- [ ] **H12. Encode and decode the model file.** *Planned — the YAML format is
-      specified; the YAML ⇄ binary codec and the measurement of the binary are
-      the work.  Feeds the oracle (H11) and the published table-building tools
-      (E10).*  `docs/MODEL_FORMAT.md`.
+- [x] **H11. A complete review of the model-size accounting.** *Steps 1–3 done;
+      4–6 open.*  `scripts/model_size.py` builds at `(V, k, q)`, writes the YAML,
+      packs the binary, reports the bytes per section and round-trips held-out
+      identifiers through the packed file.  Measured at 8192/16: 30,612 B,
+      45.790 bits/id, 84.1 % in 64 bits.  It also forced a design fix — the
+      terminator moved to a zero-weight STOP leaf in the top stage — priced the
+      one-map constraint (0.42 bits for 4,096 B), and overturned `q = 2`: the
+      quarters buy 0.10 bits and 0.13 fit points for 1,184 B once the terminator
+      is free, so the shipped file is `q = 1`.  The `--flat` yardstick is
+      measured too, at three grid points: it buys 2.7–3.6 fit points for 38–385
+      kB, so the factored code is the cheaper one on the frontier.  Still open:
+      the inventory table from the measured sections, the re-derivation of every
+      other table (step 4), the zero-stop fit at the grid (step 5) and retiring
+      the superseded numbers (step 6).  `docs/MODEL_BUDGET.md` §7.
+- [x] **H12. Encode and decode the model file.** *Done for the shipped layout.*
+      The YAML writer, the independent reader, the binary packer and unpacker,
+      the arithmetic rule coder and the canonical codes live in
+      `scripts/model_size.py`; `--self-test` runs the worked example of
+      `MODEL_FORMAT.md` §5 end to end.  What is missing is the published
+      table-building tool (E10).  `docs/MODEL_FORMAT.md`.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 

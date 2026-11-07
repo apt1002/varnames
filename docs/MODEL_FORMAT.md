@@ -20,7 +20,7 @@ plus enough header to identify the format:
 |---|---|---|
 | the word list, `V` index pairs | `rules:` | — |
 | the word trees, `V` leaves over `kq` trees | `bottom_trees:`, `memberships:` | right cluster → words; canonical codes |
-| the cluster trees, `k` trees of `kq` leaves | `top_trees:` | canonical codes |
+| the cluster trees, `k` trees of `kq + 1` leaves | `top_trees:` | canonical codes; leaf 0 is the terminator |
 | the alphabet (ids 1…) | `alphabet:` | symbol 0 is the stop |
 | — | `format:`, `version:`, `left_clusters:`, `right_clusters_per_left:` | — |
 
@@ -29,6 +29,13 @@ what the word step codes; the `kq` right clusters are grouped `q` to a **left
 cluster**, which is what the cluster step codes.  The top stage is therefore `k`
 trees of `kq` leaves, not `kq` trees of `kq` — the asymmetry is where the
 quarter code's gain comes from (`CLUSTER_QUARTERS.md`).
+
+Each top tree has one leaf more than there are right clusters: a zero-weight
+**STOP** leaf, listed first.  It is never emitted — the padding is what the
+decoder reads there — and it is what makes the identifier end for free.  A
+bottom tree's terminator leaf is the stop itself (symbol 0), which is likewise
+never read: the end of an identifier is signalled in the top stage, before any
+word step.
 
 The file still stores **one map**: each word's right cluster.  Its left cluster
 is that label divided by `q`, so the second alphabet costs no second table — one
@@ -62,8 +69,8 @@ bottom_trees:                          # k*q trees, one per right cluster
   - [1, 2, 2]                          # right cluster 2: symbols 3, 4, 5
   - [1, 1]                             # right cluster 3: symbols 0, 7
 top_trees:                             # one tree per left cluster
-  - [2, 3, 3, 1]                       # after left cluster 0
-  - [1, 2, 3, 3]                       # after left cluster 1
+  - [4, 1, 2, 3, 4]                    # leaf 0 is STOP; then right clusters 0-3
+  - [4, 2, 1, 3, 4]                    # after left cluster 1
 ```
 
 Every sequence is a YAML sequence of integers; the file is ASCII with LF
@@ -87,7 +94,7 @@ normative, and `rules:` children use it.
   of its own.  No character may claim id 0.
 * `left_clusters` — `k`, the number of left clusters.  It fixes the number of
   top trees, the left-hand alphabet, and the length of each `top_trees` entry
-  once `q` is known.
+  once `q` is known (`k·q + 1`).
 * `right_clusters_per_left` — `q`, the number of right clusters per left
   cluster.  It fixes the right-hand alphabet, `k·q`, and so the number of
   `bottom_trees` entries.  `q = 1` makes the two alphabets one, which is the
@@ -110,9 +117,10 @@ normative, and `rules:` children use it.
   no bits at all.  The decoder knows which words are in the tree from
   `memberships`, so no leaf list is stored, and each tree is complete in its own
   right (a Huffman build stopped at `q` survivors).
-* `top_trees` — `k` depth sequences of `k·q` entries each.  Tree *i* is the code
-  for the next **right cluster** given left cluster *i*; its leaves are the right
-  clusters in ascending id order.
+* `top_trees` — `k` depth sequences of `k·q + 1` entries each.  Tree *i* is the
+  code for the next **right cluster** given left cluster *i*; leaf 0 is the
+  **STOP** leaf, which the model gives zero weight, and leaves 1 … `k·q` are the
+  right clusters in ascending label order.
 
 ### Invariants a reader must check
 
@@ -121,52 +129,82 @@ normative, and `rules:` children use it.
    of their leaves, in ascending order, and the total leaf count is `V`.
 3. Every tree is **complete**: `Σ 2^(d_max − d) == 2^d_max` exactly, with every
    depth `≥ 0`.
-4. `len(top_trees) == k`, each with `k·q` entries, one per right cluster.
+4. `len(top_trees) == k`, each with `k·q + 1` entries: the STOP leaf and one per
+   right cluster.
 5. `rules[i] = [a, b]` with `a ≠ b` and `a, b < len(alphabet) + 1 + i`.
 6. Symbol 0 (the stop) is a leaf of exactly one bottom tree — the one for its
    right cluster.
-7. Every left cluster has exactly `q` non-empty right clusters, so `q` may not
-   exceed the number of words in the smallest left cluster.
+7. A left cluster has at most `q` non-empty right clusters.  Fewer is legal — a
+   right cluster with one word cannot be split further — and an empty one is an
+   empty depth list and never decodes.  The shipped build is `q = 1`, so every
+   left cluster has exactly one non-empty right cluster.
+8. In every top tree, leaf 0 (STOP) is at the **maximum** depth, and in the
+   bottom tree that holds the stop, symbol 0 is at the maximum depth.  Both
+   follow from giving those two leaves zero weight, and together they are what
+   makes the padding decode as the terminator (§5).
 
 The canonical codes then follow from the depths by the rule in
-[`ENCODING.md`](ENCODING.md) §3: within a tree, sort leaves by `(length, label)`
-and hand out integers in that order.
+[`ENCODING.md`](ENCODING.md) §3, in one form for both stages: **the all-zeros
+codeword belongs to the first leaf at the maximum depth**, the remaining codes
+are handed out in *ascending* depth order from the top of the code space (the
+mirror image of the usual DEFLATE convention), and within a depth the leaves
+ascend by label.  Invariant 8 is what makes the first leaf at the maximum depth
+be the terminator, so neither the encoder nor the decoder needs an orientation
+table.
 
 ## 3. The binary form
 
-Planned, in this order, all integers little-endian:
+Measured, not estimated: `scripts/model_size.py` writes the model, packs it in
+this order and reports the bytes of each section.  The figures are at
+`V = 8192, k = 16, q = 1`, the operating point, with the packed rule table.
 
-| section | encoding | bytes at `V = 8192, k = 16, q = 2` |
+| section | encoding | bytes |
 |---|---|---:|
 | magic | `VNAM` | 4 |
 | version | one byte | 1 |
-| `V`, `k`, `q` | varints | 5–6 |
-| `alphabet` | 63 bytes, ids 1–63 | 63 |
-| `rules` | 2 × (V − 64) child indices | see below |
-| `memberships` | `⌈log₂ kq⌉` bits each, packed | 5,120 |
-| `bottom_trees` | a depth-width byte, then `V` depths in right-cluster order | 5,120 |
-| `top_trees` | `k² q` depths at the same width, packed | 320 |
-| checksum | CRC-32 of everything above | 4 |
+| `V`, `k`, `q`, `len(alphabet)` | varints | 5 |
+| rules length | a varint, because the rule stream is not self-delimiting | 3 |
+| `rules` | 2 × (V − 64) child indices, Zipf-arithmetic-coded | 21,145 |
+| `alphabet` | `len(alphabet)` bytes, ids 1–63 | 63 |
+| `memberships` | `⌈log₂ k⌉` = 4 bits each, packed | 4,096 |
+| depth width | one byte, in bits | 1 |
+| `bottom_trees` | `V` depths at that width, right cluster by right cluster, ascending symbol id inside | 5,120 |
+| `top_trees` | `k(k + 1)` = 272 depths at the same width | 170 |
+| CRC-32 | of everything above | 4 |
+| **total** | | **30,612** |
 
 Two encodings of the section that dominates, the rule table:
 
-* **plain** — `⌈log₂ V⌉` bits per child, 13 at `V = 8,192`: 26,416 B.  Simple,
-  obviously correct, and the form the round-trip tests use.
+* **plain** — `⌈log₂ V⌉` bits per child, 13 at `V = 8,192`: 26,416 B, and the
+  whole file 35,883 B.  Simple, obviously correct, and the form the round-trip
+  tests use.
 * **packed** — the child index is coded with the Zipf model of
-  `MODEL_BUDGET.md` §4 (index `< *i*`, probability `∝ (j+1)^−0.7`): about 21 kB
-  at `V = 8,192`, a saving of 19–22 %.  This is the number the budget quotes.
+  `MODEL_BUDGET.md` §4 (index `< i`, probability `∝ (j+1)^−0.7`, truncated to the
+  symbols defined so far): **21,145 B**, 20 % less, and 69 % of the file.  The
+  decoder derives the same frequencies from `V` alone, so the coder costs no
+  table.  This is the number the budget quotes.
 
-The rest of the file is 10.6 kB, so the model file is about **31.6 kB** at
-`V = 8192, k = 16, q = 2` packed — against the 33.7 kB in `MODEL_BUDGET.md` §5.1,
-which adds 2 kB of library code that is not part of the model.
+Bits are packed **least-significant first within a byte**: bit *i* of the stream
+is bit *i* mod 8 of byte *i* // 8, and bit 0 of the code is the first bit an
+encoder writes, so the padding of `ENCODING.md` §2 is the run of zeros *above*
+the code.  Integers are little-endian.
 
-The quarter code costs 1.2 kB of that: one more bit per label (5 bits instead of
-4, since a right cluster is one of twice as many), and twice the top depths
-(320 B instead of 160 B).  The label is not avoidable: a depth list cannot say
-which symbols share a tree, and no position in the tree can stand in for it (§7).
+The rest of the file is 9,467 B, so the model is **30.6 kB** — against the
+32.7 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
+part of the model.  The YAML of §2 is 176,548 B at the same point: it is the
+portable form, and the binary is what the budget measures.
 
-A 5-bit depth field covers trees of depth ≤ 31.  If a build exceeds it the
-writer uses 6 bits and says so; at `V = 8,192` that costs 1 kB of depths.
+A model with `q > 1` pays 1.2 kB at this point: one more bit per label (5 bits
+instead of 4, since a right cluster is one of twice as many), and twice the top
+depths (330 B instead of 170 B, the STOP leaf included).  It is the label that
+dominates, and it is not avoidable: a depth list cannot say which symbols share
+a tree, and no position in the tree can stand in for it (§7).  Measured, the
+quarters do not repay it (`CLUSTER_QUARTERS.md`).
+
+The depth width is **5 bits measured, not assumed**: the deepest bottom tree is
+21 at `V = 8192, k = 16` and the deepest top tree 13, and the same 5 bits holds
+on the whole measured grid.  A build that exceeded depth 31 would have to be
+length-limited or use 6 bits, which costs 1 kB; neither is needed.
 
 ## 4. What the file deliberately omits
 
@@ -182,27 +220,34 @@ writer uses 6 bits and says so; at `V = 8,192` that costs 1 kB of depths.
 
 ## 5. Worked example
 
-The file in §2 is a complete model: `V = 8`, `k = 2`, `q = 2`.  Symbol 0 is the
-stop (`\n`), the characters `a`…`e` are ids 1–5, and words 6 and 7 are `ab` and
-`abc`.  The right clusters are `{a}`, `{b, ab}`, `{c, d, e}` and `{stop, abc}`;
-left cluster 0 is the first two and left cluster 1 the last two.
+The file in §2 is a complete model: `V = 8`, `k = 2`, `q = 2`, so `k·q = 4`
+right clusters and two top trees of 5 leaves.  Symbol 0 is the stop (`\n`), the
+characters `a`…`e` are ids 1–5, and words 6 and 7 are `ab` and `abc`.  The right
+clusters are `{a}`, `{b, ab}`, `{c, d, e}` and `{stop, abc}`; left cluster 0 is
+the first two and left cluster 1 the last two.
 
 The four bottom trees give the word step: right cluster 0 is a single symbol and
-costs nothing, right cluster 1 gives `b`→`0`, `ab`→`1`, right cluster 2 gives
-`c`→`0`, `d`→`10`, `e`→`11`, and right cluster 3 gives the stop→`0`, `abc`→`1`.
-The stop's `0` is the all-zeros path, which is what makes the zero padding past
-the budget read as a terminator (`ENCODING.md` §2).  The top trees are
-`[2, 3, 3, 1]` after left cluster 0, i.e. right cluster 3 → `0`, right cluster 0
-→ `10`, right clusters 1 and 2 → `110` and `111`, and `[1, 2, 3, 3]` after left
-cluster 1, i.e. right cluster 0 → `0`, 1 → `10`, 2 → `110`, 3 → `111`.
+costs nothing; right cluster 1 gives `b`→`0`, `ab`→`1`; right cluster 2 gives
+`c`→`1`, `d`→`00`, `e`→`01`; right cluster 3 gives the stop→`0`, `abc`→`1`.
+Note the direction of the canonical rule (invariant 8): the deeper leaves take
+the low codes, which is why `d` and `e` start with `0`.
+
+The top trees hold 5 depths each, leaf 0 being the zero-weight STOP and leaves
+1–4 right clusters 0–3.  After left cluster 0 (`[4, 1, 2, 3, 4]`): STOP→`0000`,
+right cluster 0→`1`, 1→`01`, 2→`001`, 3→`0001`.  After left cluster 1
+(`[4, 2, 1, 3, 4]`): STOP→`0000`, right cluster 0→`01`, 1→`1`, 2→`001`,
+3→`0001`.
 
 An identifier is coded as (right cluster | left cluster) then (symbol | right
-cluster), and its cycle starts at the stop, so the first top tree is the one for
-the stop's left cluster.  For `ab`: stop→`a` is right cluster 0 after left
-cluster 1, `0`; `a`→`b` is right cluster 1 after left cluster 0 then `b` inside
-it, `110 0`; `b`→stop is right cluster 3 after left cluster 0 then the stop
-inside it, `0 0`.  Seven bits for three transitions, and the word step is free
-exactly where the tree was stopped at a single symbol.
+cluster), and its cycle starts at the stop, so the first top tree is the one
+after the stop's left cluster — the stop is in right cluster 3, so left cluster
+1.  For `ab`: stop→`a` is right cluster 0 after left cluster 1, `01`, and `a`
+inside right cluster 0 is free; `a`→`b` is right cluster 1 after left cluster 0,
+`01`, then `b` inside it, `0`; and `b`→stop is the STOP leaf in left cluster 0,
+`0000`, which is never written.  Five bits of codeword, four stored — the last
+is a zero and joins the padding — and the word step is free exactly where the
+tree was stopped at a single symbol.  `python3 scripts/model_size.py
+--self-test` runs this file end to end, from the depths to the bytes and back.
 
 ## 6. Versioning
 
@@ -218,8 +263,8 @@ plain factored model rather than left out.
 **One standard model.**  The standard ships exactly one model file, fixing `V`,
 `k` and `q`, and the file carries no `name:` or family: a second standard model
 would be a version-2 question.  The format itself is general — a library user may
-write a file at any `V`, `k` and `q`, including `q = 1` — because it describes a
-code rather than the standard's choice of one.
+write a file at any `V`, `k` and `q`, with `q = 1` the shipped choice — because
+it describes a code rather than the standard's choice of one.
 
 **The counts live beside the file.**  A published model may sit in a directory
 that also holds the counts it was built from (word frequencies, the right-cluster

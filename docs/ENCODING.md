@@ -41,9 +41,14 @@ Working into a *fixed budget* changes what "bijection" means:
 ### The Huffman case: why it works
 
 Every binary tree has exactly one leaf whose codeword is all zeros — follow the
-`0` branch from the root until a leaf is reached.  So the trick costs nothing to
-arrange: after building the tree, orient each node's children so that the stop
-token lands on that leaf.  Then:
+`0` branch from the root until a leaf is reached.  A tree's orientation can put
+any leaf there, and the published model cannot store one bit of orientation: it
+stores depths, and the codewords are canonical from them
+([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §2).  So the orientation is fixed by a
+convention instead — **the all-zeros codeword is the first leaf at the maximum
+depth**, the rest being handed out from the far end of the code space — and the
+build puts the leaf it wants there by giving it **zero weight**, which makes it
+the deepest.  Then:
 
 1. **Termination is unambiguous.**  No other codeword starts with the stop's
    codeword `0^l` (the code is prefix-free), so `l` zeros can only mean "stop".
@@ -55,6 +60,12 @@ token lands on that leaf.  Then:
    `Σᵢ len(tᵢ)`: the terminator is free.  The stop must still be *in* the tree
    — it is what makes the padding decode to a terminator instead of to more
    tokens — but its own code length is not paid per identifier.
+
+The factorised code has two stages, and the padding meets the top one first.  So
+the termination has to happen there: a top tree's alphabet is the right clusters
+plus a zero-weight **STOP** leaf, and the padding decodes as that leaf.  The
+word stage is then not reached at all, which is why the stop's own bottom leaf
+is only there to keep symbol 0 in the alphabet (`MODEL_FORMAT.md` §1, §2).
 
 Point 3 is worth stating carefully because it affects how the numbers compare.
 `CODING_OVERHEAD.md` measures Huffman and arithmetic lengths *including* the
@@ -203,13 +214,17 @@ The first is better on every axis that matters here.
   point, and is already standard practice (DEFLATE, JPEG, Brotli).
 * **It fixes what would otherwise be unspecified.**  Option 2 leaves open the
   tie-breaking when two subtrees have equal weight, the treatment of zero-
-  probability symbols, the orientation that puts the stop on the all-zeros leaf,
-  and the exact quantisation of `p`.  All four change the emitted bits.
+  probability symbols, the direction of the canonical assignment, and the exact
+  quantisation of `p`.  All four change the emitted bits.
 
 What the standard must pin, in order of how easily it goes wrong:
 
-* the canonical assignment (lengths → codewords) and the symbol numbering;
-* the orientation rule that puts the stop on the all-zeros leaf;
+* the canonical assignment (lengths → codewords) and the symbol numbering — with
+  its direction, since the mirror image of the DEFLATE convention is what puts
+  the all-zeros code on the terminator (`MODEL_FORMAT.md` §2);
+* the zero weight on each stage's terminator leaf (the stop in a word tree, the
+  STOP leaf in a top tree), which is what makes that leaf the deepest and so the
+  all-zeros one;
 * the bit order in the word, and the encoder's duty to leave every unused high
   bit zero (the decoder must ignore them, not test them);
 * the byte order for the 64/128-bit word (little-endian) and the stop's role as
@@ -260,10 +275,12 @@ Neither idea changes how a codeword is written; both are written up separately.
 
 * **Cluster quarters** ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)) split each
   left cluster's tree into `q` right clusters, so the top stage has `q·k` leaves
-  instead of `k`.  The encoding is unchanged: this note with `q·k` in place of
-  `k` in the top stage, and nothing else.  It is adopted at `q = 2`, and the label set
-  is still one set: a word's label is its right cluster, and its left cluster is
-  that label divided by `q` (`MODEL_FORMAT.md` §1).
+  instead of `k` (plus the STOP leaf of §2).  The encoding is unchanged: this
+  note with `q·k` in place of `k` in the top stage, and nothing else.  It was
+  adopted at `q = 2` on the arithmetic accounting, and measured under the
+  shipped convention it does not repay its extra label, so `q = 1` ships.  The
+  label set is one set either way: a word's label is its right cluster, and its
+  left cluster is that label divided by `q` (`MODEL_FORMAT.md` §1).
 * **Codesigning the assignment** ([`CODESIGN.md`](CODESIGN.md)) chooses the
   clustering and the trees together, so it changes which labels exist and, in
   general, how many (`k` may grow).  That is a generation question: a decoder

@@ -1,16 +1,22 @@
 # Cluster quarters
 
-Status: **`q = 2` is adopted, `q = 4` is rejected.**  The "quarter" idea buys
-back part of the word-step rounding loss by splitting each left cluster's word
-tree into `q` right clusters.  The name is historical: a quarter is *any* finer
-right cluster, so `q = 2` gives halves.  The idea changes the top stage from `k`
-leaves to `q·k` and leaves the encoding untouched (`ENCODING.md` §§2–4); the
-accounting, the measurements and the price are below.  The model file carries
-them as one label per word (`MODEL_FORMAT.md`), which costs 1.2 kB at the
-operating point: this build's right clusters are subtrees of the Huffman tree,
-not of the canonical tree a depth-only file implies, so the grouping cannot be
-read off the tree and the file pays a label per word ("The structural cost"
-below).
+Status: **`q = 1` ships; `q = 2` and `q = 4` are rejected on the measured
+numbers.**  The "quarter" idea buys back part of the word-step rounding loss by
+splitting each left cluster's word tree into `q` right clusters.  The name is
+historical: a quarter is *any* finer right cluster, so `q = 2` gives halves.  The
+idea changes the top stage from `k` leaves to `q·k` and leaves the encoding
+untouched (`ENCODING.md` §§2–4); the accounting, the measurements and the price
+are below.  The arithmetic accounting (stop charged) adopted `q = 2` on 0.9 fit
+points for 1,184 B.  Under the shipped convention — a zero-weight terminator in
+the top stage — the same build buys 0.13 points and 0.10 bits for those bytes,
+because the terminator was most of what the quarters were buying.  The model file
+still carries the grouping as one label per word when `q > 1`
+(`MODEL_FORMAT.md`) — the right clusters are subtrees of the Huffman build, not
+of the canonical tree a depth-only file implies, so the grouping cannot be read
+off the tree — which costs 1.2 kB at the operating point ("The structural cost"
+below).  Measured by `scripts/model_size.py` at the operating point, the
+shipped `q = 1` file is **30,612 B** and fits **84.1 %** of held-out identifiers
+in 64 bits, against 31,796 B / 84.3 % for `q = 2` (`MODEL_BUDGET.md` §7).
 
 The factorised model needs `P(right cluster | left cluster)` before
 `P(word | right cluster)`.
@@ -354,9 +360,28 @@ So at the operating point CQF `q = 2` costs **252 bytes** in this accounting and
 buys 0.9 points over CF, or **0.3 points over arithmetic decoding at
 0.84 kB/pt**.  On the accounting's price it is the cheapest fit point in the
 whole study — cheaper than anything the `k` or `V` directions offer — and `q = 4`
-is again dominated (same fit, 3.3× the bytes).  This is the point that justifies
-adopting CQF at all; the `k = 32` point above is the second-best case, and above
-`k = 32` it is not worth the tables.
+is again dominated (same fit, 3.3× the bytes).  This is the point that made CQF
+the adopted code on the arithmetic accounting; the `k = 32` point above is the
+second-best case, and above `k = 32` it is not worth the tables.  The shipped
+convention decides against it:
+
+| `V, k` | `q = 1` file | bits/id | fit ≤64 | `q = 2` file | bits/id | fit ≤64 |
+|---|---:|---:|---:|---:|---:|---:|
+| 4096, 16 | 14,683 B | 49.083 | 80.0 % | 15,355 B | 49.060 | 80.1 % |
+| 8192, 16 | 30,612 B | 45.790 | 84.1 % | 31,796 B | 45.687 | 84.3 % |
+| 8192, 64 | 35,090 B | 45.347 | 84.5 % | 38,674 B | 45.296 | 84.7 % |
+
+At 8192/16 the paired difference is `−0.103 ± 0.010` bits per identifier and
++53 identifiers fitting in 64 bits (282 gained, 229 lost, out of 42,268) for
+1,184 B.  Against the frontier that is 9.5 kB/pt where the shipped curve charges
+3.9 kB/pt between 4096/16 and 8192/16, and 0.10 bits is worth about 0.57 kB at
+5.5 kB/bit — so the 1,184 B is not repaid on either axis.  The reason is the
+terminator: of the 1.10 bits and 0.9 points the arithmetic accounting credited
+to the quarters, about 1.00 bits and 0.78 points were the cost of *ending* an
+identifier, which the zero-weight STOP leaf in the top stage now removes from
+both codes.  What is left is the word-stage granularity alone, and it is worth
+a tenth of a bit.  `q = 4` is worse still, and at `k = 64` the `q = 2` file costs
+3,584 B for 0.05 bits.
 
 The 252 bytes are real in this accounting's terms and not in the model file's.
 That accounting stores each tree as a bracket string plus its leaves in
@@ -365,10 +390,13 @@ depth-first order, so the grouping is *in* the file: the whole change costs
 published file stores depths instead — a third of the size (`MODEL_BUDGET.md`
 §3) — and depths do not say which symbols share a tree, so it carries one label
 per word: one bit more than a left-cluster label (5 against 4 at the operating
-point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is the shipped
-price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at the cheap
-end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic reference
-on bytes *and* above it on fit (33.7 kB / 82.8 % against 39.8 kB / 82.5 %).
+point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is what `q = 2`
+would cost** (`MODEL_FORMAT.md` §3).  The arithmetic accounting priced that at
+1.3 kB/pt; measured it is 9.5 kB/pt, outside the frontier's 1–6 kB/pt band, which
+is why `q = 1` ships.  Either way the factored file sits below the arithmetic
+reference on bytes *and* above it on fit: 30.6 kB / 84.1 % measured against
+39.8 kB / 82.5 %, where the Huffman row has already had the terminator's bits
+taken off and the arithmetic row cannot (`MODEL_BUDGET.md` §7).
 
 **The noise, measured.** These are proportions over 42,268 identifiers, so the
 right yardstick is the *paired* per-identifier difference (same held-out
@@ -395,6 +423,12 @@ far from the threshold and the ones that flip are a small correlated set.  The
 stride-10 re-measurement also tightened every standard error by `sqrt(10)`
 against the earlier pass, which is how the +0.9 pt reading at `k = 32` was
 identified as noise.
+
+All of these numbers are the arithmetic accounting's convention: both codes pay
+for the stop.  Under the shipped convention the same `q = 2`-against-`q = 1`
+comparison at the operating point is 0.10 bits and 0.13 points, not 1.10 and
+0.9 — the STOP leaf removes the transition cost from both codes, and that was
+most of the quarters' margin.
 
 Two honesty notes on the domination table, whose margins are 0.3 pt: those are
 *cross-model* differences (a different code for a different `k`), so their
@@ -520,16 +554,20 @@ Two alternatives were priced, and neither is the shipped file:
 * **2,816 B, with the label set made symmetric.**  `k` becomes `kq` on both
   sides, the plain factored model at twice the clusters: 42,571 B against
   39,755 B at `V = 8192`, for +0.3 points on the arithmetic reference.  It needs
-  no format change at all, and it costs 2.4× the shipped bytes for about a third
-  of the gain (0.3 arithmetic points against 0.9 measured).
+  no format change at all, and it costs 2.7× the accounting's CF file for a third
+  of the gain (0.3 arithmetic points against the quarters' 1.1 arithmetic
+  points; measured under the shipped convention the quarters' gain is 0.13).
 
-**Outcome.** On bits and bytes, against the rule in step 6: `q = 2` wins and
-`q = 4` loses, so **`q = 2` is adopted**.  At the operating point
-(`V = 8192, k = 16`) it buys 0.9 fit points for 1,184 bytes over CF — 1.3 kB/pt,
-at the cheap end of the frontier's 1–6 — and it is both smaller and better than
-arithmetic decoding at the same point (33.7 kB / 82.8 % against 39.8 kB /
-82.5 %).  `q = 4` buys nothing further for 3.3× the bytes, and above `k = 32`
-neither pays.  The encoding itself is unchanged throughout — `q` only multiplies
-`k` in the top stage (`ENCODING.md` §5) — and the model file carries each word's
-right cluster as one label, one bit wider than a left-cluster label would be
-(`MODEL_FORMAT.md`).
+**Outcome.** On the arithmetic accounting `q = 2` won and `q = 4` lost.  On the
+measured numbers neither wins: at `8192/16` the quarter code costs 1,184 B for
+0.10 bits and 0.13 fit points — 9.5 kB/pt against the shipped frontier's 3.9 — and
+at the other measured points the terms are worse (672 B at 4096/16, 3,584 B at
+8192/64, for 0.1 and 0.2 points).  So **`q = 1` ships**: the plain factored
+code, 30,612 B, 45.790 bits per identifier, 84.1 % in 64 bits.  The mechanism is
+real — the truncated build does shorten the word step, and with the stop charged
+it is worth about a bit — but the shipped code no longer pays that charge, so the
+quarters solve a problem the format has already solved with the top-stage STOP
+leaf.  The encoding is unchanged throughout — `q` only multiplies `k` in the top
+stage (`ENCODING.md` §5) — and the format keeps `q` as an option
+(`MODEL_FORMAT.md` §2), so the decision can be revisited if a different `k` or a
+different terminator convention changes the price.

@@ -12,13 +12,14 @@ the corpus, the models and the reports below exist to test whether a compact
 bijection is reachable at all. This is research, not yet a finished codec.
 
 What is reachable today: the best model we have codes held-out identifiers at
-**~48 bits**, fits **~83%** of them in 64 bits and **~98%** in 128 bits, for a
-model of **~40 kB**. That is short of the 20 kB goal, and the gap is where the
-remaining research sits — the measured frontier, and what it costs to move along
-it, is in [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
-[`docs/ENCODING.md`](docs/ENCODING.md). Those figures price the arithmetic
-reference; the Huffman code the standard publishes stores code lengths instead of
-probabilities, so it is smaller — about 32 kB by estimate — and fits rather more.
+**45.8 bits**, fits **84.1%** of them in 64 bits and **98.8%** in 128 bits, for a
+model file of **30,612 bytes** (32.7 kB with the library code). That is short of
+the 20 kB goal, and the gap is where the remaining research sits — the measured
+frontier, and what it costs to move along it, is in
+[`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
+[`docs/ENCODING.md`](docs/ENCODING.md). The shipped figures are measured from the
+packed model file by `scripts/model_size.py`; the arithmetic reference, which
+stores probabilities instead of code lengths, is 39.8 kB at 82.5%.
 
 ## The product
 
@@ -89,9 +90,9 @@ The experimental strategy is as follows:
   fit. See [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
   [`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md).
 - **Build an encoder based on the model** — Huffman over the cluster and word
-  steps, with a stop token to end the cycle and cluster "quarters" to cut the
-  top-level code. See [`docs/ENCODING.md`](docs/ENCODING.md); the cost of the
-  Huffman restriction itself, and of the tokenisation, is in
+  steps, with a zero-weight stop to end the cycle for free. See
+  [`docs/ENCODING.md`](docs/ENCODING.md); the cost of the Huffman restriction
+  itself, and of the tokenisation, is in
   [`docs/CODING_OVERHEAD.md`](docs/CODING_OVERHEAD.md) and
   [`docs/TOKENISATION.md`](docs/TOKENISATION.md).
 
@@ -112,8 +113,9 @@ The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
 furthest bottom-left. Filled points are the arithmetic reference for each
-word list (the small numbers are `k`); the hollow points are the measured
-Huffman codes at the operating point — CF, and the quarter code that ships.
+word list (the small numbers are `k`); the hollow points are the three measured
+shipped files (4096/16, 8192/16 and 8192/64), which sit below and left of the
+reference curve.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -170,7 +172,9 @@ Along the way, we tried a lot of things that didn't work:
   level within about a bit, and the Huffman code has the smaller model size
   ([`docs/CODING_OVERHEAD.md`](docs/CODING_OVERHEAD.md),
   [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §5.2).
-- **Cluster quarters `q = 4`.** No better than `q = 2` for 3.2× the bytes
+- **Cluster quarters (`q > 1`).** Splitting each left cluster's tree into `q`
+  right clusters buys 0.1 bits and 0.1 fit points for 1.2 kB once the
+  terminator is free, so `q = 1` ships
   ([`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)).
 
 ## Layout
@@ -303,7 +307,8 @@ the training lines (`--sample 20`) and the adjacency counted over all of them
 canonical grid; the `s0` twins (`--sample 0 --stride 0`) exist to check that the
 5% sample does not bias the dictionary. `tw96`, `tw2040`, `tw2040ns`, `tw4414`
 and `tw11694` are pre-expansion or retired builds kept because reports still
-quote them, and `tw4096raw` exists only for the case-normalisation ablation. `work/` also holds the corpus-build intermediates
+quote them, and `tw4096raw` exists only for the case-normalisation ablation.
+`work/` also holds the corpus-build intermediates
 (`gems_dl/`, `*_src/`, `clean_ids/`, `*.shards`, per-ecosystem logs) — tens of
 thousands of files and several GB, none of it tracked.
 

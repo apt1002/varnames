@@ -27,7 +27,7 @@ def _cells(line):
 
 
 def _num(s):
-    s = s.replace(",", "").replace("kB", "").replace("kB", "")
+    s = s.replace(",", "").replace("*", "").replace("kB", "").replace("kB", "")
     s = re.sub(r"\(.*?\)", "", s).strip()
     m = re.match(r"^[−-]?[0-9.]+", s)
     return float(m.group(0).replace("−", "-")) if m else None
