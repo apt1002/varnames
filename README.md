@@ -16,7 +16,9 @@ What is reachable today: the best model we have codes held-out identifiers at
 model of **~40 kB**. That is short of the 20 kB goal, and the gap is where the
 remaining research sits — the measured frontier, and what it costs to move along
 it, is in [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
-[`docs/ENCODING.md`](docs/ENCODING.md).
+[`docs/ENCODING.md`](docs/ENCODING.md). Those figures price the arithmetic
+reference; the Huffman code the standard publishes stores code lengths instead of
+probabilities, so it is smaller — about 32 kB by estimate — and fits rather more.
 
 ## The product
 
@@ -100,6 +102,17 @@ the fit rate on held-out identifiers
 with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)).
 Fitting an additional 1% of identifiers into 64 bits seems to cost between 2K
 and 6K in the interesting model size range; it costs more for larger models.
+
+![The measured size-versus-fit frontier](docs/frontier.svg)
+
+The figure plots the frontier table in
+[`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
+of held-out identifiers that do *not* fit in 64 bits, so the best model is
+furthest bottom-left. Filled points are the arithmetic reference at `k` = 4…128
+for each vocabulary (the small numbers are `k`); hollow points are the shipped
+Huffman code at its operating cell. Every point charges the terminator; the
+shipped code's zero-weight stop gives back about two bits per identifier on top,
+which the size oracle will add.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -190,6 +203,7 @@ varnames/
 │   ├── CODING_OVERHEAD.md               # words per identifier + Huffman vs arithmetic
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
+│   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables, cluster quarters
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
@@ -239,6 +253,7 @@ varnames/
 │   ├── wordlist_budget.py               # word-list size vs k² table budget
 │   ├── words_per_identifier.py          # token-count histogram + Huffman penalty
 │   ├── model_budget.py                  # model size in bytes (word list + tables)
+│   ├── frontier_plot.py                 # draw docs/frontier.svg from the frontier table
 │   ├── wordlist_order.py                # creation order vs unigram order in a built list
 │   ├── model_fit_rates.py               # held-out fit rates; cost of quantising the tables
 │   ├── k_frontier.py                    # the bytes-for-fit frontier as a curve
