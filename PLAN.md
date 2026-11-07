@@ -154,10 +154,12 @@ be steered toward it.  Design intent, scope and audiences:
       *Done — all five thresholds; log `work/afk_pairmatrix.log`.*
 - [x] **H2. Corpus hardening.** *Done.*  `docs/CORPUS.md`.
 - [x] **H3. Broaden the corpus.** *Done.*  `docs/CORPUS.md`.
-- [x] **H4. Rebuild the corpus inputs.** *Done, with one exception:
-      `work/common<T>` still holds the pre-expansion common-substring sets and
-      must be rebuilt before use.  The pre-change corpus is archived at commit
-      `7228753`.*
+- [x] **H4. Rebuild the corpus inputs.** *Done.*  `work/common<T>` was rebuilt
+      from `work/camel/merged.txt` and reproduces the counts in
+      `docs/CASE_NORMALISATION.md` (278, 613, 1,788, 3,935, 8,038, 20,198,
+      40,168, 80,869 for `T` = 100k … 500).  The derived files beside them
+      (`clusters.tsv`, `code_lengths.tsv`) predate the rebuild and feed nothing
+      current.  The pre-change corpus is archived at commit `7228753`.
 - [x] **H5. Rebuild the model artefacts.** *Done for the grid; the legacy
       artefacts are not rebuilt.  See the build key below.*
 - [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done — the grid is fixed at

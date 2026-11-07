@@ -76,8 +76,8 @@ Notes on the accounting:
 * **One term is missing: the word→left-cluster map.**  The top stage is indexed
   by the left cluster of the *current* word, and neither formula charges the
   `V log₂k` bits that map needs; the leaf list only implies the *right*-cluster
-  side.  If the shared cluster assignment is adopted, one map serves both and the term
-  is already paid — which is one more reason that idea is attractive.
+  side.  If the shared cluster assignment is adopted, one map serves both and
+  the term is already paid — one more reason that idea is attractive.
 * **`V log V` is right, and it is what makes the scheme work.**  An earlier draft
   of this note tried to charge `Σ_j V_j log V_j ≈ V log(V/qk)` instead and to add
   a separate word→cluster map.  That double-charges: with every leaf annotated by
@@ -355,9 +355,9 @@ Here CQF's mean bits are *worse* than arithmetic decoding (47.891 against
 code pays more on average and still puts more identifiers under 64 bits.  That is
 only possible if the cost distribution is being reshaped — short lengths for the
 heavy symbols of a quarter, long for the rare ones — which is exactly the effect
-the redundancy argument above predicts and cannot be explained by "Huffman catching up
-to its own entropy".  CQF's value is a threshold gain, not an entropy gain, and
-at a coarse `k` it is both cheap and effective.
+the redundancy argument above predicts and cannot be explained by "Huffman
+catching up to its own entropy".  CQF's value is a threshold gain, not an
+entropy gain, and at a coarse `k` it is both cheap and effective.
 
 **The noise, measured.** These are proportions over 42,268 identifiers, so the
 right yardstick is the *paired* per-identifier difference (same held-out
@@ -423,10 +423,10 @@ points — which is why both are always reported.
        recovered − (top stage increase)
 
    and quoting `H(quarter | left cluster) + r_top` as the cost overstates it,
-   because it charges the whole top stage rather than its increment.  The trade works because a cell whose
-   final merges are expensive is a cell with one heavy survivor and small
-   siblings: the shared top tree lets that survivor pair with *other cells'*
-   heavy survivors instead of with its own tail.
+   because it charges the whole top stage rather than its increment.  The trade
+   works because a cell whose final merges are expensive is a cell with one
+   heavy survivor and small siblings: the shared top tree lets that survivor
+   pair with *other cells'* heavy survivors instead of with its own tail.
 
    Three consequences, all of which rule out imposing a partition:
 
@@ -456,3 +456,11 @@ points — which is why both are always reported.
    on the gain is the CF penalty itself (1.4–1.6 bits/identifier), and CQF can
    only recover the word-step share of it.
 
+
+**Outcome.** Against the rule in step 6: `q = 2` is adopted and `q = 4` is
+rejected.  At the operating point (`V = 8192, k = 16`) `q = 2` buys 0.9 fit
+points for 252 bytes over CF, and is 0.3 points *ahead* of arithmetic decoding
+at 0.84 kB/pt — the cheapest fit point in the study.  `q = 4` buys
+nothing further for 3.3× the bytes, and above `k = 32` neither pays.  The
+encoding is unchanged throughout: `q` only multiplies `k` in the top stage
+(`ENCODING.md` §5), and `MODEL_FORMAT.md` carries `q` per model.
