@@ -22,8 +22,8 @@ Per byte, the grid values a save *less*, by four to ten times — so the same
 percentage saving is worth more at 512 if it is worth anything at all.  What
 changes the verdict is the size of the model the percentage applies to: the
 memberships are `2V·log₂k` bits, so dropping one of the two assignments frees
-256 B at 512 (13% of a 1,980-byte model, 0.54 pt) and 2.5–6.1 kB at the grid
-(11–13% of a 22–48 kB model, ≈0.5 pt), while the constraint that buys it
+256 B at 512 (12% of a 2.2 kB model, 0.54 pt) and 2.5–6.1 kB at the grid
+(13% of a 20–46 kB model, ≈0.5 pt), while the constraint that buys it
 costs 1.2 pt of fit at 512 and only 0.1–0.6 pt once the clustering is fine
 enough.  A small model therefore shows a *loss* on a
 trade that is a *gain* at every canonical point — which is why a decision taken
@@ -83,11 +83,11 @@ the concatenated Hellinger profile.
 | model | k | bits | fit<=64 | fit<=128 | bytes | `D` asymmetry |
 |---|---|---|---|---|---|---|
 | full table | — | 53.134 | 77.0% | 97.8% | — | — |
-| `asymmetric` | 16 | 68.105 | 57.1% | 93.7% | 1,980 | 1.33 |
-| `shared`, `w = 1/√2` | 16 | 69.071 | 54.8% | 93.4% | 1,724 | 0.92 |
-| `shared`, `w = 1` | 16 | **68.784** | 55.9% | 93.5% | 1,724 | 1.20 |
-| `shared`, `w = √2` | 16 | 69.140 | 55.0% | 93.5% | 1,724 | 1.09 |
-| `asymmetric` | 32 | 66.480 | 59.0% | 94.2% | 2,872 | 1.37 |
+| `asymmetric` | 16 | 68.105 | 57.1% | 93.7% | 2,177 | 1.33 |
+| `shared`, `w = 1/√2` | 16 | 69.071 | 54.8% | 93.4% | 1,921 | 0.92 |
+| `shared`, `w = 1` | 16 | **68.784** | 55.9% | 93.5% | 1,921 | 1.20 |
+| `shared`, `w = √2` | 16 | 69.140 | 55.0% | 93.5% | 1,921 | 1.09 |
+| `asymmetric` | 32 | 66.480 | 59.0% | 94.2% | 3,073 | 1.37 |
 
 **The weight sweep vindicates the 1:1 default** — `w = 1` is the best of the
 three, so the concatenation's equal weighting is not a handicap.  (At the
@@ -95,8 +95,8 @@ canonical grid the sweep has no consistent winner, but the default survives
 there too.)
 
 **The constraint costs 0.68 bits/identifier and 1.2 points of fit<=64**, in
-exchange for 256 B (13% of the model).  The frontier slope at this point is read
-off the `k`-doubling control: 892 B buys 1.63 bits, so 256 B is worth ~0.47 bits
+exchange for 256 B (12% of the model).  The frontier slope at this point is read
+off the `k`-doubling control: 896 B buys 1.63 bits, so 256 B is worth ~0.47 bits
 — the shared model loses 0.68 and saves 0.47.  **Dominated at matched bytes**,
 the margin (1.2 pt) being four times the ±0.3 pt noise band.
 

@@ -35,7 +35,7 @@ At the canonical grid:
 | `V = 8,192`, `k = 64` | 12,288 B | 6,144 B | 6.0 kB |
 
 Against a CF-sized model (word list + unigram + memberships + block ≈ 24 kB at
-`V = 4,096, k = 64`) that is **11–14 %**, i.e. roughly **three quarters of the
+`V = 4,096, k = 64`) that is **12–13 %**, i.e. roughly **three quarters of the
 cost of doubling `k`** (which is `V·log₂2 / 8 + 3k²/8` ≈ 4 kB at that size).  So
 even a modest compression loss could be worth paying: this is a
 bytes-for-bits trade on the same frontier as `WORDLIST_BUDGET.md`.
