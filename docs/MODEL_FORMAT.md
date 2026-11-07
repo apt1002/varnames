@@ -49,10 +49,9 @@ the one whose top tree codes the first-token distribution cheapest — and numbe
 it 0, permuting the other labels — and the leaves inside their trees — to match
 (§5).
 
-The file stores **one map**: each word's right cluster.  Its left cluster is
-that label divided by `q`, so the second alphabet costs no second table — one
-label per word at `⌈log₂ kq⌉` bits instead of `⌈log₂ k⌉`, and the two counts `k`
-and `q`.
+The file stores **one map**: each word's right cluster (`⌈log₂ kq⌉` bits).
+There's no need to store the word's left cluster, which is simply the right
+cluster divided by `q`.
 
 Symbol ids are dense from zero: the characters are ids `0 … len(alphabet) − 1`
 and the words follow, so the last word is `V − 1` and

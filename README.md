@@ -14,13 +14,11 @@ bijection is reachable at all. This is research, not yet a finished codec.
 What is reachable today: the best model we have codes held-out identifiers at
 **45.2 bits**, fits **85.0%** of them in 64 bits and **99.0%** in 128 bits, for a
 model file of **32,085 bytes** (34.1 kB with the library code) at 8192 words and
-32 clusters, near where the measured bytes-for-fit curve stops paying. That is
-short of the 20 kB goal, and the gap is where the remaining research sits —
-the measured frontier, and what it costs to move along it, is in
+32 clusters. That is short of the 20 kB goal, and the gap is where the remaining
+research sits — the measured frontier, and what it costs to move along it, is in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
 [`docs/ENCODING.md`](docs/ENCODING.md). Every figure is measured from a packed
-model file by `scripts/model_size.py`; there is no arithmetic reference any
-more, because the format contains no arithmetic coder.
+model file by `scripts/model_size.py`.
 
 ## The product
 

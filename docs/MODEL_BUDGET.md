@@ -5,10 +5,8 @@ Status: **results (grid).**  The clustering notes measure the model in
 **bytes**, so the word list can be charged for and the size compared against the
 project's budget.  **Every number below is a byte count from a file
 `scripts/model_size.py` packed and read back, or a fit rate from decoding
-identifiers through it.**  The arithmetic reference that used to stand beside
-those figures is gone: the format contains no arithmetic coder, so an arithmetic
-size was never a size the project could ship, and every decision it made has
-been re-taken on the measured Huffman code.  Everything below is computed at the
+identifiers through it.**, i.e. every decision has been made on the measured
+Huffman code.  Everything below is computed at the
 canonical grid (`V = 4096 / 6144 / 8192`, `kappa = 300`) on the 10× held-out set
 (`n = 42,268`), except where a figure is marked as an estimate.  The inventory is
 stated once, so that no object is charged twice.  The pre-grid measurements are
@@ -472,7 +470,8 @@ model is no longer priced by formula anywhere in this note.
    in an arbitrary order.
 4. **Re-derive** every table from the oracle: the frontier here,
    `WORDLIST_BUDGET`, `CLUSTER_WORDS`, `SHARED_CLUSTERS`, `CLUSTER_QUARTERS`,
-   `PRUNE_WORDS`, `DICTIONARY_RULES` and `SMALL_DICT`'s price row.  The dictionary term must be charged in `shared_clusters.py`,
+   `PRUNE_WORDS`, `DICTIONARY_RULES` and `SMALL_DICT`'s price row.  The
+   dictionary term must be charged in `shared_clusters.py`,
    `quarter_accounting.py` and the corresponding comparisons, which still quote
    code-side bytes; their verdicts are unaffected (they are within-`V`), but any
    cross-`V` price must carry the term.
