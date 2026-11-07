@@ -747,6 +747,12 @@ python3 scripts/model_size.py --dir work/tw8192ns --k 16 --q 2 \
 python3 scripts/model_size.py --dir work/tw8192ns --k 16 \
         --assignment two --stride 10   # a second map, for the price
 python3 scripts/model_size.py --dir work/tw8192ns --k 16 --flat   # §5.3 yardstick
+for d in "tw512ns 8" "tw512ns 32" "tw4096ns 32" "tw6144ns 24" "tw6144ns 48"; do
+  set -- $d                                                        # the V ladder
+  python3 scripts/model_size.py --dir work/$1 --k $2 --stride 10
+done
+python3 scripts/model_size.py --dir work/tw8192ns --k 32 \
+        --assignment two --stride 10   # the map at the operating point
 python3 scripts/model_size.py --self-test      # the MODEL_FORMAT.md §5 example
 
 # model size, with the rule table priced from the directory
