@@ -1,12 +1,13 @@
 # The rejected strategy: a character-level successor model
 
 Status: **rejected.**  Encoding each character from its preceding context is
-the obvious information-theoretic design, and it does compress — but at equal
-model size the word model wins ([`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md)),
-and making the successor model compact enough to ship costs it 1-2 bits per
-character.  The document is kept because it is the reference design this
-project measured against, and because the `(k, N)` size methodology it
-introduced carries over to the word matrix (see
+the obvious information-theoretic design, and it does compress — but at a
+comparable vocabulary the word model codes identifiers 10–16% shorter
+([`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md)), and the successor model
+pays for that in tables: 16 bytes for every common substring, against a word
+list whose entries are derivable from a rule set.  The document is kept because
+it is the reference design this project measured against, and because the
+`(k, N)` size methodology it introduced carries over to the word matrix (see
 [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md)).
 
 ## The model
@@ -54,13 +55,12 @@ silhouette, and in principle held-out compression) was either arbitrary or
 merely relocated the arbitrariness, so `k` is chosen by hand and the curve is
 produced by sweeping `--k`.
 
-At the coarse end of the current sweep, `H(next) = 4.969` bits for every
-threshold and the exact-context floor `H(next | substring)` runs from 3.778
-(`N = 278`) to 2.572 (`N = 20,198`); the clustering has to buy back as much of
-that 2.4-bit gap as its `k` clusters allow.  At the pre-expansion vocabulary
-`H(next) = 4.966` and `k = 12, 22, 100` gave 4.011, 3.821, 3.502 bits — so `k`
-is the dominant lever, but 100 clusters still did not reach the exact-context
-3.070 bits.
+On the current corpus `H(next) = 4.969` bits for every threshold, and the
+exact-context floor `H(next | substring)` runs from 3.778 (`N = 278`) to 2.370
+(`N = 80,869`); the clustering has to buy back as much of that 2.6-bit gap as
+its `k` clusters allow.  At the pre-expansion vocabulary `H(next) = 4.966` and
+`k = 12, 22, 100` gave 4.011, 3.821, 3.502 bits — so `k` is the dominant lever,
+but 100 clusters still did not reach the exact-context 3.070 bits.
 
 ### What the clusters look like (pre-expansion record)
 
@@ -126,7 +126,8 @@ held-out cross-entropy `-Σ_test log2 P_cluster(successor)` is accumulated on th
 *test* counts.  (This is a clean held-out split and needs only the aggregated
 count matrix.)
 
-Result: `H_held ≈ H_train` to **≤ 0.005 bits**, all the way to `k = n_ctx`:
+Result (pre-expansion check): `H_held ≈ H_train` to **≤ 0.005 bits**, all the
+way to `k = n_ctx`:
 
 | T | n_ctx | k | H_train | H_held | Δ |
 |---:|---:|---:|---:|---:|---:|
@@ -150,22 +151,18 @@ bends, and the `k/N` it implies) is the whole question.
 
 Per threshold `T` we need the `H(next | cluster)` vs `k` curve, together with
 `N`, `n_ctx`, `H(next)` and `H(next | substring)` (the `k = 1` and `k = n_ctx`
-limits).  All thresholds `100000 … 500` have `successor_distributions.tsv`, and
-the sweep covers all eight, spanning `N = 159 … 46346`.  The grid is a
-log-spaced `k` set (`2, 3, …, 2048`), capped per threshold to keep the runs
-tractable.  The first pass covered `T = 100000 … 5000`, reaching `k = 128` and
-`256` where `n_ctx` is small (`T = 100000, 50000`) and `640` for `T = 20000,
-10000`; the extended run covered `T = 5000, 2000, 1000, 500` up to `k = 2048,
-2048, 1536, 1024`.  Because these caps are well below `n_ctx` for the tail
-thresholds, the frontier does not reach the `H(next|substring)` floor there; the
-lowest swept entropy is `2.5614` bits at `T = 500, k = 1024`, against a floor of
-`2.363`.
+limits).  All eight thresholds have `successor_distributions.tsv` on the
+10-ecosystem corpus, spanning `N = 278 … 80,869`, and the sweep covers
+`k = 8, 16, 32, 64, 128, 256, 512` (`256` at `T = 100000`, where `n_ctx = 260`).
+The lowest swept entropy is `2.609` bits at `T = 500, k = 512`, against a floor
+of `2.370`; the caps are the largest runs this box affords at the tail
+thresholds, and the consequence is discussed under *Results*.
 
 ## Method
 
-1. **Grid.**  For each `T`, sweep `k` over a log-spaced grid from 2 up to a
-   per-threshold cap (`2048` for `T ≥ 2000`, `1536` for `T = 1000`, `1024` for
-   `T = 500`), clipped at `n_ctx` where smaller.  Record `(N, n_ctx, k, H)`.
+1. **Grid.**  For each `T`, sweep `k` over a log-spaced grid from 8 up to 512
+   (256 at `T = 100000`), clipped at `n_ctx` where smaller.  Record
+   `(N, n_ctx, k, H)`.
 2. **Points.**  Map each run to `(S = 16N + 128k, H)`.
 3. **Frontier.**  Sort by `S`, take the lower envelope of `H`.
 4. **Fit** the frontier, e.g. `H ≈ a − b·S^{-c}`, and tabulate the `(N, k)`
@@ -193,7 +190,7 @@ lowest swept entropy is `2.5614` bits at `T = 500, k = 1024`, against a floor of
 ## Deliverables
 
 1. A table of frontier `(T, N, k, S, H)`, `k / N` and `dH/dlog₂S` — produced by
-   `scripts/cluster_size_frontier.py` (77 points; the script's stdout is the
+   `scripts/cluster_size_frontier.py` (26 points; the script's stdout is the
    table).
 2. A budget table: the best `(N, k)` at a few model sizes and the implied
    `k / N` — in the Results section below.
@@ -203,58 +200,71 @@ lowest swept entropy is `2.5614` bits at `T = 500, k = 1024`, against a floor of
 
 ## Results
 
-> **These tables are the pre-expansion record** (sweep of 2026-10-29, on the
-> 3.8 M-identifier corpus, when the vocabulary at `T = 100000` was `N = 159`).
-> The 10-ecosystem re-measure is in progress; the floors quoted in *The model*
-> above are the current ones.  Treat the absolute numbers below as history and
-> the *shape* of the answer as the result.
-
-`scripts/cluster_size_frontier.py` turns the merged sweep log into the frontier.
-All eight thresholds are covered, producing **77 frontier points** spanning
-`S ≈ 2.8 kB` to `S ≈ 873 kB`.
+`scripts/cluster_size_frontier.py` turns the sweep log into the frontier.  All
+eight thresholds are covered, giving **26 frontier points** spanning
+`S ≈ 5.5 kB` to `S ≈ 1.36 MB`.  The frontier is a staircase of per-`T` curves,
+so the question is where it turns and what `k / N` it implies there.
 
 At the endpoints the exact-context floors are:
 
 | T | N | n_ctx | H(next) | H(next\|substring) |
 |---:|---:|---:|---:|---:|
-| 100000 | 159 | 150 | 4.966 | 3.932 |
-| 50000 | 316 | 298 | 4.966 | 3.711 |
-| 20000 | 911 | 849 | 4.966 | 3.344 |
-| 10000 | 2102 | 1950 | 4.966 | 3.070 |
-| 5000 | 4478 | 4162 | 4.966 | 2.856 |
-| 2000 | 11758 | 10890 | 4.966 | 2.611 |
-| 1000 | 23284 | 21479 | 4.966 | 2.477 |
-| 500 | 46346 | 42895 | 4.966 | 2.363 |
+| 100000 | 278 | 260 | 4.969 | 3.778 |
+| 50000 | 613 | 570 | 4.969 | 3.523 |
+| 20000 | 1,788 | 1,656 | 4.969 | 3.163 |
+| 10000 | 3,935 | 3,646 | 4.969 | 2.939 |
+| 5000 | 8,038 | 7,335 | 4.969 | 2.758 |
+| 2000 | 20,198 | 18,099 | 4.969 | 2.572 |
+| 1000 | 40,168 | 35,362 | 4.969 | 2.466 |
+| 500 | 80,869 | 69,744 | 4.969 | 2.370 |
+
+`H(next)` is a property of the corpus, not of the vocabulary, so it is the same
+for every threshold; `H(next | substring)` is the payoff of a larger vocabulary,
+falling by 1.41 bits from `N = 278` to `N = 80,869`.  A bigger `N` therefore both
+sharpens the target and costs 16 bytes a context, and the frontier is the trade
+between that and the 128-byte clusters.
 
 The best model within a size budget — the practical answer — is:
 
 | budget `S` | `T` | `N` | `k` | `k/N` | `H` |
 |---:|---:|---:|---:|---:|---:|
-| 20 kB | 20000 | 911 | 40 | 0.044 | 3.891 |
-| 50 kB | 10000 | 2102 | 100 | 0.048 | 3.505 |
-| 100 kB | 5000 | 4478 | 200 | 0.045 | 3.191 |
-| 200 kB | 5000 | 4478 | 768 | 0.172 | 3.004 |
-| 400 kB | 2000 | 11758 | 1536 | 0.131 | 2.736 |
-| 600 kB | 1000 | 23284 | 1536 | 0.066 | 2.628 |
-| 800 kB | 1000 | 23284 | 1536 | 0.066 | 2.628 |
+| 20 kB | 50000 | 613 | 64 | 0.104 | 3.916 |
+| 50 kB | 20000 | 1,788 | 128 | 0.072 | 3.525 |
+| 100 kB | 10000 | 3,935 | 256 | 0.065 | 3.216 |
+| 200 kB | 5000 | 8,038 | 512 | 0.064 | 2.957 |
+| 400 kB | 2000 | 20,198 | 512 | 0.025 | 2.780 |
 
-**Answer to the hypothesis.**  The *budget-optimal* `k/N` is stable at
-**≈ 0.045** across the 20–100 kB band, where the model size is genuinely a mix
-of both terms.  It is **not** constant over the whole frontier: above ~150 kB
-the frontier switches to a larger `N` (a lower threshold `T`) and the optimal
-`k/N` jumps to 0.13–0.17 before falling back to 0.066 as `N` comes to dominate
-`S = 16N + 128k`.  The frontier is therefore a staircase of per-`T` curves
-rather than a single power law, and "constant `k/N`" is only an approximation
-valid in the mid range where both terms are comparable.  The raw pointwise span
-along the frontier is 0.011–0.352, but those extremes are artefacts of the very
-small models at the bottom and the capped grid at the top.
+**Answer to the hypothesis.**  The *budget-optimal* `k/N` is **not constant**
+along the frontier: it falls monotonically from 0.10 at 20 kB to 0.03 at 400 kB,
+i.e. from about ten substrings per cluster to about forty.  The drift is slow
+enough that "`k ≈ N/10` at the small end, `k ≈ N/40` at the large end" is a
+serviceable rule of thumb, but the earlier claim of a fixed `k/N ≈ 0.045` over a
+wide band was an artefact of the pre-expansion vocabulary sizes: at those `N`,
+20–100 kB happened to sit where the ratio was flat.  The raw pointwise span along
+the frontier is 0.003–0.460; the extremes are the very small models at the bottom
+and the capped grid at the top, not useful operating points.
 
-**Remaining limitation.**  The sweep caps `k` at 2048/1536/1024, well short of
-`n_ctx` for the tail thresholds, so the frontier does not reach the substring
-floor: the lowest swept `H` is 2.5614 (`T = 500, k = 1024`) against 2.363.
-Extending `k` further would lower the large-`S` end but cannot change the
-mid-range `k/N ≈ 0.045` result.  The `common2000` table has been regenerated
-(2.611 bits) and is monotone, so the earlier monotonicity break is fixed.
+**Remaining limitation.**  Every threshold is swept to `k = 512` (`T = 100000`
+stops at 256, its `n_ctx`), which is short of `n_ctx` for the tail thresholds,
+so the frontier does not reach the exact-context floor there: the lowest swept
+`H` is 2.609 (`T = 500, k = 512`) against 2.370.  Extending `k` at `T = 500`
+would lower the large-`S` end by at most 0.24 bits, at a model size already
+beyond a megabyte; it cannot change the small-`S` answer, which is where the
+model would have to live.
+
+### Pre-expansion record
+
+The first sweep (2026-10-29, 3.8 M-identifier corpus) produced 77 frontier points
+over the same eight thresholds, with floors `H(next) = 4.966` and
+`H(next | substring)` 3.932 / 3.711 / 3.344 / 3.070 / 2.856 / 2.611 / 2.477 /
+2.363 for `N = 159` / 316 / 911 / 2,102 / 4,478 / 11,758 / 23,284 / 46,346
+(`n_ctx` 150 … 42,895).  Its budget table was 20 kB → `T = 20000, k = 40`
+(3.891); 50 kB → `10000, k = 100` (3.505); 100 kB → `5000, k = 200` (3.191);
+200 kB → `5000, k = 768` (3.004); 400 kB → `2000, k = 1536` (2.736); 600 and
+800 kB → `1000, k = 1536` (2.628), i.e. `k/N` ≈ 0.045 across 20–100 kB and a
+staircase above 150 kB where the frontier switched to a larger `N`.  The grid
+re-measure above reproduces the shape and the direction of the drift, and
+replaces the numbers.
 
 ## Notes for the "distant future" encoding
 
