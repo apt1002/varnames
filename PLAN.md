@@ -285,18 +285,17 @@ old numbers remain reproducible without it.
       10-ecosystem union (per-ecosystem composition and shape, union statistics,
       common-substring thresholds, character and word-level runs, and the case
       ablation re-run at `V = 4096`).
-      **Pass 2 — model reports, to do:** the numbers (not the arguments) in
-      `docs/CODE_LENGTHS.md`, `ADJACENCY_MATRIX.md` (κ choice),
-      `TREE_WORDS.md`, `DICTIONARY_RULES.md`, `WORD_COMPRESSIBILITY.md`,
-      `BOUNDARY_TRIGRAM.md`, `SUCCESSOR_MODEL.md`, `CLUSTER_WORDS.md`,
-      `CLUSTER_LOSS.md`, `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`,
-      `BREAK_OPEN_PRIOR.md`, `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`,
-      `MODEL_BUDGET.md`, `BUDGET64_STUDY.md`, the measurements in
-      `SHARED_CLUSTERS.md`, `NEWLINE_CLUSTER.md` and `ENCODING.md`, and the
-      testing-point numbers in `SMALL_DICT.md` (which exist only to exercise
-      scripts).
-      *Then:* re-measure C28 with the 10× larger held-out set and settle C26's
-      `+0.08` pt at `V = 4096`, `k = 64`.
+      **Pass 2 — model reports, done:** `CODE_LENGTHS`, `ADJACENCY_MATRIX`
+      (κ choice and the density table), `TREE_WORDS`, `DICTIONARY_RULES`,
+      `WORD_COMPRESSIBILITY`, `BOUNDARY_TRIGRAM`, `SUCCESSOR_MODEL` (frontier
+      rebuilt from the 26-point grid sweep), `CLUSTER_WORDS`, `CLUSTER_LOSS`,
+      `MATRIX_COMPRESSION`, `PRUNE_WORDS`, `STRUCTURAL_ZEROS`,
+      `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled five seeds at each of
+      `k = 32, 64`), `NEWLINE_CLUSTER`, `ENCODING` §5 (C28 on the 10× held-out
+      set).  **Remaining:** `MODEL_BUDGET` (frontier re-sweep with the
+      dictionary term), `BUDGET64_STUDY`, `BREAK_OPEN_PRIOR` (needs a new
+      held-out run), `ENCODING` §6, and the testing-point numbers in
+      `SMALL_DICT` (which exist only to exercise scripts).
 - [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
       `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
       pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
