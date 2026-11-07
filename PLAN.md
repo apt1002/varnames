@@ -243,33 +243,42 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
       untouched, so swapping it in is part of the rebuild below.
       `docs/CORPUS.md`, `scripts/extract.py`, `scripts/audit_extract.py`,
       `scripts/check_extract.py`.
-- [~] **H3. Broaden the corpus.** *Harvests done, extraction not started.*
-      Download counts are not published by any of the four registries, so the
-      top-2,000 cap is applied through the best available popularity proxy per
-      ecosystem — reverse dependencies for Haskell (Hackage) and OCaml (opam),
-      version count for Lua (LuaRocks), `org/apache` `-sources.jar` for Java
-      (Maven Central).  Harvesting is a resumable `plan`/`fetch` pair
+- [x] **H3. Broaden the corpus.** *Done* — the ten-ecosystem union is live
+      (Haskell, Java, Lua and OCaml added to the earlier six; 4,441,974
+      identifiers, committed in `3df2cc0`).  Download counts are not published
+      by any of the four registries, so the top-2,000 cap was applied through
+      the best available popularity proxy per ecosystem — reverse dependencies
+      for Haskell (Hackage) and OCaml (opam), version count for Lua (LuaRocks),
+      `org/apache` `-sources.jar` for Java (Maven Central).  Harvesting remains
+      reproducible as a resumable `plan`/`fetch` pair
       (`scripts/harvest_packages.py`); archives are deleted after extraction;
       no host toolchain is needed because source is harvested, not built.
       `docs/CORPUS.md`.
 
-### Rebuilds the corpus change (H2/H3) will force
+### Corpus and artefact rebuilds (H4/H5)
 
-The pre-change corpus is archived in git (`corpus/` at commit `7228753`), so
-these can be rebuilt in any order, later, without losing the old numbers.
+The pre-change corpus is archived in git (`corpus/` at commit `7228753`), so the
+old numbers remain reproducible without it.
 
-- [ ] **H4. Rebuild the corpus inputs** (deferred, blocked on H2/H3):
-      `work/clean_ids/*.shards`, `corpus/by_language/*.txt`,
-      `corpus/identifiers.multilang.txt`, then `work/raw/` and `work/camel/`
+- [x] **H4. Rebuild the corpus inputs.** *Done* — `corpus/by_language/*.txt`,
+      `corpus/identifiers.multilang.txt`, `work/raw/`, `work/camel/`
       (case-normalised variants + `merged_training.txt` /
-      `merged_validation.txt` from `scripts/split_corpus.py`), `work/tokcache/`.
-- [ ] **H5. Rebuild the model artefacts** (dictionaries done for the whole
-      canonical grid plus the `s0` twins; the remaining artefacts are): the
-      case-ablation and break-open variants of the canonical `V`, `_ttw*`
-      scratch dirs, the pair matrix (`work/*/pair_stats.txt`,
-      `pair_factors_L*.npy` via `scripts/pair_matrix.py`), and `work/occ/`.  The grid is rebuilt by
-      `scripts/h5_build.sh` (dictionaries identical on rebuild; the adjacency
-      triplets' storage order depends on `--jobs`, the matrix does not).
+      `merged_validation.txt` from `scripts/split_corpus.py`) and `work/tokcache/`
+      are current.  **Exception: `work/common<T>` still holds the pre-expansion
+      common-substring sets** (159/911/2,102/… against the current
+      278/1,788/3,935/…); the current sets were built into `/tmp/cs<T>` (with
+      `scripts/common_substrings.py` on `work/camel/merged.txt`) and are
+      regenerable, but should be written back into `work/common<T>` before
+      anything reads them.
+- [x] **H5. Rebuild the model artefacts.** *Done for the grid* — the
+      dictionaries and cyclic bigram matrices exist for `V = 4096/6144/8192`
+      (`tw*ns`) plus the `s0` twins and `tw4096raw`.  The older artefacts
+      (`work/*/pair_stats.txt`, `pair_factors_L*.npy`, `work/occ/`, the
+      `tw2040*` break-open variants) are pre-expansion and belong to legacies
+      that the reports keep as labelled records; they are not rebuilt.  The
+      grid is rebuilt by `scripts/h5_build.sh` (dictionaries identical on
+      rebuild; the adjacency triplets' storage order depends on `--jobs`, the
+      matrix does not).
 - [~] **H6. Re-measure the corpus-dependent reports.** *In progress.*
       **Pass 1 — corpus-level reports, done:** `README.md`, `docs/CORPUS.md`,
       `docs/CASE_NORMALISATION.md` and `docs/RUN_LENGTHS.md` describe the
