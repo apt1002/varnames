@@ -1,34 +1,48 @@
 # Choosing the merge: dictionary-building rules
 
-`docs/TREE_WORDS.md` specifies the dictionary: repeatedly merge the **most
-common pair** of words.  It notes two things worth measuring:
+Status: **the adopted rule, then the alternatives that were measured and
+rejected.**  The dictionary is plain most-frequent-pair merge with **merges of a
+symbol with itself forbidden**; the sections after the first record what was
+tried against that rule and why it stayed.
 
-* the "most frequent pair" rule sees only bigrams, so it is a *proxy* for the
-  exact best move, "merge the pair that shrinks `CS` the most";
-* the flat run word `(u^k)` and the ordinary bigram `(uv)` both compete for the
-  same budget when a run abuts a different word, e.g. `uuuuv` as `(u⁴)v` versus
-  `uuu(uv)`.
+## The adopted rule
 
-This note reports the experiments.  Reproduce with
+Start from the character alphabet plus `\n` and repeatedly merge the most common
+adjacent pair of words (`docs/TREE_WORDS.md` §2).  Two things the rule does
+**not** do, decided by the experiments below:
+
+* **It never merges a symbol with itself.**  A word `(uu)` is never created, and
+  there is no flat run word `(u^k)`.  So every dictionary entry is a rule
+  `P a b` with `a ≠ b`, and a doubled letter can only enter the vocabulary
+  inside a word that also contains a neighbour (`sse`, `ess`, `tte`, `__i`).
+* **It is greedy by frequency, not by the exact score.**  The exact greedy move
+  would minimise `Δ = CS' − CS` over candidate pairs; the frequency rule is a
+  cheap proxy for it.
+
+Both departures from the "obvious" rules cost something in principle, so both
+were measured: the exact `Δ` rule in "Adopted: greedy by frequency", and run
+words in "Rejected: the run word".  Neither is worth its price.
+
+Everything is measured as **corpus size** `CS = S1 − S2` in bits (base 2),
+`S1 = Σ_u L(N(u))`, `S2 = Σ_{u,v} L(N(u,v))`, `L(z) = z log₂ z`, computed on the
+cyclic tokenisation of the corpus; smaller is better.  `CS` and the identity are
+defined and proved in [`TREE_WORDS.md`](TREE_WORDS.md) §4 (identity in §10).
+Where a held-out number is quoted, the dictionary is built on a train half and
+`CS` is measured on the disjoint test half (both using their own MLE counts —
+i.e. how well the tokenisation the dictionary induces fits the test data).  The
+synthetic corpora are described in `scripts/dict_experiments.py`.  Reproduce
+with
 
     python3 scripts/dict_experiments.py --quick
     python3 scripts/dict_experiments.py --real work/camel/merged_training.txt
 
-Everything is measured as **corpus size** `CS = S1 − S2` in bits (base 2),
-`S1 = Σ_u L(N(u))`, `S2 = Σ_{u,v} L(N(u,v))`, `L(z) = z log₂ z`, computed on the
-cyclic tokenisation of the corpus.  Smaller is better.  Where a held-out number
-is quoted, the dictionary is built on a train half and `CS` is measured on the
-disjoint test half (both using their own MLE counts — i.e. how well the
-tokenisation the dictionary induces fits the test data).  The synthetic corpora
-are described in `scripts/dict_experiments.py`.
-
-## Greedy by frequency vs greedy by `Δ`
+## Adopted: greedy by frequency
 
 The exact greedy move minimises `Δ = CS' − CS` over candidate pairs;
-`docs/TREE_WORDS.md` shows `Δ` depends on the embedding (`A`, `B`, `Q`) and not
-on `N(u,v)` alone, so the two rules can differ.  We build the dictionary both
-ways at the same `NUM_PAIRS`, considering the top-8 candidate pairs each step
-for the `Δ` rule.
+[`TREE_WORDS.md`](TREE_WORDS.md) §5 shows `Δ` depends on the embedding (`A`,
+`B`, `Q`) and not on `N(u,v)` alone, so the two rules can differ.  We build the
+dictionary both ways at the same `NUM_PAIRS`, considering the top-8 candidate
+pairs each step for the `Δ` rule.
 
 **Synthetic** (run-length corpora, held-out, `NUM_PAIRS = 10`):
 
@@ -58,116 +72,37 @@ drawback: `Δ` is estimated on the training counts, so it happily spends words o
 rare short-range patterns that do not generalise, whereas the most-frequent-pair
 rule is a robust, cheap proxy.  For real corpora, keep the frequency rule.
 
-## The `(u^k)` run word vs the `(uv)` boundary word
+**The same instinct was followed further, and it failed harder.**
+[`PRUNE_WORDS.md`](PRUNE_WORDS.md) overshoots the word list by 1.5× and then
+deletes the least valuable words using the *exact* removal cost — a more
+thorough way to spend the last few words than either greedy rule.  It wins
+**0.86 bits** on the raw bigram score at `NUM_PAIRS = 512` (and 0.145 at 2040),
+but the win does not survive co-clustering, the representation we actually ship
+(it is 0.6–1.8 bits *worse* there).  So two independent attempts to beat the
+frequency proxy — one per step, one by post-hoc removal — agree: the merge rule
+is not where the remaining bits are, and the cheap robust rule is the one to
+keep.
 
-When a run `u^k` is followed by `v`, the flat run word `(u^k)` and the boundary
-word `(uv)` compete for the same slot.  Two regimes, both measured held-out.
+## Rejected: the run word
 
-**(a) The full run-aware rule.**  `docs/TREE_WORDS.md` ("Relaxing the
-three-consecutive-repeats assumption") replaces the doubled-word merge `(u,u)`
-by *one flat word per observed run length*.  Against plain BPE
-(`NUM_PAIRS = 12`, run lengths exponential, so many lengths present):
+An earlier version of the dictionary allowed run words.  The first step was the
+ordinary merge `(uu)`, which the adopted rule forbids; on top of that, a run of
+`k` copies could be collapsed to one flat, `k`-ary word `(u^k)`, one word per
+observed length.  It was a bad idea, and it is gone — the run path has been
+deleted from `scripts/tree_words.py` rather than left as a dead branch.
 
-| runmean | pbound | run mass N(u,u) | N(u,v) | freq | runs | winner |
-|---:|---:|---:|---:|---:|---:|---|
-| 1.5 | 0.2 | 2 930 | 554 | 22 796 | 21 893 | runs |
-| 1.5 | 0.6 | 2 902 | 1 703 | 22 368 | 21 795 | runs |
-| 1.5 | 0.9 | 2 893 | 2 574 | 20 010 | 19 544 | runs |
-| 3.0 | 0.2 | 5 014 | 425 | 19 905 | 18 911 | runs |
-| 3.0 | 0.6 | 5 078 | 1 219 | 19 394 | 18 523 | runs |
-| 3.0 | 0.9 | 5 254 | 1 822 | 17 476 | 16 712 | runs |
+**Why it lost.**  Runs are 2.17 % of character adjacencies and 99.0 % of them
+are length 2 ([`RUN_LENGTHS.md`](RUN_LENGTHS.md)), so the run rules mostly buy
+`ss`, `tt`, `ee`, `__`, `00` — words that a pair word containing a neighbour
+(`sse`, `ess`, `tte`, `__i`) delivers anyway.  What the rules mostly add on real
+identifiers is a handful of corpus-specific long runs (`f*15`, `0*19`), which
+generalise badly.  And the machinery is real: a `k`-ary node type, a
+run-length table with one word per length, the run replay in the tokeniser and
+the run branch of the word-list encoder, for **0.2–0.4 % of the word list**.
 
-The run-aware rule wins **whenever there is run mass**, even when `N(u,v) >
-N(u,u)` (rows 3, 6): it changes only the *doubled-pair* steps, and doing them as
-flat runs is strictly better than the nested `((uu)u)…` that plain BPE builds.
-
-**(b) A *single* word.**  Spend one slot only — the modal run word `(u^k*)` or
-the boundary `(uv)`:
-
-| regime | run length | save `(k*−1)·#runs(k*)` | `N(u,v)` | run CS | uv CS | winner |
-|---|---|---:|---:|---:|---:|---|
-| fixed `R=3` | 3 | 4 980 | 240 | 9 353 | 14 280 | run |
-| fixed `R=3` | 3 | 4 988 | 1 154 | 10 475 | 14 965 | run |
-| fixed `R=5` | 5 | 6 820 | 159 | 7 019 | 11 443 | run |
-| fixed `R=5` | 5 | 6 756 | 1 421 | 7 346 | 11 538 | run |
-| spread, runmean 1.5 | 2 | 767 | 799 | 21 922 | 21 636 | uv |
-| spread, runmean 1.5 | 2 | 798 | 2 006 | 20 777 | 20 526 | uv |
-| spread, runmean 3.0 | 2 | 513 | 583 | 18 811 | 18 426 | uv |
-| spread, runmean 3.0 | 2 | 515 | 1 405 | 17 905 | 17 520 | uv |
-
-(Both subtables are the `--quick` grid; the predictor below is right on all of
-them, `10/10` including the rows omitted here.)
-
-## The heuristic
-
-For a single slot, **prefer the flat run word `(u^k)` over the boundary word
-`(uv)` iff the tokens it collapses outweigh the boundaries it would capture**,
-
-    (k − 1) · (#runs of length k)   >   N(u,v) ,
-
-i.e. compare the `u u` mass the run word removes against the `u v` mass `(uv)`
-would remove.  This rule is correct on every case above: **run wins** when a run
-length dominates (fixed `R`, so `#runs` is huge), **`uv` wins** when the run
-lengths are spread (no single `k` carries enough mass).
-
-The consequence for the full rule is the useful one: because a single run word
-covers only its own length, when run lengths are **spread out** no one `(u^k)`
-is worth a slot alone — the boundary `(uv)` should take it — but the *full*
-run-aware rule, which spends **one word per length**, still beats plain BPE.  So:
-
-* run lengths concentrated → the run word is a bargain, take it early;
-* run lengths spread → let the boundary take the first slot, and pick up the
-  runs length-by-length as the budget allows.
-
-The exact tie-break is, as ever, `Δ` — but on real data the frequency
-proxy is good enough, and the rule above needs only the two counts `N(u,v)` and
-the run-length histogram.
-
-**The predictor is just a pair count.**  A run `u^k` contains exactly `k − 1`
-adjacent `uu` pairs, so `(k − 1)·#runs(k)` counts the `uu` pairs *inside runs of
-length exactly k* (and `Σ_k (k − 1)·#runs(k) = N(u,u)`).  The rule above is
-therefore nothing more than the **most-common-pair rule** applied to the two
-candidates: count the `uu` joins against the `uv` joins and take the larger.
-The only subtlety is *which* `uu` count a candidate owns — a **single** run word
-claims just one length's slice, so it can lose to `(uv)` even when
-`N(u,u) > N(u,v)`; the **full** run-aware rule claims every length at once, so
-it *is* exactly `N(u,u) > N(u,v)`.  The genuinely new part is not the
-*selection* (still most-common-pair) but the *action*: when the top pair is a
-doubled word, collapse the run instead of merging two copies — which is why
-run-aware beats plain BPE even in grid points where `N(u,u) < N(u,v)`.
-
-## Caveats
-
-* In-sample `CS` is gameable, so every comparison here is held-out; the
-  synthetic corpora are tiny (a few hundred strings, length 20) and the numbers
-  are illustrative, not calibrated to real identifier statistics.
-* The `Δ`-greedy rule is restricted to the top-8 frequent pairs per step
-  (exhaustive `Δ` over the whole vocabulary is far too slow); a wider candidate
-  set would only help it.
-* `scripts/dict_experiments.py` uses its own simple, recount-based builder and
-  tokeniser — it is a clean-room check of the *rules*, independent of the fast
-  production path in `scripts/tree_words.py`.
-* The **run-length histogram of the real corpus** is measured in
-  `docs/RUN_LENGTHS.md`: runs are almost all length 2 (99 % of runs, 98 % of the
-  `uu` mass), so on real identifiers the crossover above is usually decided by
-  `N(u,u)` vs `N(u,v)` alone — the length-`k` cases above are the synthetic
-  stress tests.
-
-## Removing run words altogether
-
-Everything above assumes the run rule is *in use*.  The obvious question is
-whether it is needed at all: forbid **every** merge of a pair with itself, so a
-doubled character (or doubled word) is never collapsed — not even to `(uu)`, let
-alone a flat `(u^k)` — and a double can only enter the vocabulary inside a pair
-word that also contains a neighbour (`sse`, `ess`, `tte`, …).  The dictionary is
-then plain most-frequent-pair merge, with no k-ary nodes, no run-length table and
-no run path in the tokeniser.
-
-Both rules were built on the same stride-20 training sample (`work/tw*` vs
-`work/tw*ns`; the temporary `--self-merge` flag that selected between them has
-since been removed, the no-run rule being the only one), counted on the full
-training corpus and scored on the full
-held-out validation set (229,534 identifiers, `kappa = 1000`):
+The measurement that settled it: both rules on the same stride-20 training
+sample, counted on the full training corpus and scored on the full held-out
+validation set (229,534 identifiers, `kappa = 1000`):
 
 > **Historical measurement.** These are the pre-expansion numbers (the
 > 2.37 M-identifier corpus, held-out 229,534). The run path has since been
@@ -195,24 +130,76 @@ the same `V` and each rule is marginally dearer, so the run machinery saves
   7 run rules buy (13 lengths of `r f m _ s 1 0`-doubles, including `f*15` and
   `0*19`) are worth less than the 13 ordinary pairs the no-run list buys with the
   same budget: 0.22 bits cheaper and 692 more identifiers inside 64 bits.
-* **Why it is cheap.**  Runs are 2.17 % of character adjacencies and 99.0 % of
-  them are length 2 (`docs/RUN_LENGTHS.md`), so the run rules mostly buy `ss`,
-  `tt`, `ee`, `__`, `00` — words that a pair word containing a neighbour
-  (`sse`, `ess`, `tte`, `__i`) delivers anyway.  What the run rules mostly add
-  on real identifiers is a handful of corpus-specific long runs (`f*15`,
-  `0*19`), which generalise badly.
-* **The simplification is the point.**  Dropping the rule removes the k-ary
-  node type, the run-length table and its per-length words, the run replay in
-  the tokeniser, and the run branch of the word-list encoder.  Nothing in the
-  model's statistics or its storage depended on it.
 
-So the run-aware rule is retired: the dictionary is plain pair-merge with
-self-merges forbidden, and the run machinery (the run rule, the run-length
-table, the k-ary node and the replay path) has been deleted from
-`scripts/tree_words.py` rather than left as a dead branch.  The held-out numbers in
-[`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md) were measured on the
-run-aware rule; they are re-measured on the no-run dictionaries in
-`WORD_COMPRESSIBILITY.md` itself (H6).
+### What the case for run words looked like
+
+On run-heavy *synthetic* corpora the run rule does win, and this is why it was
+pursued for so long.  When a run `u^k` is followed by `v`, the flat run word
+`(u^k)` and the boundary word `(uv)` compete for the same slot.  Two regimes,
+both measured held-out.
+
+**(a) The full run-aware rule**, against plain BPE (`NUM_PAIRS = 12`, run lengths
+exponential, so many lengths present):
+
+| runmean | pbound | run mass N(u,u) | N(u,v) | freq | runs | winner |
+|---:|---:|---:|---:|---:|---:|---|
+| 1.5 | 0.2 | 2 930 | 554 | 22 796 | 21 893 | runs |
+| 1.5 | 0.6 | 2 902 | 1 703 | 22 368 | 21 795 | runs |
+| 1.5 | 0.9 | 2 893 | 2 574 | 20 010 | 19 544 | runs |
+| 3.0 | 0.2 | 5 014 | 425 | 19 905 | 18 911 | runs |
+| 3.0 | 0.6 | 5 078 | 1 219 | 19 394 | 18 523 | runs |
+| 3.0 | 0.9 | 5 254 | 1 822 | 17 476 | 16 712 | runs |
+
+The run-aware rule wins **whenever there is run mass**, even when `N(u,v) >
+N(u,u)` (rows 3, 6): it changes only the *doubled-pair* steps, and doing them as
+flat runs is strictly better than the nested `((uu)u)…` that plain BPE builds.
+That real effect is what the no-run rule gives up; on identifiers, with 99 % of
+runs at length 2, it turns out to be worth almost nothing.
+
+**(b) A *single* word.**  Spend one slot only — the modal run word `(u^k*)` or
+the boundary `(uv)`:
+
+| regime | run length | save `(k*−1)·#runs(k*)` | `N(u,v)` | run CS | uv CS | winner |
+|---|---|---:|---:|---:|---:|---|
+| fixed `R=3` | 3 | 4 980 | 240 | 9 353 | 14 280 | run |
+| fixed `R=3` | 3 | 4 988 | 1 154 | 10 475 | 14 965 | run |
+| fixed `R=5` | 5 | 6 820 | 159 | 7 019 | 11 443 | run |
+| fixed `R=5` | 5 | 6 756 | 1 421 | 7 346 | 11 538 | run |
+| spread, runmean 1.5 | 2 | 767 | 799 | 21 922 | 21 636 | uv |
+| spread, runmean 1.5 | 2 | 798 | 2 006 | 20 777 | 20 526 | uv |
+| spread, runmean 3.0 | 2 | 513 | 583 | 18 811 | 18 426 | uv |
+| spread, runmean 3.0 | 2 | 515 | 1 405 | 17 905 | 17 520 | uv |
+
+(Both subtables are the `--quick` grid; the predictor below is right on all of
+them, `10/10` including the rows omitted here.)
+
+### The selection was never the novel part
+
+For a single slot, the run word beats the boundary word iff the tokens it
+collapses outweigh the boundaries it would capture,
+
+    (k − 1) · (#runs of length k)   >   N(u,v) ,
+
+i.e. compare the `u u` mass the run word removes against the `u v` mass `(uv)`
+would remove.  This rule is correct on every case above: **run wins** when a run
+length dominates (fixed `R`, so `#runs` is huge), **`uv` wins** when the run
+lengths are spread (no single `k` carries enough mass).
+
+But a run `u^k` contains exactly `k − 1` adjacent `uu` pairs, so
+`(k − 1)·#runs(k)` counts the `uu` pairs *inside runs of length exactly k* (and
+`Σ_k (k − 1)·#runs(k) = N(u,u)`).  The rule above is therefore nothing more than
+the **most-common-pair rule** applied to the two candidates: count the `uu` joins
+against the `uv` joins and take the larger.  The only subtlety is *which* `uu`
+count a candidate owns — a **single** run word claims just one length's slice, so
+it can lose to `(uv)` even when `N(u,u) > N(u,v)`; the **full** run-aware rule
+claims every length at once, so it *is* exactly `N(u,u) > N(u,v)`.
+
+So the genuine novelty was never the *selection* — it was the *action*: when the
+top pair is a doubled word, collapse the run instead of merging two copies.  That
+action is what bought the synthetic wins above, and it is also what cost the
+`k`-ary node, the run-length table and the replay path.  On identifiers, the
+action buys the handful of `ss`/`tt`/`__` runs that a neighbour pair delivers
+anyway — hence the verdict.
 
 ### Robustness of the conclusion
 
@@ -247,3 +234,19 @@ type).
 *Caveat: measured on the pre-expansion corpus at one stride; the 576 row is the
 only place the two rules differ appreciably.  The canonical grid runs the no-run
 rule only, so this table is the record rather than a live comparison.*
+
+## Caveats
+
+* In-sample `CS` is gameable, so every comparison here is held-out; the
+  synthetic corpora are tiny (a few hundred strings, length 20) and the numbers
+  are illustrative, not calibrated to real identifier statistics.
+* The `Δ`-greedy rule is restricted to the top-8 frequent pairs per step
+  (exhaustive `Δ` over the whole vocabulary is far too slow); a wider candidate
+  set would only help it.
+* `scripts/dict_experiments.py` uses its own simple, recount-based builder and
+  tokeniser — it is a clean-room check of the *rules*, independent of the fast
+  production path in `scripts/tree_words.py`.
+* The **run-length histogram of the real corpus** is measured in
+  [`RUN_LENGTHS.md`](RUN_LENGTHS.md): runs are almost all length 2 (99 % of runs,
+  98 % of the `uu` mass), so the crossover above is usually decided by `N(u,u)`
+  vs `N(u,v)` alone — the length-`k` cases above are the synthetic stress tests.
