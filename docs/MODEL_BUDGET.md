@@ -650,6 +650,17 @@ bias–variance of the per-cluster
 trees: each cluster's Huffman build sees fewer tokens as `k` grows, so past 32
 the noisier lengths cost as much as the finer partition buys.
 
+**The `V` curve, measured.**  At its best measured `k` each word list gives
+2,277 B / 65.706 bits at `V = 512` (`k = 32`), 15,685 B / 48.926 at 4,096 (32),
+23,523 B / 46.781 at 6,144 (24) and 32,126 B / 45.221 at 8,192 (32) — and the
+word list is 39 %, 63 %, 65 % and 66 % of those files.  The steps cost 3.5 and
+5.4 kB per bit, against the 3.9 the `k` direction charges, so the ladder is
+running out.  The next rung, `V = 12,288`, needs ~8.2 kB more rules (2.8 B per
+word, the measured rate) plus 2.6 kB of depths and 2.6 kB of labels — 13.3 kB —
+and the marginal value of words is falling (16.8, 2.2, 1.6 bits per step), so it
+cannot buy more than ~1.5 bits: 8.9 kB per bit or worse, well above the
+frontier's 3.9.  Extrapolated, not built; `WORDLIST_BUDGET.md` has the ladder.
+
 Every section of those files is on the §5.1 table, and 42,268 held-out
 identifiers per point round-trip through the *packed* file with no failures.
 
@@ -668,11 +679,14 @@ have shown:
   is 45.297, i.e. the free terminator and the stripped zeros are worth **2.60
   bits**; driving the stop's weight to zero is another 0.03 (45.263); and the
   one-map file pays 0.42 back for its 4,096 B, which is where 45.687 comes from.
-* **One map is worth its constraint at this `k`.**  Two maps cost 4,096 B and buy
-  0.47 bits/identifier (45.790 → 45.317 at `q = 1`; 0.42 at `q = 2`); on the
-  frontier's ≈5.5 kB/bit that is 2.6 kB worth of bits for 4.1 kB, so the one-map
-  file wins — the same verdict as `SHARED_CLUSTERS.md` at `k = 32`, measured now
-  at the operating point.
+* **One map is worth its constraint, and more so as `k` grows.**  At `k = 16` two
+  maps cost 4,096 B and buy 0.47 bits/identifier (45.790 → 45.317 at `q = 1`;
+  0.42 at `q = 2`), which on the frontier's ≈5.5 kB/bit is 2.6 kB worth of bits
+  for 4.1 kB.  At the operating point the decision is not close: the second map
+  is 5,120 B (37,246 against 32,126 B) for **0.03 bits** (45.221 → 45.190) and
+  no fit change, i.e. 170 kB per bit.  The constraint's price falls with `k`
+  because a word's successor and predecessor profiles converge as the clusters
+  narrow — the same finding as `SHARED_CLUSTERS.md`, now in the packed file.
 * **The quarter code does not pay once the terminator is free.**  At 8192/16 it
   costs 1,184 B for 0.10 bits and 0.13 fit points (53 identifiers net), which is
   9.5 kB/pt against the shipped frontier's 3.9, and the other grid points are

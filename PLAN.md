@@ -172,27 +172,38 @@ be steered toward it.  Design intent, scope and audiences:
       current.  The pre-change corpus is archived at commit `7228753`.
 - [x] **H5. Rebuild the model artefacts.** *Done for the grid; the legacy
       artefacts are not rebuilt.  See the build key below.*
-- [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done — the grid is fixed at
-      `V ∈ {4096, 6144, 8192}`; `V = 512` is testing-only.*
-      `docs/MODEL_BUDGET.md`, `docs/SMALL_DICT.md`.
+- [x] **H7. Rationalise the `(V, k)` grid.** *Done — the grid is
+      `V ∈ {4096, 6144, 8192}`, `k` chosen per `V`; `V = 512` is testing-only.*
+      Measured, each word list has a best `k` and a file size: 15,685 B at
+      4096/32, 23,523 at 6144/24, 32,126 at 8192/32, and the marginal `V` step
+      rises to 5.4 kB per bit against the 3.9 the `k` direction charges.  A
+      `V = 12,288` list would cost 13.3 kB for at most 1.5 bits (8.9 kB/bit), so
+      the grid stops at 8,192 — extrapolated from the measured rule growth, not
+      built.  `docs/MODEL_BUDGET.md` §7, `docs/WORDLIST_BUDGET.md`.
 - [x] **H9. Restructure the documentation.** *Done.*  `README.md`.
 - [x] **H10. Reconcile the codebook accounting.** *Settled.*
       `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_BUDGET.md`.
-- [x] **H11. A complete review of the model-size accounting.** *Steps 1–3 done;
-      4–6 open.*  `scripts/model_size.py` builds at `(V, k, q)`, writes the YAML,
+- [x] **H11. A complete review of the model-size accounting.** *Steps 1–5 done;
+      step 6 open.*  `scripts/model_size.py` builds at `(V, k, q)`, writes the YAML,
       packs the binary, reports the bytes per section and round-trips held-out
       identifiers through the packed file.  Measured at the operating point
       8192/32: 32,126 B, 45.221 bits/id, 84.8 % in 64 bits.  It also forced a
       design fix — the terminator moved to a zero-weight STOP leaf in the top
-      stage — priced the one-map constraint (0.5 bits for 4,096 B), overturned
+      stage — priced the one-map constraint (0.47 bits for 4,096 B at `k = 16`,
+      0.03 for 5,120 B at the operating point), overturned
       `q = 2` (the quarters buy 0.10 bits and 0.13 fit points for 1,184 B once
       the terminator is free), and moved `k` from 16 to 32, where the measured
       curve turns over.  The `--flat` yardstick is
       measured too, at three grid points: it buys 2.7–3.6 fit points for 38–385
-      kB, so the factored code is the cheaper one on the frontier.  Still open:
-      the inventory table from the measured sections, the re-derivation of every
-      other table (step 4), the zero-stop fit at the grid (step 5) and retiring
-      the superseded numbers (step 6).  `docs/MODEL_BUDGET.md` §7.
+      kB, so the factored code is the cheaper one on the frontier.  Steps 4–5
+      are through the parts the oracle can speak to: the `V` ladder and the map
+      constraint are measured files, `WORDLIST_BUDGET.md` has the ladder in
+      bytes, `SHARED_CLUSTERS.md` the constraint in the packed file, and
+      `shared_clusters.py` / `quarter_accounting.py` now charge the dictionary
+      at the price the file pays.  Still open: the tables that belong to other
+      models (the `assoc` sweep of `CLUSTER_WORDS.md`, the pre-expansion records
+      in `PRUNE_WORDS.md` and `DICTIONARY_RULES.md`) and step 6, retiring the
+      numbers no oracle produced.  `docs/MODEL_BUDGET.md` §7.
 - [x] **H12. Encode and decode the model file.** *Done for the shipped layout.*
       The YAML writer, the independent reader, the binary packer and unpacker,
       the arithmetic rule coder and the canonical codes live in

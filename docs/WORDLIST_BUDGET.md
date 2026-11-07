@@ -124,6 +124,13 @@ not pursued.
 ```sh
 python3 scripts/wordlist_budget.py --dirs work/tw4096ns,work/tw6144ns,work/tw8192ns \
         --ks 16,32,64 --validation work/camel/merged_validation.txt --stride 40
+
+# the measured ladder: one run per (V, k) point
+for spec in "tw512ns 8" "tw512ns 32" "tw4096ns 16" "tw4096ns 32" \
+            "tw6144ns 16" "tw6144ns 24" "tw8192ns 32"; do
+  set -- $spec
+  python3 scripts/model_size.py --dir work/$1 --k $2 --stride 10
+done
 ```
 
 The `work/tw*ns` directories are the pair-merge dictionaries built from a 5 %
