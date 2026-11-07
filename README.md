@@ -51,6 +51,9 @@ theory. The bulk of the work is statistics, not programming. What you will find
 in this repo are the tools we used to study the statistics and to come up with a
 simple, compact model that can form the basis of the standard.
 
+The model itself is a portable file, versioned and human-readable, whose format
+is specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md).
+
 ## The strategy
 
 The experimental strategy is as follows:
@@ -98,11 +101,9 @@ in the training corpus that fit in 64 bits, measured as a function of the model
 size. With a large model we could do much better, but that's not the point; the
 question is how well we can do with a small model. Both halves are measured:
 the fit rate on held-out identifiers
-([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and the model size in bytes
-with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). The
-model itself is a portable file, versioned and human-readable, whose format is
-specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md).
-Fitting an additional 1% of identifiers into 64 bits seems to cost between 2K
+([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and systematically
+compared ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Fitting an
+additional 1% of identifiers into 64 bits seems to cost between 2K
 and 6K in the interesting model size range; it costs more for larger models.
 
 ![The measured size-versus-fit frontier](docs/frontier.svg)
@@ -110,11 +111,9 @@ and 6K in the interesting model size range; it costs more for larger models.
 The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
-furthest bottom-left. Filled points are the arithmetic reference at `k` = 4…128
-for each vocabulary (the small numbers are `k`); hollow points are the measured
-Huffman cells — CF, and CQF as a candidate (it needs a second label set). Every
-point charges the terminator; the Huffman code's zero-weight stop gives back
-about two bits per identifier on top, which the size oracle will add.
+furthest bottom-left. Filled points are the arithmetic reference for each
+word list (the small numbers are `k`); hollow points are the shipped
+Huffman code at its operating cell.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -167,12 +166,8 @@ Along the way, we tried a lot of things that didn't work:
 - **The square-root (Hellinger) factorisation of the table.** 3.5–4 bits behind
   co-clustering at equal store
   ([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)).
-- **Arithmetic coding.** The obvious alternative, and the shape the fit tables
-  are measured on: store the probabilities and spend `−log₂ P(b|a)` per token.
-  It must publish the probabilities — unigram, cluster maps and block, 39.8 kB
-  at `V = 8192, k = 16` — where the prefix code publishes the lengths they imply
-  (32.5 kB), and it cannot use the free terminator that a 64-bit integer hands a
-  prefix code. Bits are level within about a bit, so the smaller object wins
+- **Arithmetic coding.** The obvious alternative to Huffman encoding. Bits are
+  level within about a bit, and the Huffman code has the smaller model size
   ([`docs/CODING_OVERHEAD.md`](docs/CODING_OVERHEAD.md),
   [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §5.2).
 - **Cluster quarters `q = 4`.** No better than `q = 2` for 3.2× the bytes
@@ -343,22 +338,16 @@ built at a fixed grid (`V = 4096, 6144, 8192`), and `V = 512` exists only to
 exercise scripts: it builds in seconds and fits in memory, so a new harness can
 be run end to end before the real one is paid for. It is **not** a small version
 of the product. No accept/reject decision, no byte budget and no frontier price
-may be taken from it — the frontier is priced in kB per point of fit, and that
-price differs by an order of magnitude between 512 and the grid, so a scheme that
-saves a fixed number of bytes is scored differently at each. Measurements at
-`V = 512` are kept in [`docs/SMALL_DICT.md`](docs/SMALL_DICT.md), which carries
-the same warning; the experiment reports quote only the grid.
+may be taken from it — it is not the relevant part of the frontier. Measurements
+at `V = 512` are kept in [`docs/SMALL_DICT.md`](docs/SMALL_DICT.md), which
+carries the same warning; the experiment reports quote only the grid.
 
 **Price a compression decision in fit rate, and in bytes.** A change can win on
 mean bits and still be worthless: the product is a fixed-budget encoder, so what
 matters is the fraction of identifiers that fits in 64 bits, and what that
 fraction costs in kilobytes. Reports therefore quote bits **and** the fit rate,
 and anything that trades one for the other is priced against the local frontier
-slope in kB per point of fit (see the tables in
-[`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)). Bits alone are also the
-wrong success metric when the report is about *generating* identifiers: the
-"hit rate" of a generator measures memorisation of the training corpus, not
-compression.
+slope in kB per point of fit.
 
 ## Licensing, provenance and authorship
 
