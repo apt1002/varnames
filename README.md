@@ -179,6 +179,8 @@ varnames/
 │       ├── ruby.txt  rust.txt  ocaml.txt  haskell.txt  java.txt
 │       ├── python.txt  go.txt  lua.txt  perl.txt  javascript.txt
 ├── PLAN.md                              # index of the research lines (+ long-term productisation horizon)
+├── LICENSE-MIT  LICENSE-APACHE          # code + specification: MIT OR Apache-2.0
+├── LICENSE-CC0                          # corpus + published tables: CC0-1.0
 ├── docs/
 │   ├── CORPUS.md                        # corpus statistics + reproduction
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
@@ -342,12 +344,43 @@ slope in kB per point of fit (see the tables in
 success metric when the report is about *generating* identifiers: the "hit rate"
 of a generator measures memorisation of the training corpus, not compression.
 
-## Licensing & provenance
+## Licensing, provenance and authorship
 
-Identifiers are extracted as facts from openly published package sources and locally installed open-source software. Individual packages carry their own licenses. This repository contains only the derived token lists, not the original source code.
+Identifiers are extracted as facts from openly published package sources and
+locally installed open-source software. Individual packages carry their own
+licences. This repository contains only the derived token lists, not the
+original source code.
 
-The original work in this repo is offered under a well-known permissive licence that we hope will encourage its adoption: *TODO — licence decision pending*.
+The original work in this repo is offered under **MIT OR Apache-2.0**, at your
+option ([`LICENSE-MIT`](LICENSE-MIT), [`LICENSE-APACHE`](LICENSE-APACHE)).
+Both are permissive, so a standard defined here can be embedded in compilers,
+editors and products without a licensing conversation; the Apache option adds an
+express patent grant, which is why it is offered alongside the simpler MIT. The
+dual form also matches the Rust ecosystem, where the engineering implementation
+will be published.
+
+The derived corpus and the published lookup tables are dedicated to the public
+domain under **CC0-1.0** ([`LICENSE-CC0`](LICENSE-CC0)), to the extent we hold
+rights in them. The point is that an implementation must be free to copy the
+tables into its binary without an attribution burden — and to be used as
+training or evaluation data — while the identifiers themselves remain facts
+about third-party packages whose own licences are unaffected. (In the EU a
+collection of identifiers could in principle attract database rights even
+though the individual tokens are facts; the CC0 dedication covers whatever
+rights we do hold.)
+
+**Authorship.** The design, experiments and text were developed by Alistair
+Turnbull in collaboration with an AI coding agent (goose, from the Agentic AI
+Foundation). The agent wrote most of the code from the author's design and
+instructions, and drafted most of the prose; the research direction, the choice
+of experiments, the checking of every result and the responsibility for what is
+published are human. This note is here so that the provenance is not a surprise
+to a reader or to a downstream user, and so that the copyright, warranty and
+patent terms above are understood to be asserted on the usual human-authorship
+basis.
 
 ## Contributing
 
-We welcome contributions on [GitHub](https://github.com/apt1002/varnames) and you can email us at `varnames -at- minworks.co.uk`.
+We welcome contributions on [GitHub](https://github.com/apt1002/varnames) and
+you can email us at `varnames -at- minworks.co.uk`. Contributions are accepted
+under the same terms as the project (inbound = outbound); no CLA is required.

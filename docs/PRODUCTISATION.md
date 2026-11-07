@@ -51,7 +51,8 @@ Out of scope (explicit):
 6. **Python reference implementation** — runnable, readable.
 7. **Rust engineering implementation** — runnable, readable.
 8. **Table-building tools** — easy to use and modify.
-9. **Licence** — permissive.
+9. **Licence** (settled) — `MIT OR Apache-2.0` for code and specification,
+   `CC0-1.0` for the corpus and the published tables; see `README.md`.
 
 Both implementations (6, 7) default to the standardised tables but accept
 non-standard tables.

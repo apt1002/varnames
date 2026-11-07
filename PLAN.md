@@ -219,7 +219,12 @@ steered toward it. Order roughly as listed; the encoding (E1) and the write-ups
       out of scope.)
 - [ ] **E10. Publish table-building tools** — easy to use and modify; need not
       be language-neutral.
-- [ ] **E11. Licence** — permissive.
+- [x] **E11. Licence.** *Settled* — `MIT OR Apache-2.0` for the code and the
+      specification, `CC0-1.0` for the derived corpus and the published tables
+      (MIT for simplicity and GPLv2 compatibility, Apache for the patent grant,
+      CC0 so implementations may copy the tables without attribution).
+      `README.md` ("Licensing, provenance and authorship"), `LICENSE-MIT`,
+      `LICENSE-APACHE`, `LICENSE-CC0`.
 
 ## Housekeeping / deferred regenerations
 

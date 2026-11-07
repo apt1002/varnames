@@ -36,7 +36,9 @@ The union is derived from `by_language/` with `LC_ALL=C sort -m -u`, so there
 are no duplicate per-language copies. The old Ruby-only `identifiers.txt` was
 byte-identical with `by_language/ruby.txt` and has been removed. There is also
 no length-capped (`max128`) variant; truncating long tokens is left to the
-consumer.
+consumer.  The lists are dedicated to the public domain under CC0-1.0, to the
+extent we hold rights in them — see *Licensing, provenance and authorship* in
+`README.md`.
 
 ## Composition
 
