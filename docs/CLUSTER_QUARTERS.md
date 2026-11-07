@@ -1,33 +1,35 @@
 # Cluster quarters
 
 Status: **`q = 2` is adopted, `q = 4` is rejected.**  The "quarter" idea buys
-back part of the word-step rounding loss by splitting each right cluster into `q`
-finer cells.  The name is historical: a quarter is *any* finer cell, so `q = 2`
-gives halves.  The idea changes the top stage from `k` leaves to `q·k` and leaves
-the encoding untouched (`ENCODING.md` §§2–4); the accounting, the measurements
-and the price are below.  The model file carries the cells as one label per word
-(`MODEL_FORMAT.md`), which costs 1.2 kB at the operating point: the cells of this
-build are subtrees of the Huffman tree, not of the canonical tree a depth-only
-file implies, so the 26-byte cut-point derivation does not apply ("The structural
-cost" below).
+back part of the word-step rounding loss by splitting each left cluster's word
+tree into `q` right clusters.  The name is historical: a quarter is *any* finer
+right cluster, so `q = 2` gives halves.  The idea changes the top stage from `k`
+leaves to `q·k` and leaves the encoding untouched (`ENCODING.md` §§2–4); the
+accounting, the measurements and the price are below.  The model file carries
+them as one label per word (`MODEL_FORMAT.md`), which costs 1.2 kB at the
+operating point: this build's right clusters are subtrees of the Huffman tree,
+not of the canonical tree a depth-only file implies, so a split position in the
+stored tree cannot name them ("The structural cost" below).
 
-The factorised model needs `P(cluster | cluster)` before `P(word | cluster)`.
+The factorised model needs `P(right cluster | left cluster)` before
+`P(word | right cluster)`.
 The flat model needs a tree per left cluster over all `V` words, i.e. `k` trees
 of `V` leaves — `k·V` code lengths, about 450 kB at `V = 4,096, k = 64`, which
 is out of the question.
 
-The idea: **stop each right-cluster tree early.**  Build the tree for
-`P(word | right cluster)` and halt when `q` trees remain (call them *quarters*;
-they are simply finer clusters, with no special status in the shipped code).
-Then encode `P(quarter | left cluster)` with a tree of `q·k` leaves.  Each of
-the `k` left clusters gets its own top tree, so quarters from *different*
-clusters can be paired when their probabilities are similar — which is exactly
-the pairing that the two-level factorisation cannot do.
+The idea: **stop each tree early.**  Build the tree for
+`P(word | right cluster)` and halt when `q` survivors remain (the *quarters* of
+the title; each survivor is one right cluster, with no special status in the
+shipped code).  Then encode `P(right cluster | left cluster)` with a tree of
+`q·k` leaves.  Each of the `k` left clusters gets its own top tree, so right
+clusters from *different* left clusters can be paired when their probabilities
+are similar — which is exactly the pairing that the two-level factorisation
+cannot do.
 
 The mechanism is the classical Huffman redundancy bound: a tree's expected
 redundancy is at most about its largest leaf probability, plus a small constant.
-Splitting a cell into `q` pieces divides its largest leaf probability by up to
-`q`, so the word-step penalty (measured at 0.173 bits/token) should shrink,
+Splitting a right cluster into `q` pieces divides its largest leaf probability
+by up to `q`, so the word-step penalty (measured at 0.173 bits/token) should shrink,
 while the cluster-step penalty (0.036) hardly moves.
 
 ## The size accounting, checked
@@ -132,22 +134,22 @@ and the mechanism, checked to three decimals against the identity above:
 | 2 | 22.948 | 18.055 | +4.893 | 5.704 | **+0.811** | +1,144 |
 | 4 | 27.563 | 18.055 | +9.508 | 10.454 | **+0.946** | +3,688 |
 
-The `kappa` prior makes every cell non-zero, so the Huffman rounding is small
+The `kappa` prior makes every right cluster non-zero, so the Huffman rounding is small
 here and these are close to rounding-free numbers.
 
 **The mechanism is real, and the fraction grows with the model.**  CQF recovers
 **35% (`q = 2`) and 41% (`q = 4`)** of the flat → CF penalty, and the amounts are
-exactly the expensive in-cell merges.  An earlier draft guessed a ~1.2-bit
+exactly the expensive within-cluster merges.  An earlier draft guessed a ~1.2-bit
 penalty at the canonical grid, so that a small recovered fraction would give
 ~0.22 (`q = 2`) and ~0.36 (`q = 4`) bits.  **That guess was wrong in both
 terms**: the penalty is *larger* (2.3 bits at `k = 32`, 3.0 at `k = 64`) and the
-recovered fraction is *larger* too, because the in-cell merge mass is nearly
+recovered fraction is *larger* too, because the within-cluster merge mass is nearly
 independent of `k` while CF's cluster step is not.  The extrapolation in that
 earlier draft is therefore too pessimistic: the word step is 66% of CF's cost
-(34.371 of 52.426) and the expensive in-cell merges are a larger share of it at
+(34.371 of 52.426) and the expensive within-cluster merges are a larger share of it
 the canonical grid.
 
-The `k = 64` cell (`V = 4096`, 4.02M identifiers) completes the picture:
+The `k = 64` point (`V = 4096`, 4.02M identifiers) completes the picture:
 
 | scheme | bits/identifier | vs flat | model bytes |
 |---|---:|---:|---:|
@@ -163,16 +165,17 @@ The `k = 64` cell (`V = 4096`, 4.02M identifiers) completes the picture:
 
 Two things to note, both against the earlier expectation:
 
-* **The in-cell merges are `k`-independent** — 5.704 / 10.454 at `k = 32`,
-  5.702 / 10.251 at `k = 64`.  They are a property of the tail of each cell's
-  word distribution, not of how many cells there are.  So the recovery
+* **The within-cluster merges are `k`-independent** — 5.704 / 10.454 at
+  `k = 32`, 5.702 / 10.251 at `k = 64`.  They are a property of the tail of each
+  right cluster's word distribution, not of how many right clusters there are.
+  So the recovery
   *fraction* rises with `k` (35% → 43% for `q = 2`), because the penalty it is a
   fraction of grows (CF's cluster step 18.055 → 21.421 while the word step only
   falls 34.371 → 30.886).
 * **The top stage increase is `k`-*sub*linear**: 4.893 → 4.430 for `q = 2` even
   though the top tree grows from 32 to 64 leaves.  It is charged as
-  `H(quarter | L) − H(cluster | L)`, and the extra quarter distinction bites
-  less once the cells are already fine.
+  `H(right cluster | L) − H(cluster | L)`, and the extra distinction bites
+  less once the right clusters are already fine.
 
 Against bytes, though, the story is unchanged: the top stage is `k x kq`, so the
 byte cost of the same 1.27 bits is 4.5x what it was at `k = 32`.
@@ -208,7 +211,7 @@ scores them on `merged_validation.txt` at **stride 10 (42,268 identifiers)** —
 the current re-measurement; the earlier pass used 4,227 identifiers.  Held-out
 identifiers average 4.71 tokens at `V = 4096` and 4.06 at `V = 8192` against
 5.70 in the corpus, so bits/identifier are not comparable *across* corpora, but
-every comparison inside a cell is paired on the same identifiers.  The absolute
+every comparison at one point is paired on the same identifiers.  The absolute
 fit rates are 0.5–0.7 points lower than the 4,227-identifier pass read, which is
 the sampling, not the model (see "The noise, measured").
 
@@ -262,12 +265,12 @@ Four readings:
   code catching up to its own entropy" — an arithmetic decoder already does
   that, and it costs nothing in bytes.  CQF reshapes the cost distribution:
   Huffman lengths are not `−log₂ P`, they are short for the heavy symbols of a
-  quarter and long for the rare ones, which pulls identifiers toward the
+  right cluster and long for the rare ones, which pulls identifiers toward the
   threshold even at the same mean.  But the size of that gain is **+0.2 to
   +0.4 pt**, not the +0.9 the 4,227-identifier pass reported: its paired
   standard error was ±0.2 pt, so that reading was noise.
 * **Mean bits and fit rates agree in sign here, and disagree in size.** `q = 4`
-  is better than `q = 2` on both statistics in all three cells (51.140/78.7 vs
+  is better than `q = 2` on both statistics at all three points (51.140/78.7 vs
   51.293/78.5; 50.402/79.6 vs 50.639/79.3; 47.358/83.4 vs 47.465/83.3) — for
   3.2× the bytes.  A 0.1-bit mean gain buys 0.1–0.3 points; the choice between
   `q = 2` and `q = 4` is therefore a question of price, not of sign.
@@ -350,33 +353,24 @@ So at the operating point CQF `q = 2` costs **252 bytes** in this accounting and
 buys 0.9 points over CF, or **0.3 points over arithmetic decoding at
 0.84 kB/pt**.  On the accounting's price it is the cheapest fit point in the
 whole study — cheaper than anything the `k` or `V` directions offer — and `q = 4`
-is again dominated (same fit, 3.3× the bytes).  This is the cell that justifies
-adopting CQF at all; the `k = 32` cell above is the second-best case, and above
+is again dominated (same fit, 3.3× the bytes).  This is the point that justifies
+adopting CQF at all; the `k = 32` point above is the second-best case, and above
 `k = 32` it is not worth the tables.
 
 The 252 bytes are real in this accounting's terms and not in the model file's.
 The accounting stores each tree's topology, a bracket string plus a leaf list, so
-a cell is a subtree of what is stored and `q − 1` cut points name it.  A file
-stores depths instead — a third of the size (`MODEL_BUDGET.md` §3) — and a depth
-list plus the canonical rule reconstructs the *canonical* tree, whose subtrees
-are not this build's cells.  The published file therefore stores one cell label
-per word: two bits more than the cluster label it replaces (5 against 4 at the
-operating point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is the
-shipped price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at the
-cheap end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic
+a right cluster is a subtree of what is stored and `q − 1` positions name it.  A
+file stores depths instead — a third of the size (`MODEL_BUDGET.md` §3) — and a
+depth list plus the canonical rule reconstructs the *canonical* tree, whose
+subtrees are not this build's right clusters.  The published file therefore
+stores one label per word: one bit more than a left-cluster label (5 against 4 at
+the operating point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is
+the shipped price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at
+the cheap end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic
 reference on bytes *and* above it on fit (33.7 kB / 82.8 % against 39.8 kB /
-82.5 %).  Recovering the 252 B needs a build that cuts the canonical tree rather
-than truncating the Huffman one, which is a different code and unmeasured.
-
-This cell also settles the mechanism question the `k = 32` cell left ambiguous.
-Here CQF's mean bits are *worse* than arithmetic decoding (47.891 against
-47.727, i.e. +0.16) while its **fit rate is better** (82.8% against 82.5%): the
-code pays more on average and still puts more identifiers under 64 bits.  That is
-only possible if the cost distribution is being reshaped — short lengths for the
-heavy symbols of a quarter, long for the rare ones — which is exactly the effect
-the redundancy argument above predicts and cannot be explained by "Huffman
-catching up to its own entropy".  CQF's value is a threshold gain, not an
-entropy gain, and at a coarse `k` it is both cheap and effective.
+82.5 %).  Recovering the 252 B needs a build that splits the canonical tree
+rather than stopping the Huffman build early, which is a different code and
+unmeasured.
 
 **The noise, measured.** These are proportions over 42,268 identifiers, so the
 right yardstick is the *paired* per-identifier difference (same held-out
@@ -409,7 +403,7 @@ Two honesty notes on the domination table, whose margins are 0.3 pt: those are
 sampling error is the unpaired one, 0.2 pt, and individually they are not
 significant.  What is significant is the bits gap they are built from
 (`−0.820 ± 0.007` here), and the fact that the fit ordering agrees with the bits
-ordering in all three cells.  The two metrics can disagree when the mean sits
+ordering at all three points.  The two metrics can disagree when the mean sits
 well below the 64-bit threshold — a bits gain that does not appear as fit
 points — which is why both are always reported.
 
@@ -431,21 +425,21 @@ points — which is why both are always reported.
    Huffman's cost is the sum over merges of the merged mass, so the `q − 1`
    merges *above* the stop point are exactly what CQF replaces:
 
-       in-cell loss avoided = Σ over the last q − 1 merges of the merged mass
+       loss avoided inside the cluster = Σ over the last q − 1 merged masses
 
-   CQF replaces them with a top symbol shared across cells.  Careful with the
-   comparison: the top stage is not *new* — CF already pays a cluster step of
-   `H(right cluster | left cluster)`.  What CQF pays is the **increase** from `k`
-   to `kq` symbols, `H(quarter | left cluster) − H(right cluster | left
-   cluster)` plus its rounding.  So the net is
+   CQF replaces them with a top symbol shared across right clusters.  Careful
+   with the comparison: the top stage is not *new* — CF already pays a cluster
+   step of `H(cluster | left cluster)`.  What CQF pays is the **increase** from
+   `k` to `kq` symbols, i.e. the same conditional entropy at a finer target, plus
+   its rounding.  So the net is
 
        recovered − (top stage increase)
 
-   and quoting `H(quarter | left cluster) + r_top` as the cost overstates it,
-   because it charges the whole top stage rather than its increment.  The trade
-   works because a cell whose final merges are expensive is a cell with one
-   heavy survivor and small siblings: the shared top tree lets that survivor
-   pair with *other cells'* heavy survivors instead of with its own tail.
+   and quoting the whole top stage rather than its increment overstates it,
+   because it charges what CF already paid.  The trade works because a right
+   cluster whose final merges are expensive is one with a heavy survivor and
+   small siblings: the shared top tree lets that survivor pair with *other right
+   clusters'* heavy survivors instead of with its own tail.
 
    Three consequences, all of which rule out imposing a partition:
 
@@ -478,61 +472,55 @@ points — which is why both are always reported.
 
 ## The structural cost: it refines one side only
 
-Every model in this repository before this one had **one label set**.  Clusters
-are shared, and that is what lets `k` mean one thing on both sides of the
-transition: `k` word trees with `V` leaves between them, and `k` cluster trees
-with `k` leaves each, so the number of trees equals the number of leaves in a
-row.
+Every model in this repository before this one had **one label set**, used on
+both sides of the transition: `k` word trees with `V` leaves between them, and
+`k` cluster trees with `k` leaves each, so the number of trees equalled the
+number of leaves in a row.
 
-CQF breaks the symmetry of the **code**.  Each *right* cluster is split into `q`
-cells, so the right-hand alphabet is `qk` while the left-hand alphabet stays `k`:
-the top stage is `k` trees of `qk` leaves, not `qk` of `qk`.  The refinement is
-nested inside each right cluster, and that is where the gain comes from — a cell
-can pair with a *different* cluster's survivor in the top tree, which a finer
-shared clustering cannot do without also making the left context finer.
+CQF gives the two sides different label sets.  Every word belongs to a **right
+cluster** — the thing the word step codes — and the `kq` right clusters are
+grouped `q` to a **left cluster**, which is what the cluster step codes.  So the
+top stage is `k` trees of `kq` leaves, not `kq` trees of `kq`, and a right
+cluster can pair with a *different* left cluster's survivor in the top tree,
+which a finer shared clustering cannot do without also making the left context
+finer.  That asymmetry is where the gain comes from.
 
-It does not need a second **assignment**.  Each word carries one label, its cell;
-its cluster is that label divided by `q`.  So the model file stores one map, one
-bit wider, and recovers both stages from it and the two counts (`MODEL_FORMAT.md`
-§1).  What is paid for is the width, not a second table.
+It does not need a second **map**.  Each word carries one label, its right
+cluster, and its left cluster is that label divided by `q`.  So the file stores
+one label per word in `⌈log₂ kq⌉` bits rather than `⌈log₂ k⌉` — 5 instead of 4 at
+the operating point, 1,024 B — plus 160 B of extra top depths, and the two counts
+`k` and `q`.  What is paid for is the width, not a second table.
 
-Three prices were on the table, and they are not the same number:
+Two ways of avoiding that kilobyte were considered.
 
-* **252 B, in the accounting above.**  The accounting stores each tree's
-  *topology* — a bracket string plus a leaf list — so a cell is a subtree of what
-  is stored, and `q − 1` cut points per cluster (~26 B) name it, with the top
-  stage growing 256 B and the bottom brackets shrinking 4 B.
-* **1,184 B, with the cell stored as a label.**  One `⌈log₂ qk⌉`-bit label per
-  word is 1,024 B at `q = 2`, which is one bit more per word than the cluster
-  label it replaces, and the top stage is 320 B against 160 B: no format rule,
-  and no topology in the file.
-* **2,816 B, with the label set made symmetric.**  `k` becomes `qk` on both
-  sides, i.e. the plain factored model at twice the clusters: 42,571 B against
-  39,755 B at `V = 8192`, for +0.3 points on the arithmetic reference.  The
-  factored equivalent is unmeasured, but this is the only option that needs no
-  format change at all.
+* **Name each right cluster by its position in a stored tree.**  If the file
+  stored the tree's *topology* — a bracket string plus its leaves in depth-first
+  order, which is what the size accounting prices — then a right cluster would
+  be a subtree, and `q − 1` split positions per left cluster (~26 B) would name
+  where it starts and ends: "the first 312 leaves of this tree, in code order,
+  are right cluster 2".  That is the 252 B in the accounting.  The published file
+  stores *depths* instead, a third of the size, and a reader turns those depths
+  into the canonical tree, whose subtrees are not this build's right clusters.
+  A check on simulated cluster builds found about a quarter of the right
+  clusters to be unbroken blocks of the canonical leaf order, and fewer still to
+  be subtrees of it.  So positions do not name them, and the file pays the
+  extra bit.
+* **Make the label set shared, so `k` becomes `kq` on both sides.**  That is the
+  plain factored model at twice the clusters: 42,571 B against 39,755 B at
+  `V = 8192`, for +0.3 points on the arithmetic reference.  It needs no format
+  change at all, and it costs 2.4× the shipped bytes for about a third of the
+  gain (0.3 arithmetic points against 0.9 measured).
 
-The shipped file takes the **second**, for a reason the accounting cannot see: it
-stores depths, not topology.  A depth list plus the canonical rule of
-`ENCODING.md` §3 reconstructs the *canonical* tree, and this build's cells are
-subtrees of the *Huffman* tree.  The two trees have the same shape and different
-leaves, so a cut point does not name a cell — a check on simulated cluster builds
-found a quarter of the cells contiguous in the canonical leaf order, and fewer
-still subtrees.  Cutting the canonical tree instead of truncating the Huffman
-build would make the 252 B available again, but that is a different code and
-needs its own measurement (`MODEL_FORMAT.md` §7).
-
-So the ordering is stark: the symmetric route costs about eleven times the bytes
-of the shipped one, for about a third of its gain (0.3 arithmetic points against
-0.9 measured).  The asymmetry is not a detail of the accounting — it is where the
-gain comes from.
+So the asymmetry costs **1,184 B**: one more bit per word, plus 160 B of top
+depths — against 252 B in the accounting and 2,816 B for the symmetric route.
 
 **Outcome.** On bits and bytes, against the rule in step 6: `q = 2` wins and
 `q = 4` loses, so **`q = 2` is adopted**.  At the operating point
 (`V = 8192, k = 16`) it buys 0.9 fit points for 1,184 bytes over CF — 1.3 kB/pt,
 at the cheap end of the frontier's 1–6 — and it is both smaller and better than
-arithmetic decoding at the same cell (33.7 kB / 82.8 % against 39.8 kB /
+arithmetic decoding at the same point (33.7 kB / 82.8 % against 39.8 kB /
 82.5 %).  `q = 4` buys nothing further for 3.3× the bytes, and above `k = 32`
 neither pays.  The encoding itself is unchanged throughout — `q` only multiplies
-`k` in the top stage (`ENCODING.md` §5) — and the model file carries the cells as
-one label per word, one bit wider than the cluster label (`MODEL_FORMAT.md`).
+`k` in the top stage (`ENCODING.md` §5) — and the model file carries each word's
+right cluster as one label, one bit wider than a left-cluster label would be
+(`MODEL_FORMAT.md`).

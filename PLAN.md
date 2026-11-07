@@ -102,8 +102,9 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/NEWLINE_CLUSTER.md`.
 - [x] **C28. Cluster quarters.** *Adopted at `q = 2`; `q = 4` rejected.  It
       costs 1,184 B at the operating point, not the accounting's 252 B: the file
-      stores one label per word (its cell), because the cells are subtrees of the
-      Huffman tree and the file derives the canonical one.*
+      stores one label per word (its right cluster), because this build's right
+      clusters are subtrees of the Huffman tree and the file derives the
+      canonical one.*
       `docs/CLUSTER_QUARTERS.md`.
 - [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
       model term.*  `docs/CODESIGN.md`.
@@ -112,12 +113,12 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       can be seen rather than inferred.  `docs/CLUSTER_WORDS.md`,
       `docs/HELLINGER_FACTORISATION.md`.
 - [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
-      model.*  The two clouds of the adopted model, coloured by cluster, as
-      illustration.  `README.md`.
-- [ ] **C32. Cells as canonical subtrees.** *Planned — an option worth 1.0 kB.*
-      Split the canonical tree at `q − 1` positions and re-code each cell, so the
-      model file can derive the cells from cut points instead of storing a label
-      per word.  Needs its own fit measurement and byte count.
+      model.*  The two clouds of the adopted model, coloured by right cluster,
+      as illustration.  `README.md`.
+- [ ] **C32. Right clusters as canonical subtrees.** *Planned — an option worth
+      1.0 kB.*  Split the canonical tree at `q − 1` positions and re-code each
+      part, so the model file names right clusters by position instead of
+      storing a label per word.  Needs its own fit measurement and byte count.
       `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_FORMAT.md`.
 
 ## D. Corpus preprocessing

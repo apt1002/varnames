@@ -7,9 +7,10 @@ measurement at the testing vocabulary (`V = 512`) rejected it; that measurement
 is a statement about a cheap model, not about the constraint, and it now lives
 in [`SMALL_DICT.md`](SMALL_DICT.md) with the rest of the testing-point numbers.
 The decision rule that reads the result is spelled out below.  The adopted
-quarter code keeps the constraint: it splits each cluster into `q` cells, so the
-one map is one bit wider and the cluster is the cell label divided by `q`
-(`CLUSTER_QUARTERS.md`, `MODEL_FORMAT.md` §1).
+quarter code keeps the constraint: it splits each left cluster into `q` right
+clusters, so the one map is one bit wider and the left cluster is the
+right-cluster label divided by `q` (`CLUSTER_QUARTERS.md`, `MODEL_FORMAT.md`
+§1).
 
 ## The question
 
@@ -136,12 +137,12 @@ scaled: the testing-point run is recorded in
 ### The close-out: five seeds on the 10x held-out set
 
 A margin of a tenth of a point cannot be carried by one seed, so both
-`V = 4096` cells were re-measured with five seeds on the 10x held-out set
+`V = 4096` points were re-measured with five seeds on the 10x held-out set
 (stride 10, 42,268 identifiers), re-interpolating the frontier per seed
 (`scripts/c26_closeout.py`, which also counts the identifiers that cross the
 64-bit line in each direction):
 
-| cell | margin over 5 seeds | paired SE | shared − asymmetric bits | crossings at 64 bits |
+| point | margin over 5 seeds | paired SE | shared − asymmetric bits | crossings at 64 bits |
 |---|---:|---:|---:|---:|
 | 4096, `k = 32` | **+0.343 pt** | 0.068 | +0.274 ± 0.039 | +64 / −91 |
 | 4096, `k = 64` | **−0.036 pt** | 0.055 | +0.429 ± 0.041 | +73 / −124 |

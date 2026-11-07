@@ -36,16 +36,16 @@ assignment are derived at load time.
 How the tables are *generated* is a separate matter, and the tool chain is not
 settled.  What the research still has to settle — `kappa`, the clustering
 method, the choice of `k` — moves the parameters but not the structure.  The
-adopted code has one structural refinement: each cluster is split into `q`
-cells, so the right-hand alphabet is `qN` while the left stays `N`.  That is
-still three tables — the cells are one label per word, one bit wider, not a
-second assignment (`CLUSTER_QUARTERS.md` §"The structural cost",
+adopted code has one structural refinement: each left cluster is split into `q`
+right clusters, so the right-hand alphabet is `kq` while the left stays `k`.
+That is still three tables — the one map is one label per word, one bit wider,
+not a second assignment (`CLUSTER_QUARTERS.md` §"The structural cost",
 `MODEL_FORMAT.md` §1).
 
-For comparison, then, a candidate model is the pair `(V, k)`, which fixes its
-size once the cost per leaf and per index is fixed, plus one measurement: the
-fraction of held-out identifiers it codes into 64 bits.  The
-best model is the one furthest bottom-left in the scatter plot in
+For comparison, then, a candidate model is the triple `(V, k, q)`, which fixes
+its size once the cost per leaf and per index is fixed, plus one measurement:
+the fraction of held-out identifiers it codes into 64 bits.  The best model is
+the one furthest bottom-left in the scatter plot in
 [`README.md`](../README.md); the rest of this note is the accounting that makes
 the horizontal axis honest.
 
@@ -188,7 +188,7 @@ would add 1.0 kB at `V = 8192` (1,024 B of depths) and 0.5 kB more to the top
 stage at `k = 64`.
 
 The table is the plain factored model; the adopted quarter code adds 1.2 kB at
-8192/16 — the cluster map becomes a cell map (`⌈log₂ qk⌉` = 5 bits, 5.1 kB
+8192/16 — the cluster map widens to right clusters (`⌈log₂ kq⌉` = 5 bits, 5.1 kB
 against 4.1) and the top stage doubles to 0.3 kB — for **33.7 kB**, at 82.8 %
 instead of 81.9 % (`CLUSTER_QUARTERS.md`).
 
@@ -286,14 +286,14 @@ One correction to an earlier version of this note.  At `V = 8192, k = 16` the
 measured Huffman figure, 45.027 bits and 85.3 % fit, is the **flat** code — one
 tree per left cluster over all `V` words — whose codebook is `W`, about 245 kB
 in the bracket form and ~105 kB as the depth table.  It is an upper bound on
-what a Huffman code can do at this cell, not the shipped design.  The
+what a Huffman code can do at this point, not the shipped design.  The
 **factored** code measures 48.987 bits / 81.9 % (CF) and 47.891 / 82.8 %
 (CQF `q = 2`, the adopted quarter code) with the stop charged
 (`CLUSTER_QUARTERS.md`); its zero-stop figure has not been measured and should
 come out ~2 bits better.  So
 "32.5 kB gets 85.3 %" is not a sentence this note can support yet — 32.5 kB is
 the factored model's size, 85.3 % is the flat model's fit.  The oracle measures
-both, on the same cell, in the same convention.
+both, at the same point, in the same convention.
 
 ### 5.4 The arithmetic size at the grid
 
@@ -356,7 +356,7 @@ better once the zero-weight stop is measured.  So this table is the frontier of
 the *reference*, and the shipped design's frontier lies down and to the left of
 it.  Its shape — the knee, the cheap stretch, the dead
 zone — carries over; the numbers do not.  [`README.md`](../README.md) plots these
-points, with the one measured shipped cell marked.
+points, with the one measured shipped point marked.
 
 Four things follow.
 
@@ -551,7 +551,7 @@ is therefore to stop pricing the model by formula and measure it.  Six steps:
    term.
 5. **Fit-rate convention.**  Re-measure the fit under the shipped criterion of
    §5.3 — the zero-weight stop, all trailing zeros free — for the *factored*
-   code at every grid cell, and settle the `k = 16`, `q = 2` and shared-cluster
+   code at every grid point, and settle the `k = 16`, `q = 2` and shared-cluster
    choices on those numbers rather than on arithmetic bits.  This is also where
    the flat-versus-factored mix-up of §5.3 gets closed.
 6. **Retire** the superseded numbers: `README.md`'s status line, and any table

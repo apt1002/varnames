@@ -254,28 +254,29 @@ yardstick, CF or CQF is the product.**
 Neither idea changes how a codeword is written; both are written up separately.
 
 * **Cluster quarters** ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)) split each
-  right cluster into `q` finer cells, so the top stage has `q·k` leaves instead
-  of `k`.  The encoding is unchanged: this note with `q·k` in place of `k` in
-  the top stage, and nothing else.  It is adopted at `q = 2`, and the label set
-  is still one set: a word's label is its cell, and its cluster is that label
-  divided by `q` (`MODEL_FORMAT.md` §1).
+  left cluster's tree into `q` right clusters, so the top stage has `q·k` leaves
+  instead of `k`.  The encoding is unchanged: this note with `q·k` in place of
+  `k` in the top stage, and nothing else.  It is adopted at `q = 2`, and the label set
+  is still one set: a word's label is its right cluster, and its left cluster is
+  that label divided by `q` (`MODEL_FORMAT.md` §1).
 * **Codesigning the assignment** ([`CODESIGN.md`](CODESIGN.md)) chooses the
   clustering and the trees together, so it changes which labels exist and, in
   general, how many (`k` may grow).  That is a generation question: a decoder
-  cannot tell a codesigned model from any other model with the same `V` and `N`.
+  cannot tell a codesigned model from any other model with the same `V` and `k`.
 
 An implementation of §§2–4 decodes a model built either way: the first changes
 only the label space, the second only which labels exist.
 
 ## 6. Open questions
 
-* Which tables ship: word list, the cell map (and the `q` that coarsens it into
-  clusters), `D`, and the code lengths.  Does the standard fix `V`, `k` and the
-  corpus, or publish a family?  The container is settled — the file format and
-  its binary form are specified in [`MODEL_FORMAT.md`](MODEL_FORMAT.md).
+* Which tables ship: word list, the right-cluster map (and the `q` that groups
+  it into left clusters), `D`, and the code lengths.  Does the standard fix `V`,
+  `k`, `q` and the corpus, or publish a family?  The container is settled — the
+  file format and its binary form are specified in
+  [`MODEL_FORMAT.md`](MODEL_FORMAT.md).
 * The reserved `\n` clusters (`NEWLINE_CLUSTER.md`) interact with this: a
-  dedicated start/end cell makes the first and last trees tiny and exact, and
-  removes the stop from the cells whose code lengths it currently distorts.
+  dedicated start/end cluster makes the first and last trees tiny and exact,
+  and removes the stop from the clusters whose code lengths it distorts.
 * If the code is published, the encoder must agree with the decoder on the
   *canonical* integer (the zero-padded code) — the standard should say so
   explicitly, because "any integer that decodes to the identifier" is not a
