@@ -196,7 +196,7 @@ at matched model size the largest `V` that fits beats a finer `k` by 1–3 bits,
 so the practical rule is *buy words first, clusters last*.  The sweep across
 `V = 4,096 / 6,144 / 8,192`, the removable-midpoint refinement and the numbers
 live in [`WORDLIST_BUDGET.md`](WORDLIST_BUDGET.md).  Measured in the shipped
-file the word list is the largest single object — 21,145 of 32,126 B at the
+file the word list is the largest single object — 21,109 of 32,085 B at the
 operating point, 66 % of the model — which is the same finding in the currency
 the file actually pays.
 

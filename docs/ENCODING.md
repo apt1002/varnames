@@ -259,9 +259,10 @@ what the quarter idea attacks ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)); an
 on *bits*, one tree per left cluster over the joint is what to compare against,
 though it is not what can be published — which is the rest of this section.
 
-**But the flat code cannot be published.**  Its table is `k` trees of `V` leaves:
-224 kB at `(4,096, 32)`, 448 kB at `(4,096, 64)`, 960 kB at `(8,192, 64)`,
-against 7.9–19 kB for the factorised project.  Publishing probabilities instead
+**But the flat code cannot be published.**  Its table is `k` trees of `V` leaves,
+which measured is 52.9 kB at `(4,096, 16)`, 123.6 kB at `(8,192, 16)` and
+420.5 kB at `(8,192, 64)` — against 14.7–35 kB for the factorised project, and
+for 2.3–2.8 fit points (`MODEL_BUDGET.md` §5.2).  Publishing probabilities instead
 of lengths does not rescue it (that is `k·V` bytes, 131 kB at `(4,096, 32)`).
 So the choice splits on §3: if the standard ships the code, the flat code is out
 and the design is **CF or CQF**; if the library derives codes at load time, the
@@ -277,8 +278,9 @@ Neither idea changes how a codeword is written; both are written up separately.
   left cluster's tree into `q` right clusters, so the top stage has `q·k` leaves
   instead of `k` (plus the STOP leaf of §2).  The encoding is unchanged: this
   note with `q·k` in place of `k` in the top stage, and nothing else.  It was
-  adopted at `q = 2` on the arithmetic accounting, and measured under the
-  shipped convention it does not repay its extra label, so `q = 1` ships.  The
+  adopted at `q = 2` on the arithmetic accounting; measured in the packed file
+  it buys 0.12 bits per identifier for 1,184–1,664 B — 10–14 kB a bit, three
+  times the frontier's price — so `q = 1` ships.  The
   label set is one set either way: a word's label is its right cluster, and its
   left cluster is that label divided by `q` (`MODEL_FORMAT.md` §1).
 * **Codesigning the assignment** ([`CODESIGN.md`](CODESIGN.md)) chooses the

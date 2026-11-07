@@ -122,7 +122,7 @@ Cost of storing the list, Zipf-coded (`docs/MODEL_BUDGET.md`): 1,019 → 1,036 B
 4,645 → 4,663 B, 10,815 → 10,850 B — the naive list needs a few more rules for
 the same `V` and each rule is marginally dearer, so the run machinery saves
 **0.2–0.4 % of the word list** and nothing else.  At the canonical grid the
-same code measures 9,825 B of rules at `V = 4,096`, 15,388 at 6,144 and 21,145
+same code measures 9,806 B of rules at `V = 4,096`, 15,360 at 6,144 and 21,109
 at 8,192 — 9.8, 10.1 and 10.4 bits per child index against the 12–13 a
 fixed-width field would need (`scripts/model_size.py`, `MODEL_FORMAT.md` §3).
 

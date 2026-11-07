@@ -50,21 +50,21 @@ cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
 
 | `V` | `k` | word list | labels | depths | header | file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 512 | 32 | 897 | 320 | 980 | 80 | 2,277 | 65.706 | 60.0 % | 94.5 % |
-| 4,096 | 32 | 9,825 | 2,560 | 3,220 | 80 | 15,685 | 48.926 | 80.4 % | 98.3 % |
-| 6,144 | 24 | 15,388 | 3,840 | 4,215 | 80 | 23,523 | 46.781 | 82.9 % | 98.7 % |
-| 8,192 | 32 | 21,145 | 5,120 | 5,780 | 81 | **32,126** | **45.221** | **84.8 %** | **98.9 %** |
+| 512 | 32 | 894 | 320 | 980 | 75 | 2,269 | 65.449 | 60.4 % | 94.5 % |
+| 4,096 | 32 | 9,806 | 2,560 | 3,220 | 75 | 15,661 | 48.866 | 80.5 % | 98.4 % |
+| 6,144 | 24 | 15,360 | 3,840 | 4,215 | 75 | 23,490 | 46.731 | 83.2 % | 98.7 % |
+| 8,192 | 32 | 21,109 | 5,120 | 5,780 | 76 | **32,085** | **45.217** | **85.0 %** | **99.0 %** |
 
 * **The word list is the largest object, and it grows to two thirds of the
   file.**  39 % of the file at `V = 512`, 63 % at 4,096, 65 % at 6,144 and 66 %
-  at 8,192 (21,145 of 32,126 B).  The rule "buy words first, clusters last" is
+  at 8,192 (21,109 of 32,085 B).  The rule "buy words first, clusters last" is
   therefore a statement about the biggest single term, not a tie-break.
 * **At a fixed byte budget the largest `V` that fits still wins.**  The
-  cheapest file measured at `V = 8,192` is 29,463 B (`k = 8`: 21,145 of rules,
-  5,120 of bottom depths, 3,072 of labels), and at `V = 6,144` it is 22,550 B.
-  So a 23.5 kB budget cannot hold an 8,192 file at any `k` measured, and the
-  best 6,144 file there is 46.781 bits at 82.9 %; the best 4,096 file is 48.926
-  at 80.4 % for 15.7 kB.
+  cheapest file measured at `V = 8,192` is 29,422 B (`k = 8`: 21,109 of rules,
+  5,120 of bottom depths, 3,072 of labels), and at `V = 6,144` it is 20,824 B
+  (`k = 4`).  So a 23.5 kB budget cannot hold an 8,192 file at any `k` measured,
+  and the best 6,144 file there is 46.731 bits at 83.2 %; the best 4,096 file is
+  48.866 at 80.5 % for 15.7 kB.
   The measured ladder is 512 → 4,096 → 6,144 → 8,192 with the bytes going
   2.3 → 15.7 → 23.5 → 32.1 kB and the bits 65.7 → 48.9 → 46.8 → 45.2: the first
   step is worth 16.8 bits for 13.4 kB, and the later ones 2.2 and 1.6 bits for
@@ -102,7 +102,7 @@ cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
   dictionary's own rules (~`2(V − 64)` integers, charged as bytes in
   [`MODEL_BUDGET.md`](MODEL_BUDGET.md)).  Adding it (`k² + 4V`) moves every
   point right, but the frontier still picks the largest `V` at every budget.
-  Measured, the packed dictionary at `V = 8,192` is 21,145 B rather than the
+  Measured, the packed dictionary at `V = 8,192` is 21,109 B rather than the
   16,256 B the "one byte per stored number" estimate gives (2 × 8,128 integers)
   — the rule indices are the one place the model pays more than a byte per
   number — and the ordering survives that too (measured section above).

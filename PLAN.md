@@ -227,11 +227,13 @@ be steered toward it.  Design intent, scope and audiences:
       offset per tree is recovered from the Kraft equality, so no byte is
       stored for it.  `docs/MODEL_FORMAT.md` §3.
 - [~] **H15. Retire the arithmetic sizes.** *Under way.*  `MODEL_BUDGET.md` is
-      now Huffman-only: the frontier, the slices, the ladder and the yardstick
-      are packed files.  Remaining: the `CF`/`CQF`/`W` tables of
-      `CLUSTER_QUARTERS.md` (now replaced by measured `q = 1`/`q = 2` files) and
-      the arithmetic columns of `CODING_OVERHEAD.md`.  `docs/MODEL_BUDGET.md` §7
-      step 6.
+      now Huffman-only — the frontier, the slices, the ladder, the yardstick and
+      the two rejected structures are packed files — and `CLUSTER_QUARTERS.md`
+      no longer carries the `CF`/`CQF`/`W` formulas at all: it prices the same
+      trade with `q = 1` and `q = 2` files.  Remaining: the arithmetic columns of
+      `CODING_OVERHEAD.md` and the `assoc` sweep of `CLUSTER_WORDS.md`, which are
+      within-model comparisons whose verdicts the bytes agree with.  See
+      `docs/MODEL_BUDGET.md` §7, step 6.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 

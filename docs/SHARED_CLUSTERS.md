@@ -85,7 +85,7 @@ buys is real.
 Report, per `k`: held-out mean bits, fit ≤64, fit ≤128, model bytes (word list +
 unigram + membership + block), and the full-table reference bits.  The word list
 is charged at the price the packed file pays for it, not at a formula
-(`model_size.pack_rules`): at `V = 8,192` that is 21,145 B, and a `V log₂ V`
+(`model_size.pack_rules`): at `V = 8,192` that is 21,109 B, and a `V log₂ V`
 estimate misses it by 8 kB.  Adopt if at
 **matched total bytes** the fit rate is no worse than the asymmetric model
 (within ±0.3 pt, the run-to-run noise of the frontier), or if the matched-`k`
