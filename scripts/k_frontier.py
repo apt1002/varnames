@@ -10,18 +10,30 @@ is straight, where it bends, or whether a candidate sits above or below it
 locally.
 
 This sweeps `k` at fixed `V` with the *same* accounting and the *same* held-out
-set, so the curve and its local slope fall out:
+set, so the curve and its local slope fall out.
 
-    model bytes = word (2(V-k) + V log V) + uni V
-                + mem 2 V log k             (two labellings)
-                + block k*k                 (the D table)
-    bits        = assoc model, held-out, `model_fit_rates.bits_assoc`
+Two accountings, because the project has two model shapes:
 
-That is the accounting used in `SHARED_CLUSTERS.md` (17,400 B at 4096/32), so
-the slopes are directly comparable with the 5.5 kB/bit figure.  Note it differs
-from the code-bytes-only accounting in `ENCODING.md` §5 by the unigram table,
-the assignment map and the block -- a roughly `k`-independent offset, so *within
-a sweep* the two agree and only absolute levels move.
+``full`` (default, the model the fit rates are measured on)
+    rules   the pair-merge dictionary, child indices under the two-parameter
+            Zipf code -- computed from this directory, not a formula
+    unigram V bytes, in creation order
+    mem     2 V log k bits          (two labellings: lcl and rcl)
+    block   k*k bytes              (the D table)
+    code    2 kB
+    bits    assoc model, held-out, `model_fit_rates.bits_assoc`
+
+``codebook`` (``--code-side``, what SHARED_CLUSTERS.md and the C26-C28 pricing
+tables quote: 17,400 B at 4096/32)
+    word    2(V-k) + V log V bits  (the bottom Huffman tree: internal nodes and
+                                    the word -> leaf map)
+    uni V, mem 2 V log k bits, block k*k, no rule table and no code.
+
+The codebook shape is the *Huffman* model's code side and the full shape is the
+*arithmetic* model; they are not two prices for one object.  The full shape is
+the one the published fit rates belong to, so it is the default.  Within a
+sweep the shapes differ by terms constant in `k` except `word` vs `rules`, so
+local slopes are close but not identical.
 
 Usage:
     k_frontier.py --dir work/tw512ns --ks 8,12,16,24,32 --stride 100
@@ -41,25 +53,28 @@ import model_fit_rates as mfr
 from newline_cluster import model_from, plain_labels
 
 
-# The pair-merge dictionary itself: every symbol above the characters is a rule
-# naming two children.  MODEL_BUDGET.md measures the child-index stream at
-# 2.2-2.6 bytes per rule (Zipf code: 4.5 kB/2,040, 10.6/4,414, 30.9/11,694),
-# plus ~2 kB of code.  Without this term the frontier is not the model: at
-# V = 8192 it is 21.5 kB, i.e. 40% of what the other terms add up to.
-DICT_BYTES_PER_RULE = 2.4
+# The program code is allowed 2 kB; the pair-merge dictionary itself is priced
+# from the directory (see `dictionary_bytes`).
 DICT_CODE_BYTES = 2000.0
 
 
-def dict_bytes(V):
-    return DICT_BYTES_PER_RULE * (V - 64) + DICT_CODE_BYTES
+def dictionary_bytes(chars, rules):
+    """Zipf-coded child-index stream, in bytes (`model_budget.dictionary_bits`)."""
+    from model_budget import dictionary_bits
+    bits, _ = dictionary_bits(chars, rules, 'zipf')
+    return bits / 8.0
 
 
-def model_bytes(V, k, with_dict=True):
-    word = (2 * (V - k) + V * np.log2(V)) / 8.0
+def model_bytes(V, k, rules_bytes=None, shape='full'):
+    """Bytes for one model.  `rules_bytes` is required for shape='full'."""
     uni = float(V)
     mem = 2.0 * V * np.log2(k) / 8.0
     blk = float(k * k)
-    return word + uni + mem + blk + (dict_bytes(V) if with_dict else 0.0)
+    if shape == 'codebook':
+        word = (2 * (V - k) + V * np.log2(V)) / 8.0
+        return word + uni + mem + blk
+    assert rules_bytes is not None, 'shape=full needs the rule-table size'
+    return rules_bytes + uni + mem + blk + DICT_CODE_BYTES
 
 
 def main():
@@ -70,13 +85,18 @@ def main():
     ap.add_argument('--validation', default='work/camel/merged_validation.txt')
     ap.add_argument('--stride', type=int, default=100)
     ap.add_argument('--seed', type=int, default=1)
-    ap.add_argument('--no-dict', action='store_true',
-                    help='omit the dictionary/rule term (code-side bytes only)')
+    ap.add_argument('--code-side', action='store_true',
+                    help="price the Huffman code side instead of the full "
+                         "arithmetic model (the SHARED_CLUSTERS accounting)")
     args = ap.parse_args()
 
     M, uni, chars, rules, sym = hf.dense_matrix(args.dir)
     V, nchars = M.shape[0], len(chars)
     stop = nchars
+    rbytes = dictionary_bytes(chars, rules)
+    shape = 'codebook' if args.code_side else 'full'
+    print(f"# rule table {rbytes:.0f} B (Zipf index code), shape={shape}",
+          flush=True)
     _, _, M_ref = hf.priors(M, args.kappa * V)
     del M, uni
 
@@ -95,7 +115,7 @@ def main():
         m = model_from(M_ref, lcl, rcl, k)
         bits = mfr.bits_assoc(seqs, m['logc'], m['logD'], m['logden'],
                               lcl, rcl)
-        by = model_bytes(V, k, with_dict=not args.no_dict)
+        by = model_bytes(V, k, rules_bytes=rbytes, shape=shape)
         rows.append(dict(k=k, bits=bits.mean(), f64=(bits <= 64).mean() * 100,
                          f128=(bits <= 128).mean() * 100, by=by))
         print(f"{k:>4} {bits.mean():>9.3f} {rows[-1]['f64']:>7.1f}% "

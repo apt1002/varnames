@@ -13,7 +13,7 @@ bijection is reachable at all. This is research, not yet a finished codec.
 
 What is reachable today: at the canonical grid the best model we have codes
 held-out identifiers at **~48 bits**, fits **~83%** of them in 64 bits and
-**~98%** in 128 bits, for a model of **~53 kB** (word list, block matrix and
+**~98%** in 128 bits, for a model of **~40 kB** (word list, block matrix and
 code together). That is short of the 20 kB goal, and the gap is where the
 remaining research sits — the measured frontier, and what it costs to move along
 it, is in [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
@@ -102,8 +102,9 @@ the fit rate on held-out identifiers
 ([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and the model size in bytes
 with every table charged ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). The
 frontier is a ramp, not a staircase, and it is priced in **kB per point of
-fit** — 4.3–4.6 kB/pt across the grid, 0.47 kB/pt at the testing vocabulary,
-which is why the two are never compared (see the third house rule below).
+fit** — 2–6 kB/pt through the useful 20–32 kB stretch, 13–48 kB/pt above 40 kB,
+and 0.47 kB/pt at the testing vocabulary, which is why the two are never
+compared (see the third house rule below).
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -253,6 +254,7 @@ varnames/
 │   ├── wordlist_budget.py               # word-list size vs k² table budget
 │   ├── words_per_identifier.py          # token-count histogram + Huffman penalty
 │   ├── model_budget.py                  # model size in bytes (word list + tables)
+│   ├── wordlist_order.py                # creation order vs unigram order in a built list
 │   ├── model_fit_rates.py               # held-out fit rates; cost of quantising the tables
 │   ├── k_frontier.py                    # the bytes-for-fit frontier as a curve
 │   ├── budget64_study.py                # 64/128-bit sets: coverage, boundary, generation

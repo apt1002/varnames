@@ -292,16 +292,29 @@ old numbers remain reproducible without it.
       `MATRIX_COMPRESSION`, `PRUNE_WORDS`, `STRUCTURAL_ZEROS`,
       `CODING_OVERHEAD`, `SHARED_CLUSTERS` (C26 settled five seeds at each of
       `k = 32, 64`), `NEWLINE_CLUSTER`, `ENCODING` §5 (C28 on the 10× held-out
-      set).  **Remaining:** `MODEL_BUDGET` (frontier re-sweep with the
-      dictionary term), `BUDGET64_STUDY`, `BREAK_OPEN_PRIOR` (needs a new
+      set).  **Remaining:** `BUDGET64_STUDY`, `BREAK_OPEN_PRIOR` (needs a new
       held-out run), `ENCODING` §6, and the testing-point numbers in
       `SMALL_DICT` (which exist only to exercise scripts).
+      **`MODEL_BUDGET` done:** priced on the arithmetic inventory once
+      (rules + unigram + memberships + block + 2 kB code), which retires the
+      code-side-plus-dictionary sum that double-charged a Huffman bottom stage;
+      the operating point is 39.8 kB at `V = 8192, k = 16` (was quoted 53.5 kB,
+      README corrected), `k = 16` is confirmed as the floor, and
+      `k_frontier.py` now defaults to the full inventory with `--code-side` for
+      the old pricing.
 - [ ] **H8. Charge the dictionary term in every byte table.** *Half done* —
       `k_frontier.py` and `MODEL_BUDGET.md` now include the rule table; the
       pricing in `shared_clusters.py`, `quarter_accounting.py` and the C26–C28
       comparisons still quote code-side bytes.  The verdicts are unaffected
       (they are within-`V`), but any cross-`V` price must carry the term.
-      `docs/MODEL_BUDGET.md` ("What the byte numbers include").
+      `docs/MODEL_BUDGET.md` ("The two model shapes").
+- [ ] **H10. Reconcile the codebook accounting.** *Open* — `ENCODING.md` §5
+      prices a Huffman tree at 2 bits per internal node, while §3 states one
+      byte per code length; the two differ by 3–5 kB on the factorised codebook
+      (`CF` 8.0 kB at 4096/32 on the §5 convention).  The C28 verdict rests on
+      the `q = 2`/`q = 4` *increments*, which are exact either way, but no
+      Huffman total can be set beside the arithmetic totals in `MODEL_BUDGET.md`
+      until one convention is chosen.
 - [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done* — the grid is now
       `V ∈ {4096, 6144, 8192}` (`NUM_PAIRS` 4032, 6080, 8128), with `V = 512`
       kept only to exercise scripts (`docs/SMALL_DICT.md`; nothing is decided

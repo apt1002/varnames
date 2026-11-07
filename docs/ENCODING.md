@@ -531,10 +531,11 @@ costs 11.7–14.9 kB/pt for 0.1–0.3 points.  Since `ENCODING.md` §1–3 choos
 probabilities for the decoder's sake, the `k = 32` gain is real and conditional:
 it exists *because* the product is a Huffman product.
 
-(The byte figures here are code-side plus the model terms of the accounting in
-§5; the dictionary term is charged separately in
+(The byte figures here are the codebook accounting of §5; the dictionary term,
+and the full arithmetic model it belongs to, are in
 [`MODEL_BUDGET.md`](MODEL_BUDGET.md).  Every comparison in this section is
-within one `V`, so the omission does not move the ordering.)
+within one `V`, so the rule table cancels and the omission does not move the
+ordering.)
 
 **The operating point: `V = 8192, k = 16`.**  The frontier measurement moved the
 cheap model down to a coarse `k` at the largest vocabulary, which changes CQF's
