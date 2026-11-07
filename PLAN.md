@@ -316,13 +316,18 @@ old numbers remain reproducible without it.
       comparisons still quote code-side bytes.  The verdicts are unaffected
       (they are within-`V`), but any cross-`V` price must carry the term.
       `docs/MODEL_BUDGET.md` ("The two model shapes").
-- [ ] **H10. Reconcile the codebook accounting.** *Open* — `ENCODING.md` §5
-      prices a Huffman tree at 2 bits per internal node, while §3 states one
-      byte per code length; the two differ by 3–5 kB on the factorised codebook
-      (`CF` 8.0 kB at 4096/32 on the §5 convention).  The C28 verdict rests on
-      the `q = 2`/`q = 4` *increments*, which are exact either way, but no
-      Huffman total can be set beside the arithmetic totals in `MODEL_BUDGET.md`
-      until one convention is chosen.
+- [x] **H10. Reconcile the codebook accounting.** *Settled* — `ENCODING.md` §5's
+      `2(V−k)` is the **bracket skeleton** of the bottom trees (two bits per
+      internal node: one `(` and one `)`; `L` leaves have `L−1` nodes), and its
+      `V log V` is the depth-first leaf list.  §3's one byte per code length is
+      a different *store* of the same information, not a different price; the two
+      cross at `V/k = 64` and the static table wins at the grid (3 kB at
+      8192/16), so a shipped artifact carries lengths.  The two shapes therefore
+      cost the **same** bytes — the Huffman win is ~1–2 bits/identifier for the
+      free terminator, not size.  Residual (new): neither formula charges the
+      **word→left-cluster** map (`V log k` bits) unless C26's shared assignment
+      is used; it cancels in a shape comparison but is missing from any absolute
+      Huffman total.  `docs/ENCODING.md` §5, `docs/MODEL_BUDGET.md`.
 - [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done* — the grid is now
       `V ∈ {4096, 6144, 8192}` (`NUM_PAIRS` 4032, 6080, 8128), with `V = 512`
       kept only to exercise scripts (`docs/SMALL_DICT.md`; nothing is decided

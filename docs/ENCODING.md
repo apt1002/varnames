@@ -279,7 +279,7 @@ CQF = k (2 (q k - 1) + q k log q k) + (2 (V - q k) + V log V)
 W   = k (2 (V - 1)   +  V log V)
 ```
 
-Two notes on the accounting:
+Notes on the accounting:
 
 * **The bottom stage does not grow.** `2(V − qk)` instead of `2(V − k)` *saves*
   `2(q−1)k` bits — a few hundred bytes.  All of CQF's cost is in the top stage,
@@ -289,6 +289,29 @@ Two notes on the accounting:
   what `q = 2` costs**, and doubling `k` roughly quadruples both.  (An earlier
   draft said "a quarter"; that was wrong — `q = 2`'s top stage is 44 % of
   `q = 4`'s.)
+* **What the `2` is: a bracket string.**  A full binary tree with `L` leaves has
+  `L − 1` internal nodes.  Write each internal node as `(… )` around its two
+  children and each leaf as its word index, and the tree becomes a depth-first
+  string.  Keep only the brackets and you have the *shape* in exactly `2(L−1)`
+  bits — enough to recover every code length.  Keep only the indices and you
+  have the *leaf list* in depth-first order — enough to recover the assignment.
+  Either alone is useless; together they reconstruct the tree exactly.  So
+  `2(V−k)` is **two bits per internal node** across all `k` bottom trees, not
+  "two bytes per rule", and `V log V` is the leaf list.
+
+  This is a *compressed* store, and it needs a tree walk at load time.  §3's one
+  byte per code length is the **static** store of the same information, and it is
+  competitive: the bracket form pays `log₂V + 2` bits per leaf (the +2 amortises
+  one internal node per leaf), the table pays `8 + log₂k` (a length plus its
+  cluster map).  They cross at `V/k = 64`; above that the static table is smaller
+  — by 0.4 kB at 4096/32, 3 kB at 8192/16 — and it needs no processing beyond the
+  canonical assignment.  So the figures below are the *reference* (smallest
+  known) store, while a shipped artifact would carry the length table.
+* **One term is missing: the word→left-cluster map.**  The top stage is indexed
+  by the left cluster of the *current* word, and neither formula charges the
+  `V log₂k` bits that map needs; the leaf list only implies the *right*-cluster
+  side.  If C26's shared assignment is adopted, one map serves both and the term
+  is already paid — which is one more reason that idea is attractive.
 * **`V log V` is right, and it is what makes the scheme work.**  An earlier draft
   of this note tried to charge `Σ_j V_j log V_j ≈ V log(V/qk)` instead and to add
   a separate word→cluster map.  That double-charges: with every leaf annotated by
