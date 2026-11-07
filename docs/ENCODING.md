@@ -304,7 +304,7 @@ Notes on the accounting:
   competitive: the bracket form pays `log₂V + 2` bits per leaf (the +2 amortises
   one internal node per leaf), the table pays `8 + log₂k` (a length plus its
   cluster map).  They cross at `V/k = 64`; above that the static table is smaller
-  — by 0.4 kB at 4096/32, 3 kB at 8192/16 — and it needs no processing beyond the
+  — by 0.5 kB at 4096/32, 3 kB at 8192/16 — and it needs no processing beyond the
   canonical assignment.  So the figures below are the *reference* (smallest
   known) store, while a shipped artifact would carry the length table.
 * **One term is missing: the word→left-cluster map.**  The top stage is indexed

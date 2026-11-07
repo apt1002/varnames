@@ -325,7 +325,7 @@ alone gives the assignment; together they reconstruct the tree.
 not a bigger price for the same object, and at the grid it is the cheaper one:
 the bracket form pays `log₂V` bits per leaf where a length table pays 8 bits
 plus `log₂k` for the map.  The crossover is `V/k = 64`; above it the table wins
-by 0.4 kB at 4096/32, 3 kB at 8192/16 and 1 kB at 8192/64 with two maps, and by
+by 0.5 kB at 4096/32, 3 kB at 8192/16 and 1 kB at 8192/64 with two maps, and by
 2.9 / 7.0 kB with C26's shared assignment (one map serves both sides).  What
 both figures omit is the **word→left-cluster** map (another `V log₂k` bits)
 unless the assignment is shared.
