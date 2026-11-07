@@ -22,7 +22,9 @@ grouping considered (an imposed partition would put the expensive unequal merge
 
 Bits are the total Huffman cost over every transition of the counted corpus,
 divided by the number of identifiers.  Bytes use the accounting of
-`docs/CLUSTER_QUARTERS.md`.
+`docs/CLUSTER_QUARTERS.md` for the code tables, plus the word list charged at
+the price the packed file pays for it (`model_size.pack_rules`): the dictionary
+is not free just because every scheme here shares it.
 
 Usage:
     quarter_accounting.py --dir work/tw512ns --k 16 --qs 2,4 --kappa 300
@@ -95,6 +97,7 @@ def main():
     ap.add_argument('--kappa', type=float, default=300.0)
     ap.add_argument('--seed', type=int, default=1)
     args = ap.parse_args()
+    import model_size as msz        # local: model_size imports `huffman` here
 
     M, uni, chars, rules, sym = hf.dense_matrix(args.dir)
     V, nchars = M.shape[0], len(chars)
@@ -140,11 +143,16 @@ def main():
         _, cj, _ = huffman(c[words])
         cf_bot += cj
 
+    frule = [(msz.to_file_id(a, nchars), msz.to_file_id(b, nchars))
+             for _kind, (a, b), _nid in rules]
+    dic = len(msz.pack_rules(frule, V, nchars)[0])
     print(f"{args.dir}: V={V}, k={k}, kappa={args.kappa}, "
           f"N={N:.0f} identifiers, {M_ref.sum():.0f} transitions")
+    print(f"word list {dic} B packed; bytes below are code tables + word list")
     print(f"{'scheme':<18} {'bits/id':>9} {'=-flat':>8} {'bytes':>8}")
-    vb = k * (2 * (k - 1) + k * np.log2(k)) + (2 * (V - k) + V * np.log2(V))
-    vw = k * (2 * (V - 1) + V * np.log2(V))          # the flat table: k*V lengths
+    vb = k * (2 * (k - 1) + k * np.log2(k)) + 8 * dic
+    vw = k * (2 * (V - 1) + V * np.log2(V)) + 8 * dic
+    # the flat table: k*V lengths, plus the shared word list
     print(f"{'flat':<18} {flat_cost / N:>9.3f} {0.0:>8.3f} {vw / 8:>8.0f}")
     _ = vb
 
@@ -180,8 +188,7 @@ def main():
             words = np.flatnonzero(ql == J)
             bot += float(np.sum(c[words] * bot_len[words]))
         cqf = top + bot
-        vbq = (k * (2 * (k * q - 1) + k * q * np.log2(k * q))
-               + (2 * (V - k * q) + V * np.log2(V)))
+        vbq = (k * (2 * (k * q - 1) + k * q * np.log2(k * q)) + 8 * dic)
         print(f"{'CQF q=%d' % q:<18} {cqf / N:>9.3f} {(cqf - flat_cost) / N:>8.3f} "
               f"{vbq / 8:>8.0f}")
         print(f"  top stage {top / N:.3f} bits/id (entropy-optimal "
@@ -191,7 +198,7 @@ def main():
               f"=> net {(avoided - (top - cf_top)) / N:+.3f} bits/id "
               f"for {(vbq - vb) / 8:+.0f} B")
 
-    cfb = k * (2 * (k - 1) + k * np.log2(k)) + (2 * (V - k) + V * np.log2(V))
+    cfb = k * (2 * (k - 1) + k * np.log2(k)) + 8 * dic
     print(f"{'CF':<18} {(cf_top + cf_bot) / N:>9.3f} "
           f"{(cf_top + cf_bot - flat_cost) / N:>8.3f} {cfb / 8:>8.0f}")
     print(f"  cluster step {cf_top / N:.3f}, word step {cf_bot / N:.3f} bits/id")

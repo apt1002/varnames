@@ -540,6 +540,22 @@ def read_yaml(path):
 
 # ------------------------------------------------------------- the binary
 
+def pack_rules(rules, V, nchars):
+    """The Zipf-coded rule table on its own: `(bytes, bits)`.
+
+    Kept separate from `pack` so the other accounting scripts can charge the
+    dictionary the price the file actually pays instead of a formula.  The
+    prior is a function of `V` alone, so the decoder stores no table for it.
+    """
+    prefix = zipf_prefix(V)
+    enc = ArithEncoder()
+    for i, (a, b) in enumerate(rules):
+        total = int(prefix[nchars + 1 + i])
+        for x in (a, b):
+            enc.encode(int(prefix[x]), int(prefix[x + 1]), total)
+    return enc.finish(), enc.bits
+
+
 def pack(m, depth_bits=None, packed_rules=True):
     """Pack the model into MODEL_FORMAT.md §3.  Returns (bytes, sections)."""
     V, k, q = m['V'], m['k'], m['q']
@@ -548,15 +564,8 @@ def pack(m, depth_bits=None, packed_rules=True):
     sections = {}
 
     # the rule table comes first because its length is stored
-    prefix = zipf_prefix(V)
     if packed_rules:
-        enc = ArithEncoder()
-        for i, (a, b) in enumerate(m['rules']):
-            total = int(prefix[nchars + 1 + i])
-            for x in (a, b):
-                enc.encode(int(prefix[x]), int(prefix[x + 1]), total)
-        rules_data = enc.finish()
-        rule_bits = enc.bits
+        rules_data, rule_bits = pack_rules(m['rules'], V, nchars)
     else:
         bw = BitWriter()
         width = ceil_log2(V)

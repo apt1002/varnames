@@ -2,7 +2,9 @@
 
 Status: **succeeded (as a budget rule).**  The word list and the block matrix
 are the two things the model spends numbers on, and at matched model size the
-larger word list always wins.  Buy words first, clusters last.
+larger word list always wins.  Buy words first, clusters last.  Measured in the
+shipped file the same rule holds in bytes, and the word list turns out to be
+two thirds of the file at the operating point.
 
 ## The question
 
@@ -40,6 +42,39 @@ continues to 50.00 at `k = 128` (store 24,576), 48.96 at `k = 256` (73,728),
 47.42 at `k = 512` (270,336) and 45.64 at `k = 1,024` (1,056,768) — see the
 `k`-scaling table in [`CLUSTER_WORDS.md`](CLUSTER_WORDS.md).
 
+## The same question in the shipped file's bytes
+
+`store` counts numbers; the shipped format stores two of the same objects as
+bytes, and `scripts/model_size.py` measures them (`MODEL_BUDGET.md` §7).  At the
+cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
+
+| `V` | best `k` | word list | labels | depths | header | file | bits/id | fit ≤64 | fit ≤128 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 512 | 32 | 897 | 320 | 980 | 80 | 2,277 | 65.706 | 60.0 % | 94.5 % |
+| 4,096 | 32 | 9,825 | 2,560 | 3,220 | 80 | 15,685 | 48.926 | 80.4 % | 98.3 % |
+| 6,144 | 24 | 15,388 | 3,840 | 4,215 | 80 | 23,523 | 46.781 | 82.9 % | 98.7 % |
+| 8,192 | 32 | 21,145 | 5,120 | 5,780 | 81 | **32,126** | **45.221** | **84.8 %** | **98.9 %** |
+
+* **The word list is the largest object, and it grows to two thirds of the
+  file.**  39 % of the file at `V = 512`, 63 % at 4,096, 65 % at 6,144 and 66 %
+  at 8,192 (21,145 of 32,126 B).  The rule "buy words first, clusters last" is
+  therefore a statement about the biggest single term, not a tie-break.
+* **At a fixed byte budget the largest `V` that fits still wins.**  The
+  cheapest file measured at `V = 8,192` is 29,463 B (`k = 8`: 21,145 of rules,
+  5,120 of bottom depths, 3,072 of labels), and at `V = 6,144` it is 22,550 B.
+  So a 23.5 kB budget cannot hold an 8,192 file at any `k` measured, and the
+  best 6,144 file there is 46.781 bits at 82.9 %; the best 4,096 file is 48.926
+  at 80.4 % for 15.7 kB.
+  The measured ladder is 512 → 4,096 → 6,144 → 8,192 with the bytes going
+  2.3 → 15.7 → 23.5 → 32.1 kB and the bits 65.7 → 48.9 → 46.8 → 45.2: the first
+  step is worth 16.8 bits for 13.4 kB, and the later ones 2.2 and 1.6 bits for
+  7.8 and 8.6 kB, i.e. 3.7 and 5.5 kB per bit.
+* **The leftover still goes to `k`, but it has stopped paying much.**  Within
+  `V = 8,192`, `k` from 8 to 32 buys 0.88 bits and 1.1 fit points for 2,663 B;
+  from 32 to 64 it gives back 0.13 bits for another 2,964 B (`MODEL_BUDGET` §7).
+  So the order of the two knobs is unchanged by the byte accounting: words
+  first, then the `k` the remaining bytes can justify, which is 32 at 8,192.
+
 ## What it shows
 
 * **The word list is the dominant lever.**  Merely moving from `V = 4,096` to
@@ -63,6 +98,10 @@ continues to 50.00 at `k = 128` (store 24,576), 48.96 at `k = 256` (73,728),
   dictionary's own rules (~`2(V − 64)` integers, charged as bytes in
   [`MODEL_BUDGET.md`](MODEL_BUDGET.md)).  Adding it (`k² + 4V`) moves every
   point right, but the frontier still picks the largest `V` at every budget.
+  Measured, the packed dictionary at `V = 8,192` is 21,145 B rather than the
+  16,256 B the "one byte per stored number" estimate gives (2 × 8,128 integers)
+  — the rule indices are the one place the model pays more than a byte per
+  number — and the ordering survives that too (measured section above).
 
 ## The removable-word refinement
 

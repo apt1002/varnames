@@ -22,7 +22,10 @@ Controls reported for each `k`:
 
 Bytes use the accounting of `docs/CLUSTER_QUARTERS.md`: bit-coded parts in
 bits/8, stored numbers at one byte each (the quantisation of
-`model_fit_rates.py`).  Membership is `V log2 k` bits per side.
+`model_fit_rates.py`).  Membership is `V log2 k` bits per side.  The word list
+is charged at the price the packed file pays for it (`model_size.pack_rules`),
+not at a formula: the dictionary is the largest object in the model, and a
+`V log2 V` estimate misprices it by kilobytes.
 
 Usage:
     shared_clusters.py --dir work/tw512ns --ks 16 --stride 100 --half-weight 1
@@ -39,6 +42,7 @@ import hfactor_words as hf
 import cluster_words as cw
 import cluster_substrings_lib as csl
 import model_fit_rates as mfr
+import model_size as msz
 
 
 def profiles(M_ref):
@@ -60,9 +64,9 @@ def cluster_shared(M_ref, w, k, rng):
     return labels
 
 
-def model_bytes(V, k, n_assign):
+def model_bytes(V, k, n_assign, dict_bytes=0.0):
     """Word list + unigram + memberships + block, in bytes."""
-    word = (2 * (V - k) + V * np.log2(V)) / 8.0
+    word = float(dict_bytes)
     uni = float(V)
     mem = n_assign * V * np.log2(k) / 8.0
     blk = float(k * k)
@@ -105,8 +109,13 @@ def main():
           f"fit<=64 {100 * (bf <= 64).mean():.1f}%  "
           f"fit<=128 {100 * (bf <= 128).mean():.1f}%")
     ks = [int(x) for x in args.ks.split(',')]
+    frule = [(msz.to_file_id(a, nchars), msz.to_file_id(b, nchars))
+             for _kind, (a, b), _nid in rules]
+    dict_bytes = len(msz.pack_rules(frule, V, nchars)[0])
+    print(f"word list: {dict_bytes} B packed (Zipf-coded rules)")
     print("asymmetric bytes: " +
-          ", ".join(f"k={k}: {model_bytes(V, k, 2)['total']:.0f} B" for k in ks))
+          ", ".join(f"k={k}: {model_bytes(V, k, 2, dict_bytes)['total']:.0f} B"
+                    for k in ks))
 
     hdr = (f"  {'model':<16} {'k':>4} {'bits':>8} {'fit64':>7} {'fit128':>7} "
            f"{'bytes':>7} {'D asym':>7}")
@@ -117,7 +126,7 @@ def main():
         rng = np.random.default_rng(args.seed + 1)
         rcl, _ = cw.cluster_axis(M_ref, k, rng, 1)
         bits, D, asym = score(M_ref, lcl, rcl, k, seqs)
-        bb = model_bytes(V, k, 2)['total']
+        bb = model_bytes(V, k, 2, dict_bytes)['total']
         print(f"  {'asymmetric':<16} {k:>4} {bits.mean():>8.3f} "
               f"{100 * (bits <= 64).mean():>6.1f}% "
               f"{100 * (bits <= 128).mean():>6.1f}% {bb:>7.0f} {asym:>7.3f}")
@@ -125,7 +134,7 @@ def main():
             rng = np.random.default_rng(args.seed)
             lab = cluster_shared(M_ref, w, k, rng)
             bits2, D2, asym2 = score(M_ref, lab, lab, k, seqs)
-            bs = model_bytes(V, k, 1)['total']
+            bs = model_bytes(V, k, 1, dict_bytes)['total']
             print(f"  {'shared w=%.3f' % w:<16} {k:>4} {bits2.mean():>8.3f} "
                   f"{100 * (bits2 <= 64).mean():>6.1f}% "
                   f"{100 * (bits2 <= 128).mean():>6.1f}% {bs:>7.0f} "
@@ -136,7 +145,7 @@ def main():
         rng = np.random.default_rng(args.seed + 1)
         rcl, _ = cw.cluster_axis(M_ref, k, rng, 1)
         bits, D, asym = score(M_ref, lcl, rcl, k, seqs)
-        bb = model_bytes(V, k, 2)['total']
+        bb = model_bytes(V, k, 2, dict_bytes)['total']
         print(f"  {'asymmetric 2k':<16} {k:>4} {bits.mean():>8.3f} "
               f"{100 * (bits <= 64).mean():>6.1f}% "
               f"{100 * (bits <= 128).mean():>6.1f}% {bb:>7.0f} {asym:>7.3f}")

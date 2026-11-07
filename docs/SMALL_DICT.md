@@ -16,9 +16,9 @@ the grid sit at very different prices:
 | point | frontier price | a 256 B saving is worth |
 |---|---:|---:|
 | `V = 512`, `k = 16` | 0.47 kB/pt | 0.54 pt |
-| `V = 4096`–`8192` | 2–6 kB/pt (4.7 at 4096, `k = 32`) | 0.04–0.13 pt |
+| `V = 4096`–`8192` | 2.4–5.5 kB/pt (2.5 at 4096, `k = 32`; 3.8 for 4096 → 8192) | 0.05–0.10 pt |
 
-Per byte, the grid values a save *less*, by an order of magnitude — so the same
+Per byte, the grid values a save *less*, by four to ten times — so the same
 percentage saving is worth more at 512 if it is worth anything at all.  What
 changes the verdict is the size of the model the percentage applies to: the
 memberships are `2V·log₂k` bits, so dropping one of the two assignments frees
@@ -47,7 +47,8 @@ question can only be settled at 512, it is not settled.  Build the dictionary
   `quarter_codes.py`.  Bugs of the kind that produce absurd numbers at any size —
   a duplicated stop, a transposed index, a wrong byte formula — show up
   immediately, and the byte formulas can be checked against a hand-computable
-  table (`V = 512, k = 16`: flat code 11,260 B, CF 888 B, CQF `q = 2` 1,140 B).
+  table (`V = 512, k = 16`, code tables plus the 897 B word list: flat 12,157 B,
+  CF 1,085 B, CQF `q = 2` 1,341 B).
 * **Checking a mechanism identity.**  CQF's claim that it recovers exactly the
   `q − 1` most expensive in-cell merges is an identity, so it can be verified at
   512 and used at the grid.  What does *not* transfer is the *fraction*.
@@ -205,17 +206,21 @@ identifier), `kappa = 300`.
 
 | scheme | bits/identifier | vs flat | model bytes |
 |---|---:|---:|---:|
-| flat (yardstick) | **65.371** | — | 11,260 |
-| CF | 69.250 | +3.878 | 888 |
-| CQF `q = 2` | 68.548 | +3.177 | 1,140 |
-| CQF `q = 4` | 68.072 | +2.701 | 1,708 |
+| flat (yardstick) | **65.371** | — | 12,157 |
+| CF | 69.250 | +3.878 | 1,085 |
+| CQF `q = 2` | 68.548 | +3.177 | 1,341 |
+| CQF `q = 4` | 68.072 | +2.701 | 1,917 |
+
+The bytes include the word list at the price the packed file pays for it (897 B
+for this vocabulary; `quarter_accounting.py` now charges it, so the code tables
+are 188 / 444 / 1,020 B and the rest is the same dictionary in every row).
 
 Mechanism, checked to three decimals against the identity:
 
 | q | top stage | CF cluster step | increase | merges avoided | net | bytes |
 |---|---:|---:|---:|---:|---:|---:|
-| 2 | 32.689 | 24.207 | +8.482 | 9.184 | **+0.702** | +252 |
-| 4 | 40.470 | 24.207 | +16.263 | 17.440 | **+1.177** | +820 |
+| 2 | 32.689 | 24.207 | +8.482 | 9.184 | **+0.702** | +256 |
+| 4 | 40.470 | 24.207 | +16.263 | 17.440 | **+1.177** | +832 |
 
 The Huffman rounding on the flat trees is 0.034 bits/token (0.31 per identifier),
 so these are essentially rounding-free: the `kappa` prior makes every cell
