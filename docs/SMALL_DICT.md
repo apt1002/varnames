@@ -16,14 +16,14 @@ the grid sit at very different prices:
 | point | frontier price | a 256 B saving is worth |
 |---|---:|---:|
 | `V = 512`, `k = 16` | 0.47 kB/pt | 0.54 pt |
-| `V = 4096`–`8192` | 4.3–4.6 kB/pt | 0.06 pt |
+| `V = 4096`–`8192` | 2–6 kB/pt (4.7 at 4096, `k = 32`) | 0.04–0.13 pt |
 
 Per byte, the grid values a save *less*, by an order of magnitude — so the same
 percentage saving is worth more at 512 if it is worth anything at all.  What
 changes the verdict is the size of the model the percentage applies to: the
 memberships are `2V·log₂k` bits, so dropping one of the two assignments frees
 256 B at 512 (13% of a 1,980-byte model, 0.54 pt) and 2.5–6.1 kB at the grid
-(15–17% of a 14–40 kB model, 0.6–1.4 pt), while the constraint that buys it
+(11–13% of a 22–48 kB model, ≈0.5 pt), while the constraint that buys it
 costs 1.2 pt of fit at 512 and only 0.1–0.6 pt once the clustering is fine
 enough.  A small model therefore shows a *loss* on a
 trade that is a *gain* at every canonical point — which is why a decision taken
