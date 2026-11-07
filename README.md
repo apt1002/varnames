@@ -111,10 +111,10 @@ The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
 furthest bottom-left. Filled points are the arithmetic reference at `k` = 4…128
-for each vocabulary (the small numbers are `k`); hollow points are the shipped
-Huffman code at its operating cell. Every point charges the terminator; the
-shipped code's zero-weight stop gives back about two bits per identifier on top,
-which the size oracle will add.
+for each vocabulary (the small numbers are `k`); hollow points are the measured
+Huffman cells — CF, and CQF as a candidate (it needs a second label set). Every
+point charges the terminator; the Huffman code's zero-weight stop gives back
+about two bits per identifier on top, which the size oracle will add.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -217,7 +217,7 @@ varnames/
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
-│   ├── CLUSTER_QUARTERS.md              # quarters: buy back the factorisation loss (q = 2)
+│   ├── CLUSTER_QUARTERS.md              # quarters: cheaper than k, but a second label set
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
