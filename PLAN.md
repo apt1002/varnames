@@ -328,6 +328,49 @@ old numbers remain reproducible without it.
       **word→left-cluster** map (`V log k` bits) unless C26's shared assignment
       is used; it cancels in a shape comparison but is missing from any absolute
       Huffman total.  `docs/ENCODING.md` §5, `docs/MODEL_BUDGET.md`.
+- [ ] **H11. A complete review of the model-size accounting.** *Planned.*
+      **Why.** Three estimation errors in a week: the 53.5 kB total that added a
+      Huffman bottom stage to the rule table (13.7 kB of double charge); the
+      missing word→left-cluster map; and the "bracket vs length table" claim,
+      which was wrong because the leaf list can be dropped altogether (see
+      below).  Formulas drift; a serialised artefact cannot.  So the review is
+      not another audit of the same arithmetic — it replaces the arithmetic with
+      a measurement.
+      **The prize.** With the bracket skeleton (2 bits per internal node) plus
+      the cluster map (`log₂k` bits per word) and a *derivable* leaf order, the
+      codebook costs `2 + log₂k` bits per leaf instead of the 16 bits (unigram +
+      two maps + block) the arithmetic model spends: 6.1 kB against 16.6 kB at
+      `V = 8192, k = 16`, giving a ~29 kB model at the measured zero-stop fit
+      (~85 %) instead of 39.8 kB at 82.5 %.  Everything below exists to confirm
+      or kill that number.
+      **Order.**
+      1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`,
+         serialise the model in the proposed on-disk format, report actual bytes
+         per section, decode a held-out identifier and assert losslessness, and
+         report the code's real bits/identifier from the decoded artefact.  From
+         then on every published byte comes from this, not from a formula.
+      2. One **inventory table** in `MODEL_BUDGET.md`: object / who stores it /
+         how / bytes at 4096/16, 8192/16, 8192/64 / derivable at load? / charged
+         where.  The checklist is rules, unigram, left map, right map, block,
+         bottom codebook, top codebook, program code, terminator, padding.
+      3. The **ordering question** (the one assumption behind `2 + log₂k`):
+         measure `Σ w·d` for the Huffman length multiset assigned in (a) weight
+         order — optimal, (b) creation order — the free rule, (c) canonical by
+         id.  If (b) is within ~0.05 bit/identifier of (a), the leaf list is
+         unnecessary; if not, the static length table (`8 + log₂k`) is the
+         fallback and the extra bits are the price of not storing a permutation.
+      4. **Re-derive** every table from the oracle: `MODEL_BUDGET` (frontier),
+         `ENCODING` §5 (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`,
+         `SHARED_CLUSTERS` and the C26–C28 pricing, `PRUNE_WORDS`,
+         `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  H8 folds into this.
+      5. **Fit-rate convention.**  The shipped criterion is Huffman with the
+         zero-weight stop; re-check the choices that were made on arithmetic
+         bits (`k = 16`, `q = 2`, C26 at `k = 32`) under it, and say which
+         could move.
+      6. **Retire** the superseded numbers: README's status line, and any table
+         not produced by the oracle.
+      The review's outcome is a single number per model, traceable to a file the
+      decoder can read.
 - [ ] **H7. Rationalise the `(V, k)` grid.** *Partly done* — the grid is now
       `V ∈ {4096, 6144, 8192}` (`NUM_PAIRS` 4032, 6080, 8128), with `V = 512`
       kept only to exercise scripts (`docs/SMALL_DICT.md`; nothing is decided
