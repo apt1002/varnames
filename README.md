@@ -167,6 +167,14 @@ Along the way, we tried a lot of things that didn't work:
 - **The square-root (Hellinger) factorisation of the table.** 3.5–4 bits behind
   co-clustering at equal store
   ([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)).
+- **Arithmetic coding.** The obvious alternative, and the shape the fit tables
+  are measured on: store the probabilities and spend `−log₂ P(b|a)` per token.
+  It must publish the probabilities — unigram, cluster maps and block, 39.8 kB
+  at `V = 8192, k = 16` — where the prefix code publishes the lengths they imply
+  (32.5 kB), and it cannot use the free terminator that a 64-bit integer hands a
+  prefix code. Bits are level within about a bit, so the smaller object wins
+  ([`docs/CODING_OVERHEAD.md`](docs/CODING_OVERHEAD.md),
+  [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §5.2).
 - **Cluster quarters `q = 4`.** No better than `q = 2` for 3.2× the bytes
   ([`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)).
 
@@ -348,8 +356,9 @@ fraction costs in kilobytes. Reports therefore quote bits **and** the fit rate,
 and anything that trades one for the other is priced against the local frontier
 slope in kB per point of fit (see the tables in
 [`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)). Bits alone are also the
-wrong success metric when the report is about *generating* identifiers: the "hit rate"
-of a generator measures memorisation of the training corpus, not compression.
+wrong success metric when the report is about *generating* identifiers: the
+"hit rate" of a generator measures memorisation of the training corpus, not
+compression.
 
 ## Licensing, provenance and authorship
 

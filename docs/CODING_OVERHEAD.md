@@ -14,9 +14,12 @@ identifier *ahead* of arithmetic and lifts the 64-bit fit rate by ~1.5 points.
 `scripts/words_per_identifier.py`, run on the three grid dictionaries
 (`work/tw4096ns`, `tw6144ns`, `tw8192ns`), `kappa = 300`, held-out validation at
 stride 10 (`n = 42,268` identifiers).  Because the `assoc` transition depends on
-the left *cluster* only, a per-cluster Huffman tree is exactly realisable, and
-its code lengths are derivable from the stored `(c, D)` at load time — so the
-codebook costs no storage.
+the left *cluster* only, a per-cluster Huffman tree is exactly realisable.  In
+the arithmetic accounting its code lengths are derivable from the stored
+`(c, D)` at load time, so the codebook costs no storage *there*; the published
+model stores the lengths instead of the probabilities (`ENCODING.md` §3), and
+`MODEL_BUDGET.md` §5 prices that object.  Nothing below depends on which
+accounting is used: the bits are the same either way.
 
 ## Words per identifier
 
@@ -112,8 +115,14 @@ The only difference in startup work is `k` trees of `V` leaves, versus `k` trees
 of `k` leaves plus `k` trees totalling `V` leaves.
 
 Consequence for the 64-bit set: the factored code *lowers* the fit rate by
-0.4–0.9 points, whereas the flat code raised it by 0.2–0.3.  If a Huffman coder
-is wanted, use **one tree per left cluster over the joint**, not two trees.
+0.4–0.9 points, whereas the flat code raised it by 0.2–0.3.  On bits alone the
+answer would be **one tree per left cluster over the joint**, not two trees.
+On bytes it cannot be: that table is `k·V` lengths, 245 kB at `V = 8192, k = 16`
+in the bracket form and ~105 kB as a depth table, against 15.5 kB for the
+factored code.  Publishing the code therefore decides in favour of the
+factored product and buys back the difference with quarters
+([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)); `MODEL_BUDGET.md` §5–6 carries
+the two shapes' bytes.
 
 ## The zero-weight stop changes the verdict
 
@@ -172,17 +181,27 @@ lengths suggests.
   1.8 bits, of which the rounding takes back 0.73–0.78; the net is a full bit in
   Huffman's favour and ~1.5 points of fit.  That is why the shipped code is
   Huffman with a zero-weight stop, not arithmetic, and why `ENCODING.md` §2
-  spends so long on the terminator.
+  spends so long on the terminator.  (This cell is the *flat* code; the
+  factored code's zero-stop figure is unmeasured, and should land about a bit
+  ahead of the arithmetic reference rather than two — `MODEL_BUDGET.md` §5.3.)
 * **Factor first, code second — or don't factor at all.**  Coding the model's
-  two stored factors in two Huffman steps multiplies the rounding by ~7.  The
-  rounding is the price of the *code*, not of the model, so the cheap answer is a
-  single tree per left cluster over the joint transition, which the stored
-  `(c, D)` already define.
-* Practical read: the choice between Huffman and arithmetic is **not** a size
-  argument.  Arithmetic remains simpler to frame (a cyclic code with the stop as
-  zeros beyond the target length); Huffman needs a tree per left cluster and, as
-  the next section shows, is worth about a bit — which is what the standard
-  takes.
+  two stored factors in two Huffman steps multiplies the rounding by ~7, because
+  a product of two prefix codes is not a prefix code for the joint.  On bits the
+  cheap answer is a single tree per left cluster over the joint transition,
+  which the stored `(c, D)` already define; on bytes that tree cannot be
+  published, so the product ships and quarters buy part of the rounding back.
+* Practical read: when this note was written the choice looked like a matter of
+  taste — "not a size argument", arithmetic simpler to frame.  That was wrong,
+  and `MODEL_BUDGET.md` §5.2 is where it shows: arithmetic publishes the
+  probabilities (unigram, cluster maps, block: 39.8 kB at `V = 8192, k = 16`),
+  while the prefix code publishes the lengths those probabilities imply
+  (32.5 kB; 36.9 kB with both maps counted alike, still 3 kB less).  Bits are
+  level, bytes are not, and the terminator only helps the prefix code.
+* Correction to two conclusions above, in hindsight.  "Not a size argument" is
+  false once the published object is priced, and "use one tree over the joint,
+  not two" is a bits-only verdict that the codebook forbids.  The shipped answer
+  is Huffman with a zero-weight stop *and* the factored code: the flat code is
+  the yardstick, not the product (`ENCODING.md` §4).
 
 ## Reproducing
 
