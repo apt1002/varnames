@@ -255,24 +255,24 @@ Neither idea changes how a codeword is written; both are written up separately.
 
 * **Cluster quarters** ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)) split each
   right cluster into `q` finer cells, so the top stage has `q·k` leaves instead
-  of `k`.  The encoding is unchanged — this note with `k` replaced by `qk` — but
-  the two sides then have different label sets, which a shared cluster
-  assignment does not.  That is why the model file carries one count and why
-  shipping `q = 2` is open, even though it wins on bits and bytes.
+  of `k`.  The encoding is unchanged: this note with `q·k` in place of `k` in
+  the top stage, and nothing else.  It is adopted at `q = 2`, and the label set
+  is still one set: a word's label is its cell, and its cluster is that label
+  divided by `q` (`MODEL_FORMAT.md` §1).
 * **Codesigning the assignment** ([`CODESIGN.md`](CODESIGN.md)) chooses the
   clustering and the trees together, so it changes which labels exist and, in
   general, how many (`k` may grow).  That is a generation question: a decoder
   cannot tell a codesigned model from any other model with the same `V` and `N`.
 
-An implementation of §§2–4 decodes a model built either way; the first is a
-change of structure, and only in its labels.
+An implementation of §§2–4 decodes a model built either way: the first changes
+only the label space, the second only which labels exist.
 
 ## 6. Open questions
 
-* Which tables ship: word list, one or two cluster assignments, `D`, and the
-  code lengths.  Does the standard fix `V`, `k` and the corpus, or publish a
-  family?  The container is settled — the file format and its binary form are
-  specified in [`MODEL_FORMAT.md`](MODEL_FORMAT.md).
+* Which tables ship: word list, the cell map (and the `q` that coarsens it into
+  clusters), `D`, and the code lengths.  Does the standard fix `V`, `k` and the
+  corpus, or publish a family?  The container is settled — the file format and
+  its binary form are specified in [`MODEL_FORMAT.md`](MODEL_FORMAT.md).
 * The reserved `\n` clusters (`NEWLINE_CLUSTER.md`) interact with this: a
   dedicated start/end cell makes the first and last trees tiny and exact, and
   removes the stop from the cells whose code lengths it currently distorts.

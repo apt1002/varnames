@@ -1,13 +1,15 @@
 # Cluster quarters
 
-Status: **`q = 2` wins on bits and bytes, `q = 4` is rejected; whether `q = 2`
-can ship is open** — it needs a second label set, which the adopted structure
-does not have ("The structural cost" below).  The "quarter" idea
-buys back part of the word-step rounding loss by splitting each right cluster
-into `q` finer cells.  The name is historical: a quarter is *any* finer cell, so
-`q = 2` gives halves.  The idea changes the top stage from `k` leaves to `q·k`
-and leaves the encoding untouched (`ENCODING.md` §§2–4); the accounting, the
-measurements and the decision rule are below.
+Status: **`q = 2` is adopted, `q = 4` is rejected.**  The "quarter" idea buys
+back part of the word-step rounding loss by splitting each right cluster into `q`
+finer cells.  The name is historical: a quarter is *any* finer cell, so `q = 2`
+gives halves.  The idea changes the top stage from `k` leaves to `q·k` and leaves
+the encoding untouched (`ENCODING.md` §§2–4); the accounting, the measurements
+and the price are below.  The model file carries the cells as one label per word
+(`MODEL_FORMAT.md`), which costs 1.2 kB at the operating point: the cells of this
+build are subtrees of the Huffman tree, not of the canonical tree a depth-only
+file implies, so the 26-byte cut-point derivation does not apply ("The structural
+cost" below).
 
 The factorised model needs `P(cluster | cluster)` before `P(word | cluster)`.
 The flat model needs a tree per left cluster over all `V` words, i.e. `k` trees
@@ -344,12 +346,27 @@ leaves:
 Paired against CF: arithmetic `−1.260 ± 0.005` bits / `+0.6 ± 0.0` pt; CQF `q = 2`
 `−1.095 ± 0.006` / `+0.9 ± 0.1` pt; CQF `q = 4` `−1.167 ± 0.006` / `+1.0 ± 0.1`.
 
-So at the operating point CQF `q = 2` costs **252 bytes** and buys 0.9 points
-over CF, or **0.3 points over arithmetic decoding at 0.84 kB/pt**.  It is the
-cheapest fit point in the whole study — cheaper than anything the `k` or `V`
-directions offer — and `q = 4` is again dominated (same fit, 3.3x the bytes).
-This is the cell that justifies shipping CQF at all; the `k = 32` cell above is
-the second-best case, and above `k = 32` it is not worth the tables.
+So at the operating point CQF `q = 2` costs **252 bytes** in this accounting and
+buys 0.9 points over CF, or **0.3 points over arithmetic decoding at
+0.84 kB/pt**.  On the accounting's price it is the cheapest fit point in the
+whole study — cheaper than anything the `k` or `V` directions offer — and `q = 4`
+is again dominated (same fit, 3.3× the bytes).  This is the cell that justifies
+adopting CQF at all; the `k = 32` cell above is the second-best case, and above
+`k = 32` it is not worth the tables.
+
+The 252 bytes are real in this accounting's terms and not in the model file's.
+The accounting stores each tree's topology, a bracket string plus a leaf list, so
+a cell is a subtree of what is stored and `q − 1` cut points name it.  A file
+stores depths instead — a third of the size (`MODEL_BUDGET.md` §3) — and a depth
+list plus the canonical rule reconstructs the *canonical* tree, whose subtrees
+are not this build's cells.  The published file therefore stores one cell label
+per word: two bits more than the cluster label it replaces (5 against 4 at the
+operating point), 1,024 B, plus 160 B of extra top depths, so **1,184 B is the
+shipped price** (`MODEL_FORMAT.md` §3).  That is 1.3 kB/pt over CF, still at the
+cheap end of the frontier's 1–6 kB/pt, and it puts CQF below the arithmetic
+reference on bytes *and* above it on fit (33.7 kB / 82.8 % against 39.8 kB /
+82.5 %).  Recovering the 252 B needs a build that cuts the canonical tree rather
+than truncating the Huffman one, which is a different code and unmeasured.
 
 This cell also settles the mechanism question the `k = 32` cell left ambiguous.
 Here CQF's mean bits are *worse* than arithmetic decoding (47.891 against
@@ -461,60 +478,61 @@ points — which is why both are always reported.
 
 ## The structural cost: it refines one side only
 
-Every model in this repository has had **one label set**.  The adopted structure
-says so twice — `k` bottom trees with `V` leaves between them, and `k` top trees
+Every model in this repository before this one had **one label set**.  Clusters
+are shared, and that is what lets `k` mean one thing on both sides of the
+transition: `k` word trees with `V` leaves between them, and `k` cluster trees
 with `k` leaves each, so the number of trees equals the number of leaves in a
-row.  Clusters are shared, and that is what lets `k` mean one thing on both
-sides of the transition.
+row.
 
-CQF breaks the symmetry.  Each *right* cluster is split into `q` cells, so the
-right-hand alphabet is `qk` while the left-hand alphabet stays `k`: the top
-stage is `k` trees of `qk` leaves, not `qk` of `qk`.  The refinement is nested
-inside each right cluster, so the cell vocabulary is a second label set laid
-over the first.
+CQF breaks the symmetry of the **code**.  Each *right* cluster is split into `q`
+cells, so the right-hand alphabet is `qk` while the left-hand alphabet stays `k`:
+the top stage is `k` trees of `qk` leaves, not `qk` of `qk`.  The refinement is
+nested inside each right cluster, and that is where the gain comes from — a cell
+can pair with a *different* cluster's survivor in the top tree, which a finer
+shared clustering cannot do without also making the left context finer.
 
-That is a real cost, and it has three prices, which are not the same number:
+It does not need a second **assignment**.  Each word carries one label, its cell;
+its cluster is that label divided by `q`.  So the model file stores one map, one
+bit wider, and recovers both stages from it and the two counts (`MODEL_FORMAT.md`
+§1).  What is paid for is the width, not a second table.
 
-* **252 B, as measured above.**  This is the price *if* the cells are derived
-  from the plain word tree rather than stored — a cell is a subtree, so `q − 1`
-  boundaries per cluster (~50 B) name it and the top stage grows by 160 B.  It
-  is the cheapest reading, and it needs an extra rule in the model format: the
-  reader must reconstruct the subdivision from the tree's canonical leaf order.
-* **~1.3 kB, with the cells stored as a map.**  One `⌈log₂ qk⌉`-bit label per
-  word is 1,024 B at `q = 2`, and the top stage is 320 B: no extra format rule,
-  and a straightforward model file with two label sets.
-* **2,816 B, with the label set kept shared.**  `k` becomes `qk` on both sides,
-  i.e. the plain factored model at twice the clusters: 42,571 B against
+Three prices were on the table, and they are not the same number:
+
+* **252 B, in the accounting above.**  The accounting stores each tree's
+  *topology* — a bracket string plus a leaf list — so a cell is a subtree of what
+  is stored, and `q − 1` cut points per cluster (~26 B) name it, with the top
+  stage growing 256 B and the bottom brackets shrinking 4 B.
+* **1,184 B, with the cell stored as a label.**  One `⌈log₂ qk⌉`-bit label per
+  word is 1,024 B at `q = 2`, which is one bit more per word than the cluster
+  label it replaces, and the top stage is 320 B against 160 B: no format rule,
+  and no topology in the file.
+* **2,816 B, with the label set made symmetric.**  `k` becomes `qk` on both
+  sides, i.e. the plain factored model at twice the clusters: 42,571 B against
   39,755 B at `V = 8192`, for +0.3 points on the arithmetic reference.  The
   factored equivalent is unmeasured, but this is the only option that needs no
   format change at all.
 
-So the ordering is stark: the symmetric route costs about eleven times the
-bytes of the measured variant, for about a third of its gain (0.3 arithmetic
-points against 0.9 measured).  The asymmetry is not a
-detail of the accounting — it is where the gain comes from.  A cell is a
-right-hand-only refinement, so it can pair with a *different* cluster's survivor
-in the top tree, which a finer shared clustering cannot do without also making
-the left context finer.
+The shipped file takes the **second**, for a reason the accounting cannot see: it
+stores depths, not topology.  A depth list plus the canonical rule of
+`ENCODING.md` §3 reconstructs the *canonical* tree, and this build's cells are
+subtrees of the *Huffman* tree.  The two trees have the same shape and different
+leaves, so a cut point does not name a cell — a check on simulated cluster builds
+found a quarter of the cells contiguous in the canonical leaf order, and fewer
+still subtrees.  Cutting the canonical tree instead of truncating the Huffman
+build would make the 252 B available again, but that is a different code and
+needs its own measurement (`MODEL_FORMAT.md` §7).
 
-The model file in [`MODEL_FORMAT.md`](MODEL_FORMAT.md) carries one count, `N`,
-and therefore **cannot express CQF**.  That is deliberate: the structure was
-adopted with a shared assignment, and the format follows the structure.  So the
-choice is not settled by the 252 B; it is a choice between
-
-* one label set, and CQF is not shippable; or
-* two label sets, which the format must say explicitly, and then CQF's 252 B
-  (with the tree-subdivision rule) or ~1.3 kB (without it) is the price.
-
-The open question is recorded in `MODEL_FORMAT.md` §7 and in `PLAN.md`.
+So the ordering is stark: the symmetric route costs about eleven times the bytes
+of the shipped one, for about a third of its gain (0.3 arithmetic points against
+0.9 measured).  The asymmetry is not a detail of the accounting — it is where the
+gain comes from.
 
 **Outcome.** On bits and bytes, against the rule in step 6: `q = 2` wins and
-`q = 4` loses.  At the operating point (`V = 8192, k = 16`) `q = 2` buys 0.9 fit
-points for 252 bytes over CF, and is 0.3 points *ahead* of arithmetic decoding at
-0.84 kB/pt — the cheapest fit point in the study.  `q = 4` buys nothing further
-for 3.3× the bytes, and above `k = 32` neither pays.
-
-Whether `q = 2` can **ship** is the structural question above, and it is not
-settled: the model file carries one label set, so CQF is a candidate until that
-is decided.  The encoding itself is unchanged throughout — `q` only multiplies
-`k` in the top stage (`ENCODING.md` §5).
+`q = 4` loses, so **`q = 2` is adopted**.  At the operating point
+(`V = 8192, k = 16`) it buys 0.9 fit points for 1,184 bytes over CF — 1.3 kB/pt,
+at the cheap end of the frontier's 1–6 — and it is both smaller and better than
+arithmetic decoding at the same cell (33.7 kB / 82.8 % against 39.8 kB /
+82.5 %).  `q = 4` buys nothing further for 3.3× the bytes, and above `k = 32`
+neither pays.  The encoding itself is unchanged throughout — `q` only multiplies
+`k` in the top stage (`ENCODING.md` §5) — and the model file carries the cells as
+one label per word, one bit wider than the cluster label (`MODEL_FORMAT.md`).

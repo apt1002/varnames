@@ -36,8 +36,11 @@ assignment are derived at load time.
 How the tables are *generated* is a separate matter, and the tool chain is not
 settled.  What the research still has to settle — `kappa`, the clustering
 method, the choice of `k` — moves the parameters but not the structure.  The
-quarter code is the one candidate that would change the structure, by giving the
-two sides different label sets (`CLUSTER_QUARTERS.md` §"The structural cost").
+adopted code has one structural refinement: each cluster is split into `q`
+cells, so the right-hand alphabet is `qN` while the left stays `N`.  That is
+still three tables — the cells are one label per word, one bit wider, not a
+second assignment (`CLUSTER_QUARTERS.md` §"The structural cost",
+`MODEL_FORMAT.md` §1).
 
 For comparison, then, a candidate model is the pair `(V, k)`, which fixes its
 size once the cost per leaf and per index is fixed, plus one measurement: the
@@ -184,6 +187,11 @@ the one figure still to be measured: the zero-weight stop landed at depth 28 at
 would add 1.0 kB at `V = 8192` (1,024 B of depths) and 0.5 kB more to the top
 stage at `k = 64`.
 
+The table is the plain factored model; the adopted quarter code adds 1.2 kB at
+8192/16 — the cluster map becomes a cell map (`⌈log₂ qk⌉` = 5 bits, 5.1 kB
+against 4.1) and the top stage doubles to 0.3 kB — for **33.7 kB**, at 82.8 %
+instead of 81.9 % (`CLUSTER_QUARTERS.md`).
+
 ### 5.2 The arithmetic alternative
 
 The arithmetic model stores probabilities and evaluates `P(b | a)` at load time.
@@ -280,7 +288,7 @@ tree per left cluster over all `V` words — whose codebook is `W`, about 245 kB
 in the bracket form and ~105 kB as the depth table.  It is an upper bound on
 what a Huffman code can do at this cell, not the shipped design.  The
 **factored** code measures 48.987 bits / 81.9 % (CF) and 47.891 / 82.8 %
-(CQF `q = 2`, a candidate: it needs a second label set) with the stop charged
+(CQF `q = 2`, the adopted quarter code) with the stop charged
 (`CLUSTER_QUARTERS.md`); its zero-stop figure has not been measured and should
 come out ~2 bits better.  So
 "32.5 kB gets 85.3 %" is not a sentence this note can support yet — 32.5 kB is
@@ -337,7 +345,7 @@ estimate (§5.1); its fit charges the stop (`CLUSTER_QUARTERS.md`):
 | point | kB | fit ≤64 | note |
 |---|---:|---:|---|
 | CF | 32.5 | 81.9 % | 8192/16, factored, stop charged |
-| CQF `q = 2` | 32.6 | 82.8 % | 8192/16, candidate: asymmetric labels |
+| CQF `q = 2` | 33.7 | 82.8 % | 8192/16, the adopted quarter code |
 
 **Read the axes with care.**  The bytes are the **arithmetic** model's (§5.4) and
 the fit is the **arithmetic** ideal length, stop included; the two are
@@ -554,8 +562,8 @@ read.
 
 ## 8. What it shows
 
-* **The rule table is more than half the model** — 21.1 of 32.5 kB at the
-  operating point, well ahead of the depths and the map (5.1 and 4.1 kB).  Zipf
+* **The rule table is more than half the model** — 21.1 of 33.7 kB at the
+  operating point, well ahead of the depths and the map (5.1 and 5.1 kB).  Zipf
   coding already takes 20 % off the fixed-width index stream; the empirical
   optimum is only a further 5 % and would have to be stored.  The real lever is a
   smaller vocabulary, which is the `V`-against-`k` trade above.
@@ -566,12 +574,12 @@ read.
 * **Size is not what costs the 64-bit set — clustering is.**  The full-table
   ceilings are 85–94 %; the shipped models fit 77–83 %.  The gap is the
   membership and block structure, not the word list.
-* **The next two objects are the map and the depths** (4.1 and 5.1 kB at the
+* **The next two objects are the map and the depths** (5.1 kB each at the
   operating point).  `2V · ⌈log₂k / 8⌉` doubles by `k = 64`, so the map is the
   term that makes a fine `k` expensive; it is what the shared cluster assignment
-  buys down.  The depth store is the one figure still estimated — a 6-bit field
-  instead of 5 adds 1 kB, and the top stage grows from 0.2 kB at `k = 16` to
-  2.6 kB at `k = 64`.
+  buys down, and the quarter code spends one more bit on it.  The depth store is
+  the one figure still estimated — a 6-bit field instead of 5 adds 1 kB, and the
+  top stage grows from 0.2 kB at `k = 16` to 2.6 kB at `k = 64`.
 
 ## Reproducing
 

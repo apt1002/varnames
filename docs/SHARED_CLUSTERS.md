@@ -6,7 +6,10 @@ matched total bytes when `k = 32`, and exactly on it when `k = 64`.  A first
 measurement at the testing vocabulary (`V = 512`) rejected it; that measurement
 is a statement about a cheap model, not about the constraint, and it now lives
 in [`SMALL_DICT.md`](SMALL_DICT.md) with the rest of the testing-point numbers.
-The decision rule that reads the result is spelled out below.
+The decision rule that reads the result is spelled out below.  The adopted
+quarter code keeps the constraint: it splits each cluster into `q` cells, so the
+one map is one bit wider and the cluster is the cell label divided by `q`
+(`CLUSTER_QUARTERS.md`, `MODEL_FORMAT.md` §1).
 
 ## The question
 

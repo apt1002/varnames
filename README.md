@@ -112,8 +112,8 @@ The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
 furthest bottom-left. Filled points are the arithmetic reference for each
-word list (the small numbers are `k`); hollow points are the shipped
-Huffman code at its operating cell.
+word list (the small numbers are `k`); the hollow points are the measured
+Huffman cells at the operating point — CF, and the quarter code that ships.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -212,7 +212,7 @@ varnames/
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
-│   ├── CLUSTER_QUARTERS.md              # quarters: cheaper than k, but a second label set
+│   ├── CLUSTER_QUARTERS.md              # the quarter code: k clusters of q cells each
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
