@@ -151,9 +151,11 @@ bends, and the `k/N` it implies) is the whole question.
 
 Per threshold `T` we need the `H(next | cluster)` vs `k` curve, together with
 `N`, `n_ctx`, `H(next)` and `H(next | substring)` (the `k = 1` and `k = n_ctx`
-limits).  All eight thresholds have `successor_distributions.tsv` on the
-10-ecosystem corpus, spanning `N = 278 … 80,869`, and the sweep covers
+limits).  All eight thresholds were measured on the 10-ecosystem corpus,
+spanning `N = 278 … 80,869`, and the sweep covers
 `k = 8, 16, 32, 64, 128, 256, 512` (`256` at `T = 100000`, where `n_ctx = 260`).
+The per-threshold `successor_distributions.tsv` under `work/common<T>` predate
+the corpus rebuild and have been deleted; the recipe below regenerates them.
 The lowest swept entropy is `2.609` bits at `T = 500, k = 512`, against a floor
 of `2.370`; the caps are the largest runs this box affords at the tail
 thresholds, and the consequence is discussed under *Results*.
