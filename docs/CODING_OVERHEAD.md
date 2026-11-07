@@ -100,9 +100,16 @@ lose.  Each stage is individually near its own entropy (0.03–0.04 and
 against `k`, long-tailed, so many medium-probability words have to take integer
 lengths above their ideal bits.
 
-Neither codebook costs model bytes: both are derivable at load time from the
-stored `(c, D, lcl, rcl)`.  The only difference is startup work — `k` trees of
-`V` leaves, versus `k` trees of `k` leaves plus `k` trees totalling `V` leaves.
+Neither codebook costs model bytes *here*: both are derived at load time from
+the stored `(c, D, lcl, rcl)`, which is the arithmetic variant's accounting.
+The shipped standard publishes the code instead of the probabilities
+(`ENCODING.md` §3), so the codebook *replaces* those tables rather than being
+derived from them: the factored code's is about the same size, but the flat
+code's is `k·V` lengths and is far bigger than `(c, D)`.  The bits in this
+table are unaffected — the code is the same either way — but the byte claims
+are not transferable to the published model; `MODEL_BUDGET.md` prices that.
+The only difference in startup work is `k` trees of `V` leaves, versus `k` trees
+of `k` leaves plus `k` trees totalling `V` leaves.
 
 Consequence for the 64-bit set: the factored code *lowers* the fit rate by
 0.4–0.9 points, whereas the flat code raised it by 0.2–0.3.  If a Huffman coder
