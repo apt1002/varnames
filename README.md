@@ -133,7 +133,8 @@ are in fact English words or abbreviations but many are not.
 
 We explored many ways of defining "word". It turns out that the list of words is
 the most important part of the model, and it therefore accounts for the majority
-of the model size. See ([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md))
+of the model size — two thirds of the shipped file, 21,145 of 32,126 bytes at
+the operating point. See ([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md))
 for details of the compromise. The best idea for the rejected strategy was
 different from the best idea for the adopted strategy (cited above).
 

@@ -65,7 +65,11 @@ kept as the record, and the grid was deliberately not re-run:
   matrix's approximability that a larger vocabulary does not fix (the diagnosis
   below is about the spectrum, not the size);
 * re-running would need a build to 9,216 pairs and dense matrices at
-  `V = 9,280`, i.e. hours, to re-measure a result that cannot change the design.
+  `V = 9,280`, i.e. hours, to re-measure a result that cannot change the design;
+* the packed file cannot move it either.  Both lists have the same `V`, so the
+  dictionary is the same size to within a few bytes of rule coding — the
+  decision rests entirely on the clustered bits, where the pruned list loses by
+  1–2 (`MODEL_BUDGET.md` §7 prices the word list, not its contents).
 
 If it is ever revisited, the right objective is stated at the end: prune against
 the clustered code length, not `Delta_CS`.
