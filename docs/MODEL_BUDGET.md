@@ -1,15 +1,189 @@
 # Model size in bytes, word list included
 
 Status: **results (grid).**  The clustering notes measure the model in
-"numbers" (`k² + 2V`); this note replaces that with an end-to-end **byte** count
-of a practical in-memory representation, so the word list can be charged for and
-the size compared against the project's budget.  Everything below is measured at
-the canonical grid (`V = 4096 / 6144 / 8192`, `kappa = 300`) on the 10× held-out
-set (`n = 42,268`), and the inventory is stated once, so that no object is
-charged twice.  The pre-grid measurements are kept in "Pre-grid record" at the
-end.
+"numbers" (`k² + 2V`); this note prices the model the standard publishes, in
+**bytes**, so the word list can be charged for and the size compared against the
+project's budget.  Two shapes of the same statistics are kept apart throughout:
+the **Huffman** code the standard publishes and the **arithmetic** reference the
+fit tables were measured on.  Everything below is computed at the canonical grid
+(`V = 4096 / 6144 / 8192`, `kappa = 300`) on the 10× held-out set
+(`n = 42,268`), except where a figure is marked as an estimate.  The inventory is
+stated once, so that no object is charged twice.  The pre-grid measurements are
+kept in "Pre-grid record" at the end.
 
-## What the decoder stores
+## 1. What the standard publishes
+
+The model is a word list and three tables.  The design is nearly settled:
+
+* **The word list.**  A pair-merge dictionary: `V` symbols in total, of which 64
+  are implicit — the 63 characters and the stop `\n` — and the remaining
+  `V − 64` (`4,032` / `6,080` / `8,128`) are merge rules.  A rule is `P a b`:
+  two integers less than `V`, both defined earlier in the list than the rule
+  itself.  The decoder replays the rules, so the word list is stored as pairs.
+* **The bottom stage: `k` Huffman trees with `V` leaves in total.**  One tree
+  per cluster; its leaves are the words in that cluster, labelled by word index.
+  A leaf's depth is its code length, so the trees carry `P(word | cluster)`; the
+  word → cluster map carries the membership.  Together they are the cluster
+  membership table and the unigram vector.
+* **The top stage: `k` Huffman trees with `k` leaves each.**  One tree per left
+  cluster, its leaves the right clusters `0 … k−1`.  That is the cluster ×
+  cluster adjacency matrix, row by row.
+
+Nothing else is published.  The 63 characters are implicit in the identifier
+syntax; the cluster → list-of-words index, the tree walks and the canonical code
+assignment are derived at load time.
+
+How the tables are *generated* is a separate matter, and the tool chain is not
+settled.  What the research still has to settle — `kappa`, the clustering
+method, the choice of `k`, the quarter code — moves the parameters but not the
+structure.  For comparison, then, a candidate model is the pair `(V, k)`, which
+fixes its size once the cost per leaf and per index is fixed, plus one
+measurement: the fraction of held-out identifiers it codes into 64 bits.  The
+best model is the one furthest bottom-left in the scatter plot in
+[`README.md`](../README.md); the rest of this note is the accounting that makes
+the horizontal axis honest.
+
+## 2. Theory: Huffman trees
+
+A Huffman code is a full binary tree.  Every internal node has two children,
+every leaf is a symbol, and a symbol's codeword is the path from the root, one
+bit per branch.  A tree with `L` leaves has exactly `L − 1` internal nodes, one
+fewer than it has leaves.
+
+The lengths are near-optimal: `len(s) ≈ −log₂ p(s)`, and the excess — the
+redundancy — is bounded by about the largest leaf probability plus a small
+constant.  That bound is why a Huffman code is affordable on the
+cluster-conditional distributions here, which are very skewed; the measured
+rounding is 0.024–0.038 bits per token (`CODING_OVERHEAD.md`).  `ENCODING.md` §5
+uses the same bound to price the quarter code.
+
+What has to be published is the **lengths**, not the codewords.  Given one length
+per symbol, the code is assigned canonically: sort the symbols by
+`(length, label)` and hand out consecutive integers of each length in that order.
+Every implementation then derives the same codes from the same table, which is
+the property a standard needs (`ENCODING.md` §3).  The decoder walks the canonical
+prefix table; it never reads a codeword out of the model.
+
+Three properties of the shipped code matter for the accounting:
+
+* **The stop is a zero-weight leaf.**  Its codeword is the all-zeros path and is
+  never written: the padding *is* the terminator.  The stop's own length is
+  therefore free per identifier, and each tree is built with the stop's weight
+  driven to zero so that the other symbols get the lengths of the renormalised
+  distribution (`ENCODING.md` §2).
+* **All trailing zeros are free, not just the stop's.**  The code sits in the low
+  bits of the integer, so an integer's binary length already stops at its highest
+  set bit: whatever zeros end the final codeword are indistinguishable from the
+  terminator's padding and are never stored.  On a balanced code that is about
+  `½ + ¼ + … = 1` bit per identifier, by luck.  The zero-weight stop and the
+  trailing zeros together are worth ~2 bits/identifier that an arithmetic coder
+  cannot match.
+* **The stop's leaf still costs a leaf.**  It is one of the `V` words and takes a
+  leaf in its cluster's tree.  It is in the model; it is just not in the
+  identifiers.
+
+## 3. The best representation of a Huffman tree
+
+The current best representation is **a list of the depth of each leaf**, in
+label order.  Within each depth the leaves are in label order, so the order
+need not otherwise be stored: the canonical assignment above reconstructs every
+codeword from the depths alone.  Nor does the shape need storing — the depths
+determine it — so the bracket form's "2 bits per internal node" is not paid.
+
+Two things follow, and they cut opposite ways.
+
+* **Against the bracket skeleton alone, the depth table is more expensive.**  A
+  depth costs `log₂⌈max depth⌉` bits per leaf (~5 when no tree exceeds depth 31),
+  where the bracket skeleton costs 2 bits per internal node, i.e. ~2 per leaf.
+  The depth table wins only because it replaces "shape **and** leaf list": the
+  leaf list names every leaf by word index, `log₂V` bits each (~13 at
+  `V = 8192`), while the depth table needs only the cluster map on top,
+  `log₂k` bits per leaf.  At `V = 8192, k = 16` that is **9 bits per leaf against
+  15** — 9.2 kB against 15.4 kB — which is where the saving comes from.  It is
+  the *labelling* that is saved, not the shape.
+* **It cannot do better than that.**  The shape fixes the depths in depth-first
+  order and an arbitrary leaf order need not admit that depth sequence: a
+  depth-1 leaf can only sit at an end of its subtree.  So the depth has to be
+  carried per word; `log₂ depth + log₂ k` is available and `2 + log₂k` is not.
+  (An earlier draft claimed `2 + log₂k`; it is not reachable.)
+
+The depths are stored in label order, which is creation order.  That order cannot
+be permuted without changing the tokenisation (see "The unigram in creation
+order" below), so the depth table carries whatever depth distribution the words
+happen to have.
+
+## 4. Theory: the Zipf model of word tree indices
+
+The word list is itself a tree: rule `r` is `(a, b)` and both children are
+earlier than the rule.  A child index is therefore `< s`, the number of symbols
+defined when its rule was created, so `s ≤ V` and the naive `⌈log₂V⌉` is not the
+right cost.  The index stream is also strongly skewed: a low index is an old,
+frequent word, because the greedy rule always merges the most frequent adjacent
+pair, so creation order is roughly a frequency rank.  That makes the index
+distribution approximately Zipf, and a two-parameter prior over the index range
+fits it without storing anything:
+
+    p(j) ∝ (j + 1)^−0.7,   j = 0 … s − 1.
+
+Coding the index stream four ways (`scripts/model_budget.py --index-code`, and
+the empirical entropy of the index histogram for the last column):
+
+| `V` | fixed `⌈log₂V⌉` | variable `⌈log₂s⌉` | Zipf `p(j) ∝ (j+1)^−0.7` | empirical optimum |
+|---:|---:|---:|---:|---:|
+| 4,096 | 12.1 kB (24.0 b/rule) | 11.2 (22.2) | **9.8 (19.5)** | 9.2 (18.2) |
+| 6,144 | 19.8 (26.0) | 17.8 (23.5) | **15.4 (20.2)** | 14.4 (19.0) |
+| 8,192 | 26.4 (26.0) | 24.5 (24.1) | **21.1 (20.8)** | 19.9 (19.6) |
+
+So the answer to "can we get away with fewer than `log V` bits" is **yes, about
+20 % fewer** (19 / 22 / 20 % from 4,096 to 8,192), but almost all of it comes
+from coding the *skew within* `[0, s)`, not from `s < V`: variable-width buys
+7–10 %, and the Zipf prior buys another 12–14 % at no side-information cost.  The
+empirical optimum is a further 5–6 % away and would need the distribution stored,
+so it is not worth it.
+
+Three tempting alternatives do **not** work, and the first two are worth stating
+because they look as if they should:
+
+* the *unigram* distribution is a poor code for child indices (43.4 kB at
+  `V = 11 758` on the pre-grid build, worse than plain uniform — the two
+  distributions are unrelated);
+* the children come in index order only 54–55 % of the time (`a < b` 55.4 /
+  54.9 / 53.8 %), so there is no triangular saving;
+* storing the empirical distribution costs more than the 5–6 % it would save.
+
+`k_frontier.py` and every byte figure below charge the Zipf code.
+
+## 5. The adopted design, priced
+
+### 5.1 The three tables, byte by byte
+
+Estimates, not serialised bytes: the rule table is priced in §4, the depth and
+map counts in §3.  The size oracle in §7 replaces them with measured bytes.
+
+| object | who stores it | how | 4096/16 | 8192/16 | 8192/64 | derivable at load? |
+|---|---|---|---:|---:|---:|---|
+| word list — rules | the decoder | Zipf-coded child indices | 9.8 kB | 21.1 kB | 21.1 kB | no |
+| bottom — depths | the decoder | `V` depths, label order | 2.6 | 5.1 | 5.1 | no |
+| bottom — cluster map | the decoder | `V` labels | 2.0 | 4.1 | 6.1 | no |
+| top — depths | the decoder | `k²` depths | 0.2 | 0.2 | 2.6 | no |
+| terminator | — | the all-zeros path | 0 | 0 | 0 | yes |
+| padding | — | high zero bits of the integer | 0 | 0 | 0 | yes |
+| cluster → words index | — | from the map | 0 | 0 | 0 | yes |
+| canonical codes | — | from the depths | 0 | 0 | 0 | yes |
+| program code | the library | — | 2.0 | 2.0 | 2.0 | — |
+| **total** | | | **16.6** | **32.5** | **36.9** | |
+
+The depth column assumes no tree exceeds depth 31, i.e. a 5-bit field.  That is
+the one figure still to be measured: the zero-weight stop landed at depth 28 at
+`V = 2104` (`CODING_OVERHEAD.md`), so a 6-bit field is a real possibility and
+would add 1.0 kB at `V = 8192` (1,024 B of depths) and 0.5 kB more to the top
+stage at `k = 64`.
+
+### 5.2 The arithmetic alternative
+
+The arithmetic model stores probabilities and evaluates `P(b | a)` at load time.
+It is the shape the fit tables were measured on, and it is a **different
+object**, not an addition to the Huffman one:
 
 | object | representation | cost at `V = 8192, k = 16` |
 |---|---|---:|
@@ -26,45 +200,23 @@ anything derivable at load time — notably the *cluster* → list-of-words inde
 byte per number on the logarithmic grid `P ∝ exp(byte/resolution) − 1`,
 `resolution = 12`; this is **free** to within 0.01 bits (`model_fit_rates.py`).
 
-This is the **arithmetic** model: the decoder evaluates `P(b | a)` from stored
-numbers.  The published-*Huffman* variant stores code lengths instead and is a
-**different object**, not an addition to this one — see "The two model shapes"
-below.
+With one shared cluster assignment the two maps collapse to one: **35.7 kB**.
+The Huffman inventory in §5.1 assumes the same sharing; keeping both maps adds
+4.1 kB there too.  Either way the Huffman shape saves 3.2 kB.  Side by side, the
+two shapes at `V = 8192, k = 16` are:
 
-## The word list
+| object | arithmetic | Huffman |
+|---|---|---|
+| word list rules | rule table | rule table |
+| the distributions | unigram + memberships + block | depths + map + top depths |
+| program code | 2 kB | 2 kB |
+| **total** | **39.8 kB** | **32.5 kB** |
 
-The rule table is the largest single object once it is charged, so its
-representation matters.
+They must never be added — an earlier draft did exactly that and got 53.5 kB by
+charging the Huffman bottom-stage codebook on top of the arithmetic tables and
+double-counting the 2 kB of code.
 
-### Child indices
-
-Every child index is `< s`, the number of symbols defined when its rule was
-created (children always precede their parent), so `s ≤ V` and the naive
-`⌈log₂V⌉` is not the right cost.  Coding the index stream four ways
-(`scripts/model_budget.py --index-code`, and the empirical entropy of the index
-histogram for the last column):
-
-| `V` | fixed `⌈log₂V⌉` | variable `⌈log₂s⌉` | Zipf `p(j) ∝ (j+1)^−0.7` | empirical optimum |
-|---:|---:|---:|---:|---:|
-| 4,096 | 12.1 kB (24.0 b/rule) | 11.2 (22.2) | **9.8 (19.5)** | 9.2 (18.2) |
-| 6,144 | 19.8 (26.0) | 17.8 (23.5) | **15.4 (20.2)** | 14.4 (19.0) |
-| 8,192 | 26.4 (26.0) | 24.5 (24.1) | **21.1 (20.8)** | 19.9 (19.6) |
-
-So the answer to "can we get away with fewer than `log V` bits" is **yes, about
-20 % fewer** (19 / 22 / 20 % from 4,096 to 8,192), but almost all of it comes
-from coding the *skew within* `[0, s)`, not from `s < V`: variable-width buys
-7–10 %, and a two-parameter Zipf prior over the index range buys another 12–14 %
-at no side-information cost.  The empirical optimum is a further 5–6 % away and
-would need the distribution stored, so it is not worth it.  Two tempting ideas do
-**not** work: the *unigram* distribution is a poor code for child indices (43.4 kB
-at `V = 11 758` on the pre-grid build, worse than plain uniform — the two
-distributions are unrelated), and the children come in index order only 54–55 %
-of the time (`a < b` 55.4 / 54.9 / 53.8 %), so there is no triangular saving.
-
-`k_frontier.py` and the table below use the Zipf code, which is what the byte
-figures charge.
-
-### Unigram probabilities
+#### The unigram in creation order
 
 **The word list is in *creation* order, and that is not unigram order.**  The
 greedy rule selects the most frequent *pair* of adjacent symbols, so the sequence
@@ -92,14 +244,44 @@ longer words (`only`, `once`, `control`, …) far more heavily.
 
 The order is semantic — the tokeniser merges the lowest-ranked adjacent pair
 first — so it cannot be renumbered without changing the tokenisation, and
-storing the permutation would cost `V log₂V` bits, four times the unigram
-itself.
+storing the permutation would cost `V log₂V` bits, about 1.5 times the unigram
+itself.  Costed honestly the arithmetic unigram is `V` bytes (4.1 / 6.1 /
+8.2 kB); entropy-coding the byte grid (5.4–5.8 bits/value on the pre-grid
+builds, i.e. ~0.7 `V`) would bring it to 2.9 / 4.3 / 5.7 kB.  The Huffman shape
+has no unigram to store — the depths replace it — but its depth table is in the
+same creation order and cannot be permuted either.
 
-Costed honestly it is `V` bytes (4.1 / 6.1 / 8.2 kB).  Entropy-coding the byte
-grid (5.4–5.8 bits/value on the pre-grid builds, i.e. ~0.7 `V`) would bring it
-to 2.9 / 4.3 / 5.7 kB; that refinement is not charged anywhere below.
+### 5.3 The fit-rate convention
 
-## Model size at the grid
+The shipped criterion is the Huffman code with the zero-weight stop and the free
+trailing zeros.  Three consequences for every fit rate quoted below:
+
+* **Measure bits up to the last 1**, not the sum of codeword lengths.  The
+  canonical form is the integer, and its binary length stops at its highest set
+  bit; a summed length over-counts by ~1 bit/identifier (`ENCODING.md` §2).
+* **The stop's transition is not paid.**  The zero-weight stop returns ~1.8 bits
+  and costs ~0.75 in rounding, so the stop is worth ~1 bit; with the trailing
+  zeros that is ~2 bits better than the arithmetic figure for the same tables
+  (`CODING_OVERHEAD.md`).
+* **The fit rate quoted in the tables below is the arithmetic one**, i.e. the
+  ideal length of the cyclic code including the stop.  It is therefore
+  conservative by ~2 bits, and the frontier in §6 lies down-left of where the
+  shipped design does.  Re-measuring it under the shipped convention is step 5 of
+  the oracle.
+
+One correction to an earlier version of this note.  At `V = 8192, k = 16` the
+measured Huffman figure, 45.027 bits and 85.3 % fit, is the **flat** code — one
+tree per left cluster over all `V` words — whose codebook is `W`, about 245 kB
+in the bracket form and ~105 kB as the depth table.  It is an upper bound on
+what a Huffman code can do at this cell, not the shipped design.  The
+**factored** code that ships measures 48.987 bits / 81.9 % (CF) and
+47.891 / 82.8 % (CQF `q = 2`) with the stop charged (`ENCODING.md` §5); its
+zero-stop figure has not been measured and should come out ~2 bits better.  So
+"32.5 kB gets 85.3 %" is not a sentence this note can support yet — 32.5 kB is
+the factored model's size, 85.3 % is the flat model's fit.  The oracle measures
+both, on the same cell, in the same convention.
+
+### 5.4 The arithmetic size at the grid
 
 Zipf index code, raw-byte unigram, +2 kB code (`scripts/model_budget.py`):
 
@@ -114,7 +296,7 @@ Zipf index code, raw-byte unigram, +2 kB code (`scripts/model_budget.py`):
 | 8,192 | 32 | 21.1 | 8.2 | 10.2 | 1.0 | 2.0 | 42.6 |
 | 8,192 | 64 | 21.1 | 8.2 | 12.3 | 4.1 | 2.0 | 47.7 |
 
-## The 64-bit frontier
+## 6. The frontier so far
 
 The same accounting against the held-out fit, every measured configuration, with
 dominated points removed (a point is kept if it is smaller *and* better than
@@ -142,6 +324,25 @@ everything cheaper):
 | 47,691 | 8192 | 64 | 47.285 | 83.1 % | 98.8 % | 31.6 |
 | 54,009 | 8192 | 96 | 47.108 | 83.3 % | 98.9 % | 80.2 |
 | 62,027 | 8192 | 128 | 46.964 | 83.4 % | 98.9 % | — |
+
+The shipped code has been measured at the operating point only.  Its size is an
+estimate (§5.1); its fit charges the stop (`ENCODING.md` §5):
+
+| point | kB | fit ≤64 | note |
+|---|---:|---:|---|
+| CF | 32.5 | 81.9 % | 8192/16, factored, stop charged |
+| CQF `q = 2` | 32.6 | 82.8 % | 8192/16, adopted, stop charged |
+
+**Read the axes with care.**  The bytes are the **arithmetic** model's (§5.4) and
+the fit is the **arithmetic** ideal length, stop included; the two are
+consistent with each other, and neither is the shipped code's.  The shipped
+factored code is smaller at the same `(V, k)` — 32.5 kB against 39.8 kB at
+8192/16, or 36.6 against 39.8 with the maps counted alike — and fits ~2 bits
+better once the zero-weight stop is measured.  So this table is the frontier of
+the *reference*, and the shipped design's frontier lies down and to the left of
+it.  Its shape — the knee, the cheap stretch, the dead
+zone — carries over; the numbers do not.  [`README.md`](../README.md) plots these
+points, with the one measured shipped cell marked.
 
 Four things follow.
 
@@ -286,80 +487,35 @@ softens but survives:
 
 So a bigger word list is still the cheaper way to buy a point, but by 1.5–4×
 against the 8–25 kB/pt the `k` direction costs above 16, not by the 2–6× claimed
-when the rule table was omitted.  The mechanism is mechanical: a bigger word list shortens identifiers
-(held-out mean length falls 4.70 → 4.05 tokens from `V = 4096` to `8192`) and
-the 64-bit budget is dominated by the *long* identifiers, so `V` attacks the part
-of the distribution the threshold measures; a finer `k` only shaves the
-conditional entropy of tokens already inside an identifier.
+when the rule table was omitted.  The mechanism is mechanical: a bigger word list
+shortens identifiers (held-out mean length falls 4.70 → 4.05 tokens from
+`V = 4096` to `8192`) and the 64-bit budget is dominated by the *long*
+identifiers, so `V` attacks the part of the distribution the threshold measures;
+a finer `k` only shaves the conditional entropy of tokens already inside an
+identifier.
 
-## The two model shapes
+## 7. The size oracle
 
-The tables above price the **arithmetic** model: stored probabilities, evaluated
-as `P(b | a)`.  The standard ships a **Huffman** code instead (`ENCODING.md` §3:
-publish the code, not the probabilities), and that is a different object:
-
-| object | arithmetic | Huffman |
-|---|---|---|
-| word list rules | rule table | rule table |
-| the distributions | unigram + memberships + block | code lengths (`CF`/`CQF`) |
-| program code | 2 kB | 2 kB |
-
-A code length is one byte per symbol, so the codebook is a re-encoding of the
-same information, not an addition to it: it replaces the unigram, both cluster
-assignments and `D`.  **The two must not be added.**  An earlier draft of this
-note did exactly that — it took a "code-side" figure that already contained
-`2(V−k) + V log V` bits of Huffman *bottom-stage* codebook and charged the rule
-table on top of it, then called the sum the model.  At `V = 8192, k = 16` that
-gave 53.5 kB where the arithmetic model is 39.8 kB; the difference, 13.7 kB, is
-one bottom-stage codebook plus a double-charged 2 kB of code.
-
-The factorised codebook is priced in [`ENCODING.md`](ENCODING.md) §5 (`CF` and
-`CQF`: 8.0 kB at 4096/32, 19.4 kB at 8192/64).  That is the **bracket form**:
-`2(V−k)` is the skeleton (one `(` and one `)` per internal node, two bits each,
-`L−1` internal nodes for `L` leaves) and `V log₂V` is the depth-first leaf list.
-It is an information-theoretic reference, not the shipped store — it pays
-`log₂V + 2` bits per leaf.
-
-The shipped store is a **depth table**: `log₂⌈max depth⌉` bits per leaf, which
-is ~5 bits per tree if no tree exceeds depth 31, plus the cluster map.  At
-`V = 8192, k = 16` that is 9 bits per leaf — 5,120 B of depths plus 4,096 B of
-map, against the 16,640 B the arithmetic tables spend (unigram + two maps +
-block).  (The leaf-list-free `2 + log₂k` form is not available: the shape fixes
-the depths in depth-first order, and an arbitrary leaf order need not admit that
-depth sequence — a depth-1 leaf can only sit at an end of its subtree.  So the
-depth is carried per word.)
-
-So the Huffman shape is **smaller**, not equal: 21.1 (rules) + 5.1 (depths)
-+ 4.1 (one map) + 0.2 (top) + 2.0 (code) = **32.5 kB**, against 39.8 kB for the
-arithmetic model with two maps (35.7 kB with one shared map).  What the
-arithmetic model buys for its extra 3 kB is nothing but the ability to evaluate
-`P(b|a)` at load time.
-
-On bits, the Huffman code with the adopted zero-weight stop measured **−1.0
-bit/identifier** and **+1.5 pt of fit** over the arithmetic reference at both
-checked cells (`CODING_OVERHEAD.md`: 8192/16 goes 47.727 → 45.027 bits, 82.5 →
-85.3 %).  The depth figures are estimates until the size oracle below
-serialises the real model and reports the maximum depth per tree; the
-increments the quarter idea rests on (`q = 2` costs +1.1 kB at `k = 32`,
-`q = 4` 3.2× that) are unaffected.
-
-## The size oracle (planned)
-
-The byte figures above are arithmetic, and formulas have drifted three times —
-the 53.5 kB total that double-charged a Huffman bottom stage, the missing
-word→left-cluster map, and a "bracket vs length table" claim that did not
-survive re-reading.  The next step is therefore to stop pricing the model by
-formula and measure it.  Six steps:
+The structure in §1 and the oracle answer different questions.  The structure
+says **what is stored**; the oracle says **how many bytes it takes**.  The oracle
+is the more general of the two, because once built it measures whatever structure
+it is given — the arithmetic shape, the Huffman shape, the flat variant, the
+quarter code — from the same script and the same held-out set.  The three tables
+in §1 are the special case that ships.  The byte figures above are arithmetic and
+formula-driven, and formulas have drifted three times: the 53.5 kB total that
+double-charged a Huffman bottom stage, the missing word→left-cluster map, and a
+"bracket vs length table" claim that did not survive re-reading.  The next step
+is therefore to stop pricing the model by formula and measure it.  Six steps:
 
 1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, serialise
-   the model in the proposed on-disk format, report actual bytes per section,
+   the model in the published format (§1), report actual bytes per section,
    decode a held-out identifier and assert losslessness, and report the code's
    real bits/identifier from the decoded artefact.  From then on every published
    byte comes from this, not from a formula.
 2. One **inventory table** in this note: object / who stores it / how / bytes at
    4096/16, 8192/16, 8192/64 / derivable at load? / charged where.  The
    checklist is rules, unigram, left map, right map, block, bottom codebook, top
-   codebook, program code, terminator, padding.
+   codebook, program code, terminator, padding.  §5.1 is the first cut of it.
 3. The **depth store**: measure the maximum code depth in every bottom and top
    tree on the grid.  That sets the bits per depth (4, 5 or 6 — a 5-bit field
    assumes no tree exceeds depth 31), whether any tree must be length-limited
@@ -376,36 +532,37 @@ formula and measure it.  Six steps:
    corresponding comparisons, which still quote code-side bytes; their verdicts
    are unaffected (they are within-`V`), but any cross-`V` price must carry the
    term.
-5. **Fit-rate convention.**  The shipped criterion is Huffman with the
-   zero-weight stop; re-check the choices made on arithmetic bits (`k = 16`,
-   `q = 2`, the shared cluster assignment at `k = 32`) under it, and say which
-   could move.
+5. **Fit-rate convention.**  Re-measure the fit under the shipped criterion of
+   §5.3 — the zero-weight stop, all trailing zeros free — for the *factored*
+   code at every grid cell, and settle the `k = 16`, `q = 2` and shared-cluster
+   choices on those numbers rather than on arithmetic bits.  This is also where
+   the flat-versus-factored mix-up of §5.3 gets closed.
 6. **Retire** the superseded numbers: `README.md`'s status line, and any table
    not produced by the oracle.
 
 The outcome is a single number per model, traceable to a file the decoder can
 read.
 
-## What it shows
+## 8. What it shows
 
-* **The rule table is more than half the model** — 21.1 of 39.8 kB at the
-  operating point, well ahead of the unigram and the memberships (8.2 kB
-  each).  Zipf-coding already takes 20 % off
-  the fixed-width index stream; the empirical optimum is only a further 5 % and
-  would have to be stored.  The real lever is a smaller vocabulary, which is the
-  `V`-against-`k` trade above.
-* **The frontier is 19 kB / 77 %, 30 kB / 81 %, 40 kB / 83 %** for 64-bit
-  coverage — comfortably inside the "50 kB-ish is acceptable if it rescues the
-  64-bit set" band, and 2× the 20 kB goal.
+* **The rule table is more than half the model** — 21.1 of 32.5 kB at the
+  operating point, well ahead of the depths and the map (5.1 and 4.1 kB).  Zipf
+  coding already takes 20 % off the fixed-width index stream; the empirical
+  optimum is only a further 5 % and would have to be stored.  The real lever is a
+  smaller vocabulary, which is the `V`-against-`k` trade above.
+* **The frontier is 19 kB / 77 %, 30 kB / 81 %, 40 kB / 83 %** on the arithmetic
+  reference — comfortably inside the "50 kB-ish is acceptable if it rescues the
+  64-bit set" band, and 2× the 20 kB goal.  The shipped code sits below and left
+  of that curve; how far is what the oracle measures.
 * **Size is not what costs the 64-bit set — clustering is.**  The full-table
   ceilings are 85–94 %; the shipped models fit 77–83 %.  The gap is the
   membership and block structure, not the word list.
-* **The next two objects are the unigram and the memberships** (8.2 kB each at
-  the operating point).  `2V · ⌈log₂k / 8⌉` doubles by `k = 64`, so it is also
-  the term that makes a fine `k` expensive; it is what the shared cluster
-  assignment buys down.  The unigram is one byte per word by house convention
-  and has an entropy-coded version about 30 % smaller that nothing charges for
-  yet.
+* **The next two objects are the map and the depths** (4.1 and 5.1 kB at the
+  operating point).  `2V · ⌈log₂k / 8⌉` doubles by `k = 64`, so the map is the
+  term that makes a fine `k` expensive; it is what the shared cluster assignment
+  buys down.  The depth store is the one figure still estimated — a 6-bit field
+  instead of 5 adds 1 kB, and the top stage grows from 0.2 kB at `k = 16` to
+  2.6 kB at `k = 64`.
 
 ## Reproducing
 
@@ -423,6 +580,9 @@ python3 scripts/k_frontier.py --dir work/tw8192ns --ks 4,6,8,12,16,24,32,48,64,9
 
 # creation order vs unigram order
 python3 scripts/wordlist_order.py --dirs work/tw4096ns,work/tw6144ns,work/tw8192ns
+
+# the scatter plot in README.md (reads the frontier table above)
+python3 scripts/frontier_plot.py --doc docs/MODEL_BUDGET.md --out docs/frontier.svg
 ```
 
 ## Pre-grid record
@@ -458,4 +618,4 @@ memberships, not a better model.
 * Entropy-coding the *index stream* beyond the two-parameter Zipf prior.
 * A cluster → members index: derivable at load time, not charged.
 * Charging a Huffman codebook *and* the arithmetic tables for one model — they
-  are alternatives (see "The two model shapes").
+  are alternatives (see "The arithmetic alternative").
