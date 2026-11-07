@@ -338,10 +338,53 @@ arithmetic model buys for its extra 3 kB is nothing but the ability to evaluate
 On bits, the Huffman code with the adopted zero-weight stop measured **−1.0
 bit/identifier** and **+1.5 pt of fit** over the arithmetic reference at both
 checked cells (`CODING_OVERHEAD.md`: 8192/16 goes 47.727 → 45.027 bits, 82.5 →
-85.3 %).  The depth figures are estimates until `scripts/model_size.py` (PLAN
-H11) serialises the real model and reports the maximum depth per tree; the
-increments C28 rests on (`q = 2` costs +1.1 kB at `k = 32`, `q = 4` 3.2× that)
-are unaffected.
+85.3 %).  The depth figures are estimates until the size oracle below
+serialises the real model and reports the maximum depth per tree; the
+increments the quarter idea rests on (`q = 2` costs +1.1 kB at `k = 32`,
+`q = 4` 3.2× that) are unaffected.
+
+## The size oracle (planned)
+
+The byte figures above are arithmetic, and formulas have drifted three times —
+the 53.5 kB total that double-charged a Huffman bottom stage, the missing
+word→left-cluster map, and a "bracket vs length table" claim that did not
+survive re-reading.  The next step is therefore to stop pricing the model by
+formula and measure it.  Six steps:
+
+1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, serialise
+   the model in the proposed on-disk format, report actual bytes per section,
+   decode a held-out identifier and assert losslessness, and report the code's
+   real bits/identifier from the decoded artefact.  From then on every published
+   byte comes from this, not from a formula.
+2. One **inventory table** in this note: object / who stores it / how / bytes at
+   4096/16, 8192/16, 8192/64 / derivable at load? / charged where.  The
+   checklist is rules, unigram, left map, right map, block, bottom codebook, top
+   codebook, program code, terminator, padding.
+3. The **depth store**: measure the maximum code depth in every bottom and top
+   tree on the grid.  That sets the bits per depth (4, 5 or 6 — a 5-bit field
+   assumes no tree exceeds depth 31), whether any tree must be length-limited
+   (which costs bits), and whether the top stage is `k²` packed depths or
+   something cheaper.  It also confirms that the depth is carried per word: the
+   leaf-list-free `2 + log₂k` form fails because a depth-1 leaf can only sit at
+   an end of its subtree, so the Huffman depth sequence need not be realisable
+   in an arbitrary order.
+4. **Re-derive** every table from the oracle: the frontier here, `ENCODING` §5
+   (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`, `SHARED_CLUSTERS` and
+   the shared-cluster, reserved-cell and quarter pricing, `PRUNE_WORDS`,
+   `DICTIONARY_RULES`, and `SMALL_DICT`'s price row.  The dictionary term must
+   be charged in `shared_clusters.py`, `quarter_accounting.py` and the
+   corresponding comparisons, which still quote code-side bytes; their verdicts
+   are unaffected (they are within-`V`), but any cross-`V` price must carry the
+   term.
+5. **Fit-rate convention.**  The shipped criterion is Huffman with the
+   zero-weight stop; re-check the choices made on arithmetic bits (`k = 16`,
+   `q = 2`, the shared cluster assignment at `k = 32`) under it, and say which
+   could move.
+6. **Retire** the superseded numbers: `README.md`'s status line, and any table
+   not produced by the oracle.
+
+The outcome is a single number per model, traceable to a file the decoder can
+read.
 
 ## What it shows
 
