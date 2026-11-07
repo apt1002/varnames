@@ -17,7 +17,7 @@ labels (see `README.md`).
 - [x] Character-level fixed-budget compressibility — `docs/CODE_LENGTHS.md`.
 - [x] Square-root (Hellinger) factorisation + unobserved-pairs counting fix —
       `docs/HELLINGER_FACTORISATION.md`.
-- [x] Choosing `k` and `N` for the model size — `docs/CLUSTER_SIZE_STUDY.md`.
+- [x] Choosing `k` and `N` for the model size — `docs/SUCCESSOR_MODEL.md`.
 - [x] Dictionary (pair-merge) model: CS identity, per-merge delta —
       `docs/TREE_WORDS.md`, `scripts/check_merge_delta.py`.
 - [x] Typical run lengths of the corpus — `docs/RUN_LENGTHS.md`,
@@ -270,7 +270,7 @@ these can be rebuilt in any order, later, without losing the old numbers.
       **Pass 2 — model reports, to do:** the numbers (not the arguments) in
       `docs/CODE_LENGTHS.md`, `ADJACENCY_MATRIX.md` (κ choice),
       `TREE_WORDS.md`, `DICTIONARY_RULES.md`, `WORD_COMPRESSIBILITY.md`,
-      `BOUNDARY_TRIGRAM.md`, `CLUSTER_SIZE_STUDY.md`, `CLUSTER_WORDS.md`,
+      `BOUNDARY_TRIGRAM.md`, `SUCCESSOR_MODEL.md`, `CLUSTER_WORDS.md`,
       `CLUSTER_LOSS.md`, `MATRIX_COMPRESSION.md`, `PRUNE_WORDS.md`,
       `BREAK_OPEN_PRIOR.md`, `STRUCTURAL_ZEROS.md`, `CODING_OVERHEAD.md`,
       `MODEL_BUDGET.md`, `BUDGET64_STUDY.md`, the measurements in
@@ -293,6 +293,18 @@ these can be rebuilt in any order, later, without losing the old numbers.
       26/52/105/210) is retired from the rebuild; H4/H5 build this grid only and
       H6 re-measures at it.  Testing at `V = 512` uses `k = 16` only; anything
       measured there is labelled testing-only and lives in `docs/SMALL_DICT.md`.
+
+- [x] **H9. Restructure the documentation.** `README.md` rewritten to the
+      outline agreed on the `readme` branch: product, then the pipeline with
+      each step linked to the document that owns it, then the two strategies,
+      the rejected ideas and the layout.  Detail that did not belong at that
+      level moved into the reports that own it: `docs/SUCCESSOR_MODEL.md`
+      (renamed from `CLUSTER_SIZE_STUDY.md`; now carries the character-level
+      model and its method as well as the size study) and the new
+      `docs/WORDLIST_BUDGET.md` (word list vs `k²` budget, moved out of
+      `docs/CLUSTER_WORDS.md`).  `README.md` also gained a fourth house rule
+      (price a change in fit rate as well as bits).  `README.md`, `PLAN.md`,
+      `docs/CLUSTER_WORDS.md`, `docs/TREE_WORDS.md`, `scripts/cluster_words.py`.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 

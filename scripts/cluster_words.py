@@ -2,7 +2,7 @@
 """Compress the word x word adjacency matrix by left/right K-means clustering.
 
 The word bigram matrix ``M`` (``V x V``) is the largest table in the model.
-Following the word-level analogue of ``docs/CLUSTER_SIZE_STUDY.md``, pool the
+Following the word-level analogue of ``docs/SUCCESSOR_MODEL.md``, pool the
 words into clusters and describe the matrix by two small objects:
 
 * a ``k_L x k_R`` **block matrix** (the piecewise-constant part), and

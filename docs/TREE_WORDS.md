@@ -495,7 +495,7 @@ this is moot.
   not a likelihood ratio.
 * **No MDL for the dictionary.**  `CS` deliberately excludes the cost of the
   dictionary and the code table, so on its own it is gameable.  Following
-  `CLUSTER_SIZE_STUDY.md`, the model is built once and reused, its size is a
+  `SUCCESSOR_MODEL.md`, the model is built once and reused, its size is a
   resource to spend, and the question is the Pareto one — smallest score at a
   given model size.  The size knob here is `NUM_PAIRS`, and the score should be
   the **held-out** code length (bits/string).  See `docs/WORD_COMPRESSIBILITY.md`.

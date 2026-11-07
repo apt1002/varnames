@@ -1,13 +1,80 @@
-# Study: choosing the number of clusters `k` and the vocabulary size `N`
+# The rejected strategy: a character-level successor model
 
-Status: **results** (extended sweep completed 2026-10-29).  This note reports
-the `(k, N)` pairs that give a good successor model for their size, and tests
-the hypothesis that the frontier sits on a *constant ratio* `k / N`.
+Status: **rejected.**  Encoding each character from its preceding context is
+the obvious information-theoretic design, and it does compress — but at equal
+model size the word model wins ([`WORD_COMPRESSIBILITY.md`](WORD_COMPRESSIBILITY.md)),
+and making the successor model compact enough to ship costs it 1-2 bits per
+character.  The document is kept because it is the reference design this
+project measured against, and because the `(k, N)` size methodology it
+introduced carries over to the word matrix (see
+[`CLUSTER_WORDS.md`](CLUSTER_WORDS.md)).
 
-The model is built once and reused on a very large corpus, so its byte size is a
-resource we choose to spend rather than a cost to amortise; the question is
-purely "what is the smallest `H(next | cluster)` for a given model size?" (the
-Pareto frontier), **not** a minimum-description-length total.
+## The model
+
+Encode each character conditionally on the context that precedes it.  Wrap the
+identifier as `^identifier$`; at each split position, credit the successor
+character to the **longest common substring that is a suffix of the prefix**
+(a longest-suffix / variable-order model), so after `^Ac` the successor is
+credited to `^Ac` rather than `Ac` or `c`.  Every split position is assigned to
+exactly one context — 81,455,598 of them on the current 10-ecosystem union
+(41,272,149 on the pre-expansion corpus).  The rows are the common substrings
+that can occur as a prefix suffix (non-empty, not ending in `$`), and a `#global`
+row carries the corpus-wide successor marginal, used as a shared Dirichlet
+prior for smoothing.  `scripts/successor_distributions.py` builds the table;
+`scripts/code_lengths.py` turns it into the ideal arithmetic-code length of each
+identifier, which is how the strategy's fixed-budget success rate is scored
+([`CODE_LENGTHS.md`](CODE_LENGTHS.md)).
+
+The model is far too big at full resolution — one successor distribution per
+common substring — so the contexts are pooled into `k` clusters, each carrying
+one distribution.  `scripts/cluster_substrings.py` does the pooling under two
+objectives:
+
+* **`--method kl`** (default) directly minimises the occurrence-weighted
+  cross-entropy `sum_s N_s * H(p_s || P_cluster(s))`, which equals
+  `H(next | cluster)`; assignment is to the smallest cross-entropy and the
+  update is the pooled-count mean (Lloyd's algorithm for the KL/multinomial
+  objective).  This optimises exactly the quantity we report.
+* **`--method sphere`** embeds `sqrt(p)` on the unit sphere (squared Euclidean
+  distance is twice the squared Hellinger distance, a metric surrogate for the
+  non-metric KL "compression" distance) and runs spherical K-means.
+
+Both are occurrence-weighted: each context contributes with weight `N_s`, and
+the sphere update is the re-normalised count-weighted mean `sum N_s x_s` (the
+`kl` update is the pooled-count mean).  The weighting does not affect the
+assignment step, since it is a per-point constant.  The two methods agree to
+within ~0.04 bits over `k = 2..100` (at most 0.035 bits, mean 0.015 on the
+pre-expansion corpus; at most 0.052, mean 0.019 at threshold 2000), so it does
+not matter which one you run.  `scripts/cluster_entropy.py` reports `H(next)`,
+`H(next | substring)`, `H(next | cluster)` and the information retained.
+
+`k` is fixed by the caller (`--k`); there is deliberately no automatic
+selection.  Every criterion tried (the elbow of the bits curve, the mean
+silhouette, and in principle held-out compression) was either arbitrary or
+merely relocated the arbitrariness, so `k` is chosen by hand and the curve is
+produced by sweeping `--k`.
+
+At the coarse end of the current sweep, `H(next) = 4.969` bits for every
+threshold and the exact-context floor `H(next | substring)` runs from 3.778
+(`N = 278`) to 2.572 (`N = 20,198`); the clustering has to buy back as much of
+that 2.4-bit gap as its `k` clusters allow.  At the pre-expansion vocabulary
+`H(next) = 4.966` and `k = 12, 22, 100` gave 4.011, 3.821, 3.502 bits — so `k`
+is the dominant lever, but 100 clusters still did not reach the exact-context
+3.070 bits.
+
+### What the clusters look like (pre-expansion record)
+
+At the pre-expansion threshold `T = 2000` (11,758 common substrings, 10,890
+analysable successor distributions) and a hand-picked `k = 17`, many clusters
+are near-deterministic — each pinned to a single likely next character — plus a
+digit/underscore cluster and a large mixed "junk drawer".  The entropies are
+`H(next) = 4.966`, `H(next | substring) = 2.611`, `H(next | cluster) = 3.547`
+bits, so 17 clusters retain 1.419 bits of the 2.355-bit achievable reduction.
+That is the qualitative answer the size study below quantifies: a small `k`
+buys the deterministic structure cheaply, and the tail is what resists.
+
+The rest of this note is the size study: what `k` and `N` cost, and where the
+Pareto frontier sits.
 
 ## The two knobs and what they cost
 
@@ -135,6 +202,12 @@ lowest swept entropy is `2.5614` bits at `T = 500, k = 1024`, against a floor of
    (1) is the data for it.
 
 ## Results
+
+> **These tables are the pre-expansion record** (sweep of 2026-10-29, on the
+> 3.8 M-identifier corpus, when the vocabulary at `T = 100000` was `N = 159`).
+> The 10-ecosystem re-measure is in progress; the floors quoted in *The model*
+> above are the current ones.  Treat the absolute numbers below as history and
+> the *shape* of the answer as the result.
 
 `scripts/cluster_size_frontier.py` turns the merged sweep log into the frontier.
 All eight thresholds are covered, producing **77 frontier points** spanning
