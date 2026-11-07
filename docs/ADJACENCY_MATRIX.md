@@ -205,21 +205,12 @@ in training has no mass at all.  Larger `kappa` costs more at the top of the
 grid, because the prior's mass `kappa·V` grows with `V` against a shrinking
 token total (§2).
 
-Scored on held-out *pairs* instead of identifiers, the optimum is flatter and
-slightly lower — `kappa = 300` at `V = 4 096` and `100` at `V = 8 192`
-([`BREAK_OPEN_PRIOR.md`](BREAK_OPEN_PRIOR.md) §8.7) — which is the same range.
-Both the factorisation and the shipped word model use the one value:
-
-| criterion | what is held out | optimum |
-|---|---|---|
-| held-out bits/identifier (shipped) | identifiers | 300 at both grid ends |
-| held-out pair cross-entropy (factorisation) | `(a, b)` pairs | 100–300 |
-
 **Recommendation: a fixed `alpha = 300·V` (`kappa = 300`).**  It is the minimum
-of the identifier curve at both ends of the grid, within 0.2 bit of the optimum
-everywhere in 100–300, and needs no per-corpus tuning.  Caveat: with a single
-corpus we cannot separate the `V`- from the corpus-size dependence, so ≈300 is
-an empirical constant for this corpus.  Re-check it with the sweep in §8.
+of the identifier curve at both ends of the grid and needs no per-corpus
+tuning; the flatness between 100 and 300 means the exact value is not critical.
+Caveat: with a single corpus we cannot separate the `V`- from the corpus-size
+dependence, so ≈300 is an empirical constant for this corpus.  Re-check it with
+the sweep in §8.
 
 ## 8. Reproducing
 
