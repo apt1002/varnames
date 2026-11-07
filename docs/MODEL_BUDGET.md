@@ -471,9 +471,8 @@ model is no longer priced by formula anywhere in this note.
    an end of its subtree, so the Huffman depth sequence need not be realisable
    in an arbitrary order.
 4. **Re-derive** every table from the oracle: the frontier here,
-   `CLUSTER_QUARTERS.md` (`CF`/`CQF`/`W`), `WORDLIST_BUDGET`, `CLUSTER_WORDS`,
-   `SHARED_CLUSTERS`, `PRUNE_WORDS`, `DICTIONARY_RULES` and `SMALL_DICT`'s price
-   row.  The dictionary term must be charged in `shared_clusters.py`,
+   `WORDLIST_BUDGET`, `CLUSTER_WORDS`, `SHARED_CLUSTERS`, `CLUSTER_QUARTERS`,
+   `PRUNE_WORDS`, `DICTIONARY_RULES` and `SMALL_DICT`'s price row.  The dictionary term must be charged in `shared_clusters.py`,
    `quarter_accounting.py` and the corresponding comparisons, which still quote
    code-side bytes; their verdicts are unaffected (they are within-`V`), but any
    cross-`V` price must carry the term.
