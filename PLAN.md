@@ -100,8 +100,9 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/SHARED_CLUSTERS.md`.
 - [x] **C27. Reserved stop clusters.** *Rejected.*
       `docs/NEWLINE_CLUSTER.md`.
-- [x] **C28. Cluster quarters.** *Adopted at `q = 2`; rejected at `q = 4`.*
-      `docs/CLUSTER_QUARTERS.md`.
+- [~] **C28. Cluster quarters.** *`q = 2` wins on bits and bytes; `q = 4`
+      rejected.  Shipping is open: `q = 2` needs a second label set, and the
+      model file carries one.*  `docs/CLUSTER_QUARTERS.md`.
 - [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
       model term.*  `docs/CODESIGN.md`.
 - [ ] **C30. Show the clusters on the factor clouds.** *Planned.*  Colour

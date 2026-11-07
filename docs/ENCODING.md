@@ -251,21 +251,21 @@ yardstick, CF or CQF is the product.**
 
 ## 5. Two extensions that leave the encoding alone
 
-Two ideas change the model's parameters, not its form; the code is still the
-canonical prefix code of one stage over a labelled leaf set, published as
-lengths.
+Neither idea changes how a codeword is written; both are written up separately.
 
 * **Cluster quarters** ([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md)) split each
-  right cluster into `q` finer clusters, so the top stage has `q·k` leaves
-  instead of `k`.  That is this encoding with `k` replaced by `qk` — adopted at
-  `q = 2`, rejected at `q = 4`.
+  right cluster into `q` finer cells, so the top stage has `q·k` leaves instead
+  of `k`.  The encoding is unchanged — this note with `k` replaced by `qk` — but
+  the two sides then have different label sets, which a shared cluster
+  assignment does not.  That is why the model file carries one count and why
+  shipping `q = 2` is open, even though it wins on bits and bytes.
 * **Codesigning the assignment** ([`CODESIGN.md`](CODESIGN.md)) chooses the
   clustering and the trees together, so it changes which labels exist and, in
   general, how many (`k` may grow).  That is a generation question: a decoder
-  cannot tell a codesigned model from any other model with the same `V` and `k`.
+  cannot tell a codesigned model from any other model with the same `V` and `N`.
 
-Neither belongs in this note, which is why both are written up separately: an
-implementation of §§2–4 decodes a model built either way.
+An implementation of §§2–4 decodes a model built either way; the first is a
+change of structure, and only in its labels.
 
 ## 6. Open questions
 

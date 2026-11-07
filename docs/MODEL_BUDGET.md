@@ -35,10 +35,13 @@ assignment are derived at load time.
 
 How the tables are *generated* is a separate matter, and the tool chain is not
 settled.  What the research still has to settle — `kappa`, the clustering
-method, the choice of `k`, the quarter code — moves the parameters but not the
-structure.  For comparison, then, a candidate model is the pair `(V, k)`, which
-fixes its size once the cost per leaf and per index is fixed, plus one
-measurement: the fraction of held-out identifiers it codes into 64 bits.  The
+method, the choice of `k` — moves the parameters but not the structure.  The
+quarter code is the one candidate that would change the structure, by giving the
+two sides different label sets (`CLUSTER_QUARTERS.md` §"The structural cost").
+
+For comparison, then, a candidate model is the pair `(V, k)`, which fixes its
+size once the cost per leaf and per index is fixed, plus one measurement: the
+fraction of held-out identifiers it codes into 64 bits.  The
 best model is the one furthest bottom-left in the scatter plot in
 [`README.md`](../README.md); the rest of this note is the accounting that makes
 the horizontal axis honest.
@@ -276,10 +279,10 @@ measured Huffman figure, 45.027 bits and 85.3 % fit, is the **flat** code — on
 tree per left cluster over all `V` words — whose codebook is `W`, about 245 kB
 in the bracket form and ~105 kB as the depth table.  It is an upper bound on
 what a Huffman code can do at this cell, not the shipped design.  The
-**factored** code that ships measures 48.987 bits / 81.9 % (CF) and
-47.891 / 82.8 % (CQF `q = 2`) with the stop charged (`CLUSTER_QUARTERS.md`);
-its
-zero-stop figure has not been measured and should come out ~2 bits better.  So
+**factored** code measures 48.987 bits / 81.9 % (CF) and 47.891 / 82.8 %
+(CQF `q = 2`, a candidate: it needs a second label set) with the stop charged
+(`CLUSTER_QUARTERS.md`); its zero-stop figure has not been measured and should
+come out ~2 bits better.  So
 "32.5 kB gets 85.3 %" is not a sentence this note can support yet — 32.5 kB is
 the factored model's size, 85.3 % is the flat model's fit.  The oracle measures
 both, on the same cell, in the same convention.
@@ -334,7 +337,7 @@ estimate (§5.1); its fit charges the stop (`CLUSTER_QUARTERS.md`):
 | point | kB | fit ≤64 | note |
 |---|---:|---:|---|
 | CF | 32.5 | 81.9 % | 8192/16, factored, stop charged |
-| CQF `q = 2` | 32.6 | 82.8 % | 8192/16, adopted, stop charged |
+| CQF `q = 2` | 32.6 | 82.8 % | 8192/16, candidate: asymmetric labels |
 
 **Read the axes with care.**  The bytes are the **arithmetic** model's (§5.4) and
 the fit is the **arithmetic** ideal length, stop included; the two are
