@@ -280,7 +280,7 @@ work/camel/         # case normalisation: lower/upper/Camel splits,
 work/tw4096ns/      # pair-merge dictionary (V=4096) + cyclic bigram adj.npz
 work/tw6144ns/      # the same at V=6144
 work/tw8192ns/      # the same at V=8192
-work/tw512/         # V=512: testing only, never a result (see docs/SMALL_DICT.md)
+work/tw512ns/       # V=512: testing only, never a result (see docs/SMALL_DICT.md)
 work/common<T>/     # common substrings (threshold T) + successor distributions
                     #   (500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
 ```
@@ -288,9 +288,10 @@ work/common<T>/     # common substrings (threshold T) + successor distributions
 The `ns` suffix means *no stride*: the dictionary is built from a 5% sample of
 the training lines (`--sample 20`) and the adjacency counted over all of them
 (`--stride 0`). `tw6144ns` and `tw8192ns` are the other two points of the
-canonical grid; `tw2040`, `tw96` and `tw512` are pre-expansion builds kept
-because reports still quote them, and `tw4096raw` exists only for the
-case-normalisation ablation. `work/` also holds the corpus-build intermediates
+canonical grid; the `s0` twins (`--sample 0 --stride 0`) exist to check that the
+5% sample does not bias the dictionary. `tw96`, `tw2040`, `tw2040ns`, `tw4414`
+and `tw11694` are pre-expansion or retired builds kept because reports still
+quote them, and `tw4096raw` exists only for the case-normalisation ablation. `work/` also holds the corpus-build intermediates
 (`gems_dl/`, `*_src/`, `clean_ids/`, `*.shards`, per-ecosystem logs) — tens of
 thousands of files and several GB, none of it tracked.
 
