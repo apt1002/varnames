@@ -41,7 +41,13 @@ says so, before any word step, so a bottom tree's deepest leaf is a word like
 any other.  The corpus tokeniser's stop token is not a symbol of the file at
 all: its row of the adjacency matrix is the **start state**, which is what makes
 the first token's distribution available, and its column does not exist because
-nothing is coded after the end (see §5).
+nothing is coded after the end.  The adjacency matrix the build works from is
+therefore `V0 × (V0 − 1)` for `V0 = V + 1` corpus symbols, which is `V × (V − 1)`
+in the file's numbering.  The start state needs a left cluster, and by
+convention it is **left cluster 0**: the build chooses which cluster that is —
+the one whose top tree codes the first-token distribution cheapest — and numbers
+it 0, permuting the other labels — and the leaves inside their trees — to match
+(§5).
 
 The file stores **one map**: each word's right cluster.  Its left cluster is
 that label divided by `q`, so the second alphabet costs no second table — one
