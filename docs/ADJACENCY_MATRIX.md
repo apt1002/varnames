@@ -3,9 +3,10 @@
 This is the canonical reference for the **word × word adjacency matrix** `M`
 and for the prior (`κ`) that fills its unobserved cells.  The documents that
 *study* this matrix — the Hellinger factorisation
-([`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)) and the block
+([`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md)), the block
 clustering ([`CLUSTER_WORDS.md`](CLUSTER_WORDS.md),
-[`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md)) — refer back here rather than
+[`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md)) and the rejected break-open prior
+([`BREAK_OPEN_PRIOR.md`](BREAK_OPEN_PRIOR.md)) — refer back here rather than
 restating the construction.
 
 The idea in one sentence: tokenise each identifier into words, and for every
