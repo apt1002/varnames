@@ -1,7 +1,8 @@
 # Overshoot the word list, then prune by removal cost
 
-Status: **unsuccessful.**  Building the run-aware dictionary 1.5× too large and
-then deleting the least valuable words down to size gives a word list that codes
+Status: **unsuccessful, and a pre-expansion record at sub-grid sizes.**
+Building the pair-merge dictionary 1.5× too large and then deleting the least
+valuable words down to size gives a word list that codes
 held-out identifiers **0.86 bits better** than the plain greedy build of the
 same size (63.77 → 62.91 bits at `NUM_PAIRS = 512`), recovering most of the
 1.52-bit advantage of the 1.5× larger list (62.25 bits); at `NUM_PAIRS = 2040`
@@ -40,12 +41,34 @@ alone — no trigram scan:
 
 `split_cost` implements it and `apply_split` mutates the counts; both are
 verified against a brute-force recount (`prune_words.py selfcheck`, 0
-mismatches).  Only pair words are pruned; run words (few, valuable) are kept.
+mismatches).  Every word is a pair word — self-merges are forbidden, so there
+is no run table to protect and every word is a candidate for removal.
 
-The greedi est deletion is done with a lazily-updated min-heap: after each
+The greediest deletion is done with a lazily-updated min-heap: after each
 split the costs change, so a popped word whose cost has moved is re-queued with
 its fresh cost.  When a word is deleted its operands may stop being children of
 any kept word and become removable; those are pushed then.
+
+## Scale of the measurement (H6)
+
+The two runs below are at `NUM_PAIRS = 512` (`V = 576`) and `2040`
+(`V = 2104`) — **below the canonical grid** (`V = 4,096`–`8,192`), so under the
+project's rule they can record a negative but cannot decide anything.  They are
+kept as the record, and the grid was deliberately not re-run:
+
+* the effect was already shrinking with size — the pruned list captured 0.66 of
+  the overshoot's advantage at 512 words and only 0.14 at 2040, i.e. at
+  `V = 4,096`+ the greedy prefix contains essentially all the words the
+  overshoot would find;
+* the deciding measurement is not the raw score but the *clustered* model, where
+  the pruned list lost by 1–2 bits at every `k` and seed — a regression in the
+  matrix's approximability that a larger vocabulary does not fix (the diagnosis
+  below is about the spectrum, not the size);
+* re-running would need a build to 9,216 pairs and dense matrices at
+  `V = 9,280`, i.e. hours, to re-measure a result that cannot change the design.
+
+If it is ever revisited, the right objective is stated at the end: prune against
+the clustered code length, not `Delta_CS`.
 
 ## Result (`NUM_PAIRS = 512`, `kappa = 300`)
 
