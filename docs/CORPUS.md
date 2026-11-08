@@ -8,10 +8,13 @@ This is the training corpus for the identifier-compression research: lists of
 ```
 
 i.e. it starts with an ASCII letter or underscore, and subsequent characters are
-ASCII letters, underscores, or digits. We deliberately favour **namespace-rich
-languages** (modules / classes / packages) over languages like C that lack
-namespaces and therefore push authors into global prefixing conventions (`gl_`,
-`SDL_`, …), which distort identifier statistics.
+ASCII letters, underscores, or digits. How much that leaves out is measured in
+[`UNICODE.md`](UNICODE.md): non-ASCII identifiers are a fraction of a percent
+of identifiers even in projects whose developers are not writing in English.
+We deliberately favour **namespace-rich languages** (modules / classes /
+packages) over languages like C that lack namespaces and therefore push
+authors into global prefixing conventions (`gl_`, `SDL_`, …), which distort
+identifier statistics.
 
 This document consolidates the corpus statistics and the reproduction
 instructions. Narrative background lives in the top-level `README.md`.

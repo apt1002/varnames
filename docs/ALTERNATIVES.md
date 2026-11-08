@@ -33,6 +33,24 @@ the change of representation ([`ENCODING.md`](ENCODING.md) §2). And nothing
 here was decided at the testing vocabulary: `V = 512` exercises scripts and
 settles nothing ([`SMALL_DICT.md`](SMALL_DICT.md)).
 
+## The corpus
+
+**Non-ASCII identifiers.** The corpus is ASCII: the extractor blanks any run
+that touches a non-ASCII byte, so a name written in Cyrillic, Han, kana or
+accented Latin never reaches the tokeniser, and the model's alphabet stays at
+63 characters. The exclusion is cheap. Across 62,500 repositories in five
+languages, non-English *identifiers* appear in **0.14 % of files in 2015 and
+0.28 % in 2025**, against 11.9 % for comments; in 2.9 M public Java
+repositories, **93 % of projects from Chinese-speaking users and 88 % from
+Spanish speakers have ASCII-only identifiers**, and only 7 % of the first
+write names in Han script — the rest transliterate (pinyin, `numero` for
+`número`). A token scan of 3.7 M Python identifiers found **12** non-ASCII
+names, all in one Unicode-set library's examples. Unicode would be cheap for
+Latin-with-accents, Greek and Cyrillic and a different model for CJK, where
+20,992 Han code points make the pair-merge dictionary degenerate; the names it
+would add are the rare ones, and the hash fallback already covers them
+([`UNICODE.md`](UNICODE.md), [`CORPUS.md`](CORPUS.md)).
+
 ## The word list
 
 **Run words, `(u^k)`.** An earlier dictionary allowed a word for a run of one

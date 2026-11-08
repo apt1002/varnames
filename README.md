@@ -67,7 +67,8 @@ are in [`docs/BUILDING.md`](docs/BUILDING.md).
 The experimental strategy is as follows:
 
 - **Build a corpus** — harvest identifiers from ten ecosystems and union them;
-  see [`docs/CORPUS.md`](docs/CORPUS.md).
+  see [`docs/CORPUS.md`](docs/CORPUS.md). The corpus is ASCII-only; what that
+  leaves out is measured in [`docs/UNICODE.md`](docs/UNICODE.md).
 - **Case-normalise it** — split into lower_case / UPPER_CASE / CamelCase,
   convert the first two to CamelCase, merge and de-duplicate. On the current
   union that is 4,441,974 identifiers in, 4,226,707 out; normalisation makes
@@ -236,6 +237,7 @@ varnames/
 ├── LICENSE-CC0                          # corpus + published tables: CC0-1.0
 ├── docs/
 │   ├── CORPUS.md                        # corpus statistics + reproduction
+│   ├── UNICODE.md                       # how rare non-ASCII identifiers are, by script
 │   ├── CASE_NORMALISATION.md            # case normalisation + common substrings
 │   ├── ADJACENCY_MATRIX.md              # building the word matrix + the κ prior
 │   ├── DICTIONARY_RULES.md              # building the dictionary: rule choice, Δ vs frequency
@@ -281,6 +283,7 @@ varnames/
 │   ├── harvest_packages.py              # download plan + unpack for Java/Haskell/OCaml/Lua
 │   ├── unpack_gems.py                   # .gem → source tree
 │   ├── stats.py                         # corpus statistics → Markdown
+│   ├── nonascii_scan.py                 # count non-ASCII identifiers by script
 │   ├── validate_corpus.py               # sorted/unique/ASCII + artefact check
 │   ├── classify_identifiers.py          # lower_case / UPPER_CASE / CamelCase split
 │   ├── camelize_identifiers.py          # snake_case → CamelCase conversion
