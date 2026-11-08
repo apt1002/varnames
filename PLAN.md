@@ -125,9 +125,10 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 
 ## E. Productisation (long-term horizon)
 
-The distant target.  **Not started** — recorded so the research lines above can
-be steered toward it.  Design intent, scope and audiences:
-`docs/PRODUCTISATION.md`.
+The distant target.  **In progress** — the encoding and the plan for the
+product are settled: the packed model, the standard, both implementations and
+the table-building tools are done; the write-ups (E2–E4) are open.  Design
+intent, scope and audiences: `docs/PRODUCTISATION.md`.
 
 - [x] **E1. Design the encoding.** *Done — designed, measured and shipped: one
       model file of 30,745 bytes, one canonical assignment, the stop as padding.*
@@ -152,8 +153,10 @@ be steered toward it.  Design intent, scope and audiences:
 - [x] **E9. Standard vs custom tables.** *Done — `Codec(Model.from_path(p))`
       and `--model PATH` on both sides; the digest is how a deployment finds out
       it is not on the standard.*  `docs/STANDARD.md` §9.
-- [ ] **E10. Publish table-building tools** — easy to use and modify; need not
-      be language-neutral.
+- [x] **E10. Publish table-building tools.** *Done — one command from a corpus
+      to a `model.nvm1`, priced stage by stage; run over the full corpus it
+      reproduces the shipped file byte for byte, digest and all.*
+      `docs/BUILDING.md`.
 - [x] **E11. Licence.** *Settled — `MIT OR Apache-2.0` for the code and the
       specification, `CC0-1.0` for the derived corpus and the published tables.*
       `README.md`.

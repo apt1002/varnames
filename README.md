@@ -58,7 +58,9 @@ is specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md). The standard the
 file serves is proposed in [`docs/STANDARD.md`](docs/STANDARD.md), and there are
 two implementations of it: a reference one in [`python/`](python/) and an
 engineering one in [`rust/`](rust/), both defaulting to the published tables and
-both accepting others.
+both accepting others. A corpus of your own can be turned into tables either
+will read with `scripts/build_tables.py`; the command, its stages and its cost
+are in [`docs/BUILDING.md`](docs/BUILDING.md).
 
 ## The strategy
 
@@ -254,6 +256,7 @@ varnames/
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
 │   ├── STANDARD.md                      # the proposed standard: code, sets, tables
+│   ├── BUILDING.md                      # build your own tables: one command, and its cost
 │   ├── CLUSTER_QUARTERS.md              # the quarter code: q right clusters per left
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
@@ -313,6 +316,7 @@ varnames/
 │   ├── k_frontier.py                    # the bytes-for-fit frontier as a curve
 │   ├── budget64_study.py                # 64/128-bit sets (arithmetic account; superseded)
 │   ├── budget64_sets.py                 # 64/128-bit sets through the packed model
+│   ├── build_tables.py                  # one command from identifiers to model.nvm1
 │   ├── build_standard_model.py          # build the one standard model + its digest
 │   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
