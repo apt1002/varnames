@@ -454,7 +454,8 @@ model is no longer priced by formula anywhere in this note.
    [`MODEL_FORMAT.md`](MODEL_FORMAT.md), report actual bytes per section, decode
    held-out identifiers and assert losslessness, and report the code's real
    bits/identifier from the decoded artefact.  The packing rule is the codec of
-   H12, so the oracle and the published file share one implementation.
+   [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3, so the oracle and the published file
+   share one implementation.
 2. One **inventory table** in this note: object / who stores it / how / bytes at
    4096/16, 8192/16, 8192/32 / derivable at load?  §5.1 is it.
 3. The **depth store**: measure the depth span of every bottom and top tree on

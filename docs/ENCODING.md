@@ -1,11 +1,12 @@
 # The encoding
 
-Status: **design note; the decisions are settled, the binary layout is
-specified but not yet measured.**  This collects what the encoding has to do,
+Status: **settled and shipped.**  This collects what the encoding has to do,
 the argument for publishing a *code* rather than a *table of probabilities*, and
 the extensions that leave the encoding alone.  The three questions it used to
 leave open are closed: the standard ships one model, fixing `V`, `k` and `q`,
-and the file is specified in [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §7; the
+and the file is specified and measured in
+[`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3 (30,745 bytes at `V = 8,191`,
+`k = 32`, `q = 1`) and proposed in [`STANDARD.md`](STANDARD.md); the
 reserved stop clusters are rejected (`NEWLINE_CLUSTER.md`); and the canonical
 integer is a requirement on the encoder (§1), not something the decoder checks.
 Measurements that bear on it live in `CODING_OVERHEAD.md` (Huffman vs
@@ -191,8 +192,11 @@ residual gap between the arithmetic bound and a Huffman code may be smaller than
 Two ways to ship the model:
 
 1. **Publish the code.**  The standard contains, per tree, the code lengths (or
-   the codewords themselves) plus the *word list*, the *cluster assignment* and
-   the *block* `D`.  Start-up is a table read.
+   the codewords themselves) plus the *word list* and the *cluster assignment*.
+   Start-up is a table read.  The shipped file carries the *depths* alone —
+   codewords are derived from them by the canonical assignment, so not even the
+   codewords are stored — and the probabilities, the block `D` among them,
+   exist only while the tables are built.
 2. **Publish quantised probabilities.**  The library rebuilds the Huffman trees
    at start-up from a table of 1-byte probabilities.
 
@@ -290,3 +294,23 @@ Neither idea changes how a codeword is written; both are written up separately.
 
 An implementation of §§2–4 decodes a model built either way: the first changes
 only the label space, the second only which labels exist.
+
+## 6. What ships
+
+One model, one file.  The standard is a single `NVM1` file of 30,745 bytes at
+`V = 8,191`, `k = 32`, `q = 1`, built from the `work/tw8192ns` dictionaries at
+`kappa = 300` and seed 1, and it is the default in both implementations
+([`STANDARD.md`](STANDARD.md); the section table is `MODEL_FORMAT.md` §3).
+Nothing about the encoding depends on those numbers: a custom file with another
+`V` or `k` decodes by the same rules, which is what a private table is for
+([`STANDARD.md`](STANDARD.md) §9).
+
+The file is identified by its SHA-256,
+`976670d71a1273a2506bb537183c4854523bec20eb0b2c9708b5934adbef3f79`, and both
+implementations check it before they use the embedded copy.  The identifier
+sets of [`BUDGET64_STUDY.md`](BUDGET64_STUDY.md) are then read off the encoder
+rather than from a second table: an identifier is in the 64-bit set when its
+code occupies 64 bits or fewer, and in the 128-bit set when it occupies 128 or
+fewer.  Codes longer than 128 bits still exist — the corpus has them, up to 622
+bits in the held-out sample — but they are what the two sets exclude, not a
+failure of the encoding.
