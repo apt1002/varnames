@@ -163,11 +163,16 @@ its left cluster because the assignment is shared.
 What to look for is that one assignment produces *regions* rather than confetti
 in both panels — green upper left, the magenta-and-red band, orange at the right
 edge of the left cloud; red in a lobe of its own, purple and cyan above, green
-below in the right one. A single table of relationships, read from both sides,
-is what buys that. The tool is `scripts/factor_cloud.py --dir work/tw8192ns
---model standard/model.nvm1 --divide-unigram --no-cluster-labels`; a fresh
-clustering can be computed on the spot with `--clusters K`, and the CSV it
-writes carries the cluster so the plot can be redrawn elsewhere.
+below in the right one. The 100 most massive words are labelled, and they are
+what makes the regions readable: `Response`, `FileName`, `Name` and `Key` in the
+green upper left, `Create`, `For`, `Set` and `Is` at the orange right edge,
+`Statement`, `OnError` and `Value` in the purple band of the right cloud. A
+single table of relationships, read from both sides, is what buys that.
+
+The tool is `scripts/factor_cloud.py --dir work/tw8192ns --model
+standard/model.nvm1 --divide-unigram --no-cluster-labels`; a fresh clustering
+can be computed on the spot with `--clusters K`, and the CSV it writes carries
+the cluster so the plot can be redrawn elsewhere.
 
 Along the way, we tried a lot of things that didn't work:
 
