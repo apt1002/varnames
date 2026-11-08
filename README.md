@@ -103,6 +103,10 @@ The experimental strategy is as follows:
   [`docs/CODING_OVERHEAD.md`](docs/CODING_OVERHEAD.md) and
   [`docs/TOKENISATION.md`](docs/TOKENISATION.md).
 
+Each of those steps had alternatives, and most of them were built and measured
+before being dropped. They are collected, with the numbers that killed them, in
+[`docs/ALTERNATIVES.md`](docs/ALTERNATIVES.md).
+
 It is important that the model is small and efficient, otherwise nobody will want
 to use it. The pertinent optimisation criterion is the fraction of identifiers
 in the training corpus that fit in 64 bits, measured as a function of the model
@@ -261,6 +265,7 @@ varnames/
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
 │   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
+│   ├── ALTERNATIVES.md                  # what was rejected, and why: the measured negatives
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
