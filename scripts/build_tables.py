@@ -99,6 +99,42 @@ def split(merged, outdir, stride):
     return train, val
 
 
+def non_ascii_lines(path, limit=5):
+    """The first lines holding a non-ASCII byte, and how many there are.
+
+    The model's alphabet is ASCII: a character outside it has no id, no rule
+    and no code, so a corpus that uses one cannot be built.  Checking here, on
+    bytes, keeps the failure at the entrance instead of letting it surface
+    later as a codec error inside the dictionary (`docs/UNICODE.md`).
+    """
+    bad = []
+    n = 0
+    with open(path, 'rb') as f:
+        for i, line in enumerate(f, 1):
+            if line.isascii():
+                continue
+            n += 1
+            if len(bad) < limit:
+                bad.append((i, line.rstrip(b'\n')))
+    return n, bad
+
+
+def require_ascii(path):
+    n, bad = non_ascii_lines(path)
+    if not n:
+        return
+    examples = '\n'.join(
+        f'  line {i}: {s.decode("utf-8", "replace")}' for i, s in bad)
+    more = f'\n  … {n - len(bad):,} more' if n > len(bad) else ''
+    raise SystemExit(
+        f'{path}: {n:,} line(s) contain non-ASCII bytes.\n{examples}{more}\n'
+        'The model alphabet is the 63 ASCII characters that occur in\n'
+        'identifiers, so a character outside it has no id, no dictionary\n'
+        'rule and no codeword.  Transliterate or drop those identifiers\n'
+        'before building; how much that leaves out is measured in\n'
+        'docs/UNICODE.md.')
+
+
 def alphabet_of(path, sample):
     """The characters the dictionary will see: sorted, from the sampled lines.
 
@@ -204,6 +240,7 @@ def main():
     os.makedirs(ARGS.out, exist_ok=True)
     t0 = time.time()
     print(f'corpus {ARGS.corpus} -> {ARGS.out}', flush=True)
+    require_ascii(ARGS.corpus)
 
     stage('normalise')
     if ARGS.skip_normalise:

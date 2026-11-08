@@ -119,6 +119,11 @@ the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
 * **Changing the format.** The file is the standard; adding a section or a
   symbol is a new version of it, not a build option
   ([`STANDARD.md`](STANDARD.md) §9).
+* **Non-ASCII identifiers.** The alphabet is the ASCII characters the corpus
+  uses, so a name outside it has no id, no rule and no codeword. The tool
+  checks the corpus on entry, prints the offending lines and stops; it does not
+  transliterate them for you. How rare those names are, and why the exclusion
+  is cheap, is [`UNICODE.md`](UNICODE.md).
 
 ## Using the result
 

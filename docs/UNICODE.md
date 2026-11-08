@@ -18,6 +18,15 @@ extractor blanks any run that touches a non-ASCII byte before tokenising, so
 accented Latin cannot be coded at all — it has to fall through to the hash
 fallback ([`STANDARD.md`](STANDARD.md) §10).
 
+A non-ASCII corpus is **refused**, not silently degraded. `build_tables.py`
+checks its input on entry, prints the offending lines and stops; the
+dictionary builder refuses the same input naming the byte values, because
+underneath it reads the corpus as bytes and would otherwise make each UTF-8
+byte its own "character" (`café` as `cafÃ©`). Even then the packed file could
+not carry the result: the alphabet section is `len(alphabet)` raw bytes,
+written with `encode('ascii')` and read back the same way, so the format
+itself is ASCII by construction.
+
 The question this note answers is how large that population is. The short
 answer: non-ASCII is common in comments and string literals, uncommon in
 identifiers, and rare even in projects whose developers are not writing in

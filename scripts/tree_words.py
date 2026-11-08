@@ -96,6 +96,14 @@ def read_corpus_array(path, stride=0, limit=0, chars=None):
                 break
     if chars is None:
         chars = sorted(chr(c) for c in set(buf) if c != 10)
+    high = sorted({ord(c) for c in chars if ord(c) > 127})
+    if high:
+        where = ', '.join(f'0x{b:02x}' for b in high[:8])
+        more = f' and {len(high) - 8} more' if len(high) > 8 else ''
+        raise ValueError(
+            f'{path}: non-ASCII bytes ({where}{more}) have no id in the model '
+            'alphabet, which is ASCII-only; transliterate or drop those '
+            'identifiers (docs/UNICODE.md)')
     b = np.frombuffer(buf, dtype=np.uint8)
     arr = _lut(chars)[b]
     return chars, arr
