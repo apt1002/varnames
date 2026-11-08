@@ -172,6 +172,18 @@ alongside the binary as `model.yaml`. As the file itself it is **182,507 B
 against 30,745 B**, and a decoder that parses YAML needs a parser in every port.
 Rejected as the delivery form ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3).
 
+**Compressing the YAML with a general-purpose compressor.** The YAML is plain
+text (182,507 B), and a compressor could carry it without anyone writing a
+decoder: decompress to a string at load time and parse. It is not competitive.
+On the shipped model the best of them is **bzip2 at 33,662 B**, then xz
+(36,292 B; 36,420 with `-9e`), zstd (37,754 B at `--ultra -22`) and gzip
+(41,742 B). The packed file is **30,745 B**, so the best general-purpose
+compressor is **2.9 kB — 9.5 % — larger**, and it still has to be decompressed
+and parsed. The reason is the one that runs through this file: the YAML spends
+its bytes on text where the packed form spends bits — decimal digits,
+indentation, repeated labels — and a compressor cannot undo a representation it
+did not choose ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3).
+
 **Five-bit depths.** Storing the true Huffman depths costs five bits per leaf;
 four suffice once a bias flattens the trees, and the bias is found by search
 because no closed form bounds a Huffman span. Five bits would take the file from
