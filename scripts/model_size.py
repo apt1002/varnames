@@ -39,8 +39,9 @@ The corpus tokeniser emits a stop token, so its adjacency matrix is `V0 x V0`
 with `V0 = V + 1` counting the stop.  The stop's *row* is the distribution of
 the first token, so it survives as the start state and is folded into one top
 tree; its *column* does not, because nothing is coded after the end of an
-identifier.  The matrix is therefore `V0 x (V0-1)` — the `V x (V-1)` of
-`MODEL_FORMAT.md` — and the file has `V` symbols.  The start state belongs to
+identifier.  The matrix is therefore `V0 x (V0-1)` = `(V+1) x V` — the
+`V x (V+1)` of `MODEL_FORMAT.md` up to transposition — and the file has `V`
+symbols.  The start state belongs to
 left cluster 0 by convention; the build picks the cluster that codes the
 first-token distribution cheapest and renumbers the labels so that one is 0.
 
@@ -105,9 +106,11 @@ class BitWriter:
     def __init__(self):
         self.acc = 0
         self.n = 0
+        self.total = 0
         self.out = bytearray()
 
     def put(self, value, width):
+        self.total += width
         if width:
             self.acc |= (int(value) & ((1 << width) - 1)) << self.n
             self.n += width
@@ -258,6 +261,90 @@ def zipf_prefix(V, scale_bits=20):
     return np.concatenate([[0], np.cumsum(f)])
 
 
+# ------------------------------------------------------ the rule ladder
+
+PHI = (1.0 + 5.0 ** 0.5) / 2.0
+
+LADDER_B = 3            # index bits; the ladder has B = 2^b intervals
+DEPTH_BITS = 4          # fixed by the format; the bias keeps every span <= 15
+
+
+def variable_bits(x, N):
+    """`x` in `[0, N)` as a variable-width integer: `L` bits, plus one if needed."""
+    if N <= 1:
+        return 0
+    L = N.bit_length() - 1
+    s = N - (1 << L)
+    if x < (1 << L):
+        return L + (1 if x >= (1 << L) - s else 0)
+    return L + 1
+
+
+def variable_put(bw, x, N):
+    if N <= 1:
+        return
+    L, s = N.bit_length() - 1, N - (1 << (N.bit_length() - 1))
+    if x < (1 << L):
+        bw.put(x, L)
+        if x >= (1 << L) - s:
+            bw.put(0, 1)                # the ambiguous half: this is the low one
+    else:
+        bw.put(x - s, L)
+        bw.put(1, 1)                    # the ambiguous half: this is the high one
+
+
+def variable_get(br, N):
+    if N <= 1:
+        return 0
+    L, s = N.bit_length() - 1, N - (1 << (N.bit_length() - 1))
+    v = br.get(L)
+    if v < (1 << L) - s:
+        return v
+    return v if br.get(1) == 0 else v + s
+
+
+def ladder_edges(N, b=LADDER_B):
+    """Interval edges of the base-2 geometric ladder over `[0, N)`, in integers.
+
+    The i-th edge is `N (2^i - 1) / (2^B - 1)` with `B = 2^b`, so a decoder
+    derives them from `N` and `b` alone — the code stores no table.
+    """
+    B = 1 << b
+    den = (1 << B) - 1
+    return [(N * ((1 << i) - 1)) // den for i in range(B + 1)]
+
+
+def ladder_bits(x, N, b=LADDER_B):
+    """`b` bits of interval index, then the residual as a variable integer."""
+    if N <= 1:
+        return 0
+    edges = ladder_edges(N, b)
+    i = 0
+    for i in range((1 << b) - 1, -1, -1):
+        if x >= edges[i]:
+            break
+    w = max(1, edges[i + 1] - edges[i])
+    return b + variable_bits(min(max(x - edges[i], 0), w - 1), w)
+
+
+def ladder_put(bw, x, N, b=LADDER_B):
+    edges = ladder_edges(N, b)
+    i = 0
+    for i in range((1 << b) - 1, -1, -1):
+        if x >= edges[i]:
+            break
+    bw.put(i, b)
+    w = max(1, edges[i + 1] - edges[i])
+    variable_put(bw, min(max(x - edges[i], 0), w - 1), w)
+
+
+def ladder_get(br, N, b=LADDER_B):
+    edges = ladder_edges(N, b)
+    i = br.get(b)
+    w = max(1, edges[i + 1] - edges[i])
+    return edges[i] + variable_get(br, w)
+
+
 # ------------------------------------------------------- canonical codes
 
 def canonical_codes(depths, mode='max', complete=True):
@@ -344,18 +431,28 @@ def huffman_trunc(weights, survivors, bias=False):
     levels and the field can be 4 bits.  Zero-weight leaves are left alone: they
     are the terminator, and they must stay deepest.
 
-    The starting bias is the larger of the two conditions that between them
-    bound the span, both on the biased weights `q`:
+    The design's closed form
 
-    * the ratio `q_max / q_min <= 2^15` bounds the gap in *ideal* depths;
-    * the floor `q_min >= 2^-15` bounds the *Huffman* gap, because the
-      shallowest leaf is never shorter than one bit while the deepest can run a
-      couple of bits past `-log2 q_min`.
+        b = max(0, (P_max - 32768 P_min) / 32767)
 
-    Neither is sufficient on its own — measured at 8192/32 the ratio alone gives
-    a span of 17 and the pair a span of 16 — so the bias is doubled until the
-    built tree actually spans 15 or less.  Each doubling costs a little fit and
-    the loop starts from the smallest bias the two conditions allow.
+    bounds the gap in *ideal* (Shannon) depths, not in Huffman depths: a Huffman
+    tree's longest codeword obeys the Fibonacci bound
+    `L_max <= log_phi(T / q_min)`, which is 1.44 times the Shannon depth at the
+    same weight.  So the closed form can ask for no bias at all on a
+    distribution whose Huffman tree spans 18 levels.  Worse, it is tied to a
+    15-level target, so it says nothing about a narrower field.
+
+    There is a sufficient condition — `q_min >= phi^-15` — but it is far
+    stronger than necessary (it holds the *longest* codeword to 15, not the
+    *span*), and applying it costs real bits: at 8192/32 it flattens the trees
+    to a span of 11 and 0.22 bits per identifier.
+
+    So the bias is not computed, it is *found*, because the Huffman shape is a
+    property of the whole distribution and no single ratio describes it.  The
+    search is a doubling from the closed form to bracket a working bias, then a
+    bisection on that bracket: the smallest bias whose tree spans 15 or less,
+    found to 2^-16 relative.  That is the least flattening the field allows,
+    and it costs the fewest bits for the trees it can still build.
     """
     n = len(weights)
     if survivors >= n:
@@ -367,18 +464,39 @@ def huffman_trunc(weights, survivors, bias=False):
     if live.size <= 1:
         return huffman(w, stop_at=survivors)
     pmax, pmin = float(live.max()), float(live.min())
-    b = max(0.0,
-            (pmax - 32768.0 * pmin) / 32767.0,
-            float(live.sum()) / 32768.0 - pmin)
-    for _ in range(24):
+    T = float(live.sum())
+
+    def build(b):
         lens, cost, groups = huffman(np.where(w > 0, w + b, w),
                                      stop_at=survivors)
-        if int(lens.max()) - int(lens.min()) <= 15 or b <= 0.0:
-            return lens, cost, groups
-        b = b * 2.0
+        return lens, cost, groups, int(lens.max()) - int(lens.min())
+
+    lens, cost, groups, span = build(0.0)
+    if span <= 15:                      # no flattening needed
+        return lens, cost, groups
+
+    # Bracket a working bias by doubling.  The closed form is a guess at the
+    # scale, not a solution; `phi^-15` is a sufficient upper bound, so the
+    # doubling cannot run away.
+    b = max((pmax - 32768.0 * pmin) / 32767.0, T * 2.0 ** -20)
+    while span > 15:
+        b *= 2.0
+        lens, cost, groups, span = build(b)
+        if b > T:
+            raise AssertionError('the bias did not bring the span to 15')
+
+    # Bisect the bracket for the least bias that works, so the tail is no
+    # flatter than the 4-bit field requires.  The unbiased build failed, so 0
+    # is the low end.
+    lo = 0.0
+    for _ in range(16):
+        mid = 0.5 * (lo + b)
+        lens2, cost2, groups2, span2 = build(mid)
+        if span2 <= 15:
+            b, lens, cost, groups, span = mid, lens2, cost2, groups2, span2
+        else:
+            lo = mid
     return lens, cost, groups
-
-
 def to_file_id(i, nchars):
     """Build symbol id -> file symbol id.
 
@@ -438,7 +556,7 @@ def prepared_matrix(directory, kappa):
 
 
 def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
-                shared_weight=1.0, bias=False):
+                shared_weight=1.0, bias=True):
     """Build the model tables from a dictionary directory.
 
     The file has no stop symbol.  The corpus tokeniser emits one, but it is not
@@ -447,7 +565,7 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
     what makes the first token's distribution available to the top stage; its
     column does not, because nothing is coded after the end of an identifier.
     So the matrix loses a row and a column: `V0 x (V0-1)` for `V0 = V + 1`
-    tokens, which is the `V x (V-1)` of `MODEL_FORMAT.md` in its own numbering.
+    tokens, which is the `V x (V+1)` of `MODEL_FORMAT.md` in its own numbering.
 
     The start state needs a left cluster, and it is fixed by convention: the
     identifier starts in left cluster 0.  The build chooses which cluster that
@@ -646,22 +764,54 @@ def read_yaml(path):
 # ------------------------------------------------------------- the binary
 
 def pack_rules(rules, V, nchars):
-    """The Zipf-coded rule table on its own: `(bytes, bits)`.
+    """The ladder-coded rule table on its own: `(bytes, bits)`.
 
     Kept separate from `pack` so the other accounting scripts can charge the
-    dictionary the price the file actually pays instead of a formula.  The
-    prior is a function of `V` alone, so the decoder stores no table for it.
+    dictionary the price the file actually pays instead of a formula.  Child `j`
+    of rule `i` lies in `[0, nchars + i)`, so the number's range is known at
+    both ends and nothing is stored for the code.
     """
-    prefix = zipf_prefix(V)
-    enc = ArithEncoder()
-    for i, (a, b) in enumerate(rules):
-        total = int(prefix[nchars + i])
-        for x in (a, b):
-            enc.encode(int(prefix[x]), int(prefix[x + 1]), total)
-    return enc.finish(), enc.bits
+    bw = BitWriter()
+    for i, pair in enumerate(rules):
+        N = nchars + i
+        for x in pair:
+            ladder_put(bw, x, N)
+    return bw.finish(), bw.total
 
 
-def pack(m, depth_bits=None, packed_rules=True):
+def unpack_rules(buf, V, nchars):
+    """Read the ladder stream back into `V - nchars` index pairs."""
+    br = BitReader(buf)
+    rules = []
+    for i in range(V - nchars):
+        N = nchars + i
+        rules.append((ladder_get(br, N), ladder_get(br, N)))
+    return rules
+
+
+def depth_offsets(depths):
+    """Depths of one tree as `depth - min`, which is what the field holds.
+
+    The decoder recovers the offset because every tree is complete:
+    `sum 2^-depth = 1`, so with `depth = o + delta`, `2^o = sum 2^-delta`.
+    """
+    if not depths:                  # an empty right cluster has no depths
+        return [], 0
+    lo = min(int(d) for d in depths)
+    return [int(d) - lo for d in depths], lo
+
+
+def depth_from_offsets(deltas):
+    """The inverse: `sum 2^-delta` is a power of two and its exponent is `o`."""
+    if not deltas:
+        return []
+    total = sum(1 << (15 - int(x)) for x in deltas)
+    o = total.bit_length() - 1 - 15
+    assert total == 1 << (o + 15), f'Kraft {total} is not 2^{o + 15}'
+    return [int(x) + o for x in deltas]
+
+
+def pack(m, depth_bits=DEPTH_BITS, packed_rules=True):
     """Pack the model into MODEL_FORMAT.md §3.  Returns (bytes, sections)."""
     V, k, q = m['V'], m['k'], m['q']
     nchars = len(m['alphabet'])
@@ -700,20 +850,29 @@ def pack(m, depth_bits=None, packed_rules=True):
     add('memberships', bw.finish())
     sections['membership_bits'] = width
 
-    depths = list(m['bottom']) + list(np.asarray(m['top']).ravel())
-    if depth_bits is None:
-        depth_bits = max(1, int(max(depths)).bit_length())
-    add('depth_width', bytes([depth_bits]))
+    # the depths: 4 bits each, as offsets inside their own tree.  The offset is
+    # not stored — the Kraft equality of a complete tree fixes it (below).
+    widths = []
     bw = BitWriter()
     for J in range(kq):
-        for i in np.flatnonzero(np.asarray(m['memberships']) == J):
-            bw.put(int(m['bottom'][i]), depth_bits)
+        ids = np.flatnonzero(np.asarray(m['memberships']) == J)
+        deltas, _o = depth_offsets([int(m['bottom'][i]) for i in ids])
+        widths += deltas
+        assert not deltas or max(deltas) <= 15, \
+            f'bottom tree {J} spans {max(deltas)} levels: needs the weight bias'
+        for d in deltas:
+            bw.put(d, depth_bits)
     add('bottom_depths', bw.finish())
     bw = BitWriter()
     for L in range(k):
-        for d in m['top'][L]:
-            bw.put(int(d), depth_bits)
+        deltas, _o = depth_offsets([int(x) for x in m['top'][L]])
+        widths += deltas
+        assert max(deltas) <= 15, \
+            f'top tree {L} spans {max(deltas)} levels: needs the weight bias'
+        for d in deltas:
+            bw.put(d, depth_bits)
     add('top_depths', bw.finish())
+    sections['depth_bits'] = depth_bits
 
     return bytes(out), sections
 
@@ -728,20 +887,10 @@ def unpack(buf, packed_rules=True):
     nchars, pos = read_varint(buf, pos)
     rules_len, pos = read_varint(buf, pos)
     kq = k * q
-    prefix = zipf_prefix(V)
     if packed_rules:
-        dec = ArithDecoder(buf[pos:pos + rules_len])
-        rules = []
-        for i in range(V - nchars):
-            total = int(prefix[nchars + i])
-            pair = []
-            for _ in range(2):
-                t = dec.target(total)
-                x = int(np.searchsorted(prefix, t, side='right') - 1)
-                assert 0 <= x < nchars + i, (i, x)
-                dec.update(int(prefix[x]), int(prefix[x + 1]), total)
-                pair.append(x)
-            rules.append(tuple(pair))
+        rules = unpack_rules(buf[pos:pos + rules_len], V, nchars)
+        for i, (a, b) in enumerate(rules):
+            assert a < nchars + i and b < nchars + i, (i, a, b)
     else:
         br = BitReader(buf[pos:pos + rules_len])
         width = ceil_log2(V)
@@ -759,22 +908,23 @@ def unpack(buf, packed_rules=True):
     memberships = np.array([br.get(width) for _ in range(V)])
     assert len(memberships) == V and memberships.max() < kq
 
-    depth_bits = buf[pos]
-    pos += 1
+    depth_bits = DEPTH_BITS          # fixed by the format, not stored
     nbytes = (V * depth_bits + 7) // 8
     br = BitReader(buf[pos:pos + nbytes])
     pos += nbytes
     bottom = np.zeros(V, dtype=np.int64)
     for J in range(kq):
-        for i in np.flatnonzero(memberships == J):
-            bottom[i] = br.get(depth_bits)
+        ids = np.flatnonzero(memberships == J)
+        deltas = [br.get(depth_bits) for _ in ids]
+        for i, d in zip(ids, depth_from_offsets(deltas)):
+            bottom[i] = d
     nbytes = (k * (kq + 1) * depth_bits + 7) // 8
     br = BitReader(buf[pos:pos + nbytes])
     pos += nbytes
     top = np.zeros((k, kq + 1), dtype=np.int64)
     for L in range(k):
-        for J in range(kq + 1):
-            top[L, J] = br.get(depth_bits)
+        deltas = [br.get(depth_bits) for _ in range(kq + 1)]
+        top[L] = depth_from_offsets(deltas)
     assert pos == len(buf), (pos, len(buf))
     return dict(alphabet=alphabet, rules=[list(p) for p in rules],
                 memberships=list(memberships), bottom=bottom, top=top,
@@ -1032,7 +1182,7 @@ def main():
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--assignment', default='one', choices=('one', 'two'))
     ap.add_argument('--shared-weight', type=float, default=1.0)
-    ap.add_argument('--depth-bias', action='store_true',
+    ap.add_argument('--no-depth-bias', dest='depth_bias', action='store_false',
                     help='flatten the depths before the Huffman build')
     ap.add_argument('--validation', default='work/camel/merged_validation.txt')
     ap.add_argument('--stride', type=int, default=10)
@@ -1068,15 +1218,15 @@ def main():
 
     bd = np.asarray(m['bottom'], dtype=int)
     td = np.asarray(m['top'], dtype=int)
-    width_needed = max(1, int(max(bd.max(), td.max())).bit_length())
     mem = np.asarray(m['memberships'], dtype=int)
     bspan = max(int(bd[mem == J].max() - bd[mem == J].min())
                 for J in range(kq) if (mem == J).any())
     tspan = max(int(td[L, 1:].max() - td[L, 1:].min()) for L in range(k))
     span_field = max(1, max(bspan, tspan).bit_length())
     print(f'  depths: bottom max {bd.max()}, top max {td.max()}, '
-          f'field {width_needed} bits; per-tree span {max(bspan, tspan)} '
-          f'(bottom {bspan}, top {tspan}), offset field {span_field} bits')
+          f'per-tree span {max(bspan, tspan)} (bottom {bspan}, top {tspan}), '
+          f'stored as offsets in a {DEPTH_BITS}-bit field '
+          f'(offsets need {span_field})')
     counts = {d: int((bd == d).sum()) for d in range(int(bd.max()) + 1)}
     print('  bottom depths: ' + ' '.join(f'{d}:{counts[d]}' for d in counts
                                          if counts[d]))

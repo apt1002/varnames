@@ -118,12 +118,12 @@ validation set (229,534 identifiers, `kappa = 1000`):
 | 2,104 | 11 → 0 | 2,023 → 2,040 | 45.79 → 45.79 | 195,017 → 195,014 | 227,611 → 227,606 |
 | 4,478 | 23 → 0 | 4,389 → 4,414 | 42.48 → 42.48 | 205,531 → 205,486 | 228,506 → 228,512 |
 
-Cost of storing the list, Zipf-coded (`docs/MODEL_BUDGET.md`): 1,019 → 1,036 B,
-4,645 → 4,663 B, 10,815 → 10,850 B — the naive list needs a few more rules for
+Cost of storing the list, ladder-coded (`docs/MODEL_BUDGET.md` §4): 1,019 → 1,036
+B, 4,645 → 4,663 B, 10,815 → 10,850 B — the naive list needs a few more rules for
 the same `V` and each rule is marginally dearer, so the run machinery saves
 **0.2–0.4 % of the word list** and nothing else.  At the canonical grid the
-same code measures 9,806 B of rules at `V = 4,096`, 15,360 at 6,144 and 21,109
-at 8,192 — 9.8, 10.1 and 10.4 bits per child index against the 12–13 a
+same code measures 9,787 B of rules at `V = 4,096`, 15,259 at 6,144 and 20,926
+at 8,192 — 9.7, 10.0 and 10.3 bits per child index against the 12–13 a
 fixed-width field would need (`scripts/model_size.py`, `MODEL_FORMAT.md` §3).
 
 * **At the sizes we use, the run rule is free to drop.**  At `V = 2,104` and

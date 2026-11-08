@@ -9,7 +9,7 @@ The first axis, the pairing:
 
     pair       store `u` and `v` separately
     triangle   store `(u + v)(u + v - 1) / 2 + u`
-    square     store `(v - 1)^2 + u` if `u < v`, else `u (u - 1) + v`
+    square     store `v^2 + u` if `u < v`, else `u (u + 1) + v`
 
 The second axis, coding a number `x` known to lie in `[0, N)`:
 
@@ -103,13 +103,12 @@ def triangle_max(N):
 
 
 def square(u, v):
-    return (v - 1) ** 2 + u if u < v else u * (u - 1) + v
+    """The corrected Square: a bijection onto `[0, N^2)`, like Pair."""
+    return v * v + u if u < v else u * (u + 1) + v
 
 
 def square_max(N):
-    vals = [(N - 1) ** 2 + u for u in range(min(N - 1, 4))]
-    vals += [(N - 1) * (N - 2) + v for v in range(min(N - 1, 4))]
-    return max(vals) if vals else 0
+    return N * N - 1
 
 
 def main():

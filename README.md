@@ -13,7 +13,7 @@ bijection is reachable at all. This is research, not yet a finished codec.
 
 What is reachable today: the best model we have codes held-out identifiers at
 **45.2 bits**, fits **85.0%** of them in 64 bits and **99.0%** in 128 bits, for a
-model file of **32,085 bytes** (34.1 kB with the library code) at 8192 words and
+model file of **30,745 bytes** (32.8 kB with the library code) at 8192 words and
 32 clusters. That is short of the 20 kB goal, and the gap is where the remaining
 research sits — the measured frontier, and what it costs to move along it, is in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) and
@@ -103,7 +103,7 @@ question is how well we can do with a small model. Both halves are measured:
 the fit rate on held-out identifiers
 ([`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md)) and systematically
 compared ([`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md)). Fitting an
-additional 1% of identifiers into 64 bits seems to cost between 2K
+additional 1% of identifiers into 64 bits seems to cost between 1K
 and 6K in the interesting model size range; it costs more for larger models.
 
 ![The measured size-versus-fit frontier](docs/frontier.svg)
@@ -111,10 +111,9 @@ and 6K in the interesting model size range; it costs more for larger models.
 The figure plots the frontier table in
 [`docs/MODEL_BUDGET.md`](docs/MODEL_BUDGET.md) §6: model size against the fraction
 of held-out identifiers that do *not* fit in 64 bits, so the best model is
-furthest bottom-left. Filled points are the arithmetic reference for each
-word list (the small numbers are `k`); the hollow points are the three measured
-shipped files (4096/16, 8192/16 and 8192/32, the operating point), which sit
-below and left of the reference curve.
+furthest bottom-left. Filled points are the measured packed files, one curve
+per word list (the small numbers are `k`); the hollow diamonds charge the
+library code as well, so they sit to the right of their model-only points.
 
 We tried two main strategies, and found that the second one is much better:
 
@@ -130,7 +129,7 @@ are in fact English words or abbreviations but many are not.
 
 We explored many ways of defining "word". It turns out that the list of words is
 the most important part of the model, and it therefore accounts for the majority
-of the model size — two thirds of the shipped file, 21,109 of 32,085 bytes at
+of the model size — two thirds of the shipped file, 20,926 of 30,745 bytes at
 the operating point. See ([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md))
 for details of the compromise. The best idea for the rejected strategy was
 different from the best idea for the adopted strategy (cited above).
@@ -176,6 +175,10 @@ Along the way, we tried a lot of things that didn't work:
   right clusters buys 0.1 bits and 0.1 fit points for 1.2 kB once the
   terminator is free, so `q = 1` ships
   ([`docs/CLUSTER_QUARTERS.md`](docs/CLUSTER_QUARTERS.md)).
+- **Combining the rule pair into one number.** Triangle and Square pack
+  `(u, v)` into a single index; both lose to coding the two child ids
+  separately, because the skew the code exploits is per child
+  ([`docs/RULE_ENCODING.md`](docs/RULE_ENCODING.md)).
 
 ## Layout
 
@@ -213,6 +216,7 @@ varnames/
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
 │   ├── MODEL_FORMAT.md                  # the portable YAML model + its binary form
+│   ├── RULE_ENCODING.md                 # encoding the rule list: the pair/code grid
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
@@ -265,6 +269,9 @@ varnames/
 │   ├── wordlist_budget.py               # word-list size vs k² table budget
 │   ├── words_per_identifier.py          # token-count histogram + Huffman penalty
 │   ├── model_budget.py                  # model size in bytes (word list + tables)
+│   ├── model_size.py                    # the size oracle: pack, decode, price the model
+│   ├── rule_encoding.py                 # the rule-pair encoding grid (docs/RULE_ENCODING.md)
+│   ├── depth_bias.py                    # why the depth bias is searched, not computed
 │   ├── frontier_plot.py                 # draw docs/frontier.svg from the frontier table
 │   ├── wordlist_order.py                # creation order vs unigram order in a built list
 │   ├── model_fit_rates.py               # held-out fit rates; cost of quantising the tables

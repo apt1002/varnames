@@ -85,7 +85,7 @@ buys is real.
 Report, per `k`: held-out mean bits, fit ≤64, fit ≤128, model bytes (word list +
 unigram + membership + block), and the full-table reference bits.  The word list
 is charged at the price the packed file pays for it, not at a formula
-(`model_size.pack_rules`): at `V = 8,192` that is 21,109 B, and a `V log₂ V`
+(`model_size.pack_rules`): at `V = 8,192` that is 20,926 B, and a `V log₂ V`
 estimate misses it by 8 kB.  Adopt if at
 **matched total bytes** the fit rate is no worse than the asymmetric model
 (within ±0.3 pt, the run-to-run noise of the frontier), or if the matched-`k`
@@ -170,20 +170,20 @@ map saves:
 
 | point | one map | bits/id | fit ≤64 | two maps | bits/id | fit ≤64 | the map costs | buys | per bit |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 4096, `k = 16` | 14,659 B | 48.982 | 80.5 % | 16,707 B | 48.973 | 80.6 % | 2,048 B | 0.009 bits | 228 kB |
-| 8192, `k = 16` | 30,571 B | 45.676 | 84.5 % | 34,667 B | 45.128 | 85.1 % | 4,096 B | 0.548 bits | 7.5 kB |
-| 8192, `k = 32` | 32,085 B | 45.217 | 85.0 % | 37,205 B | 44.898 | 85.3 % | 5,120 B | 0.319 bits | 16.0 kB |
+| 4096, `k = 16` | 14,093 B | 48.982 | 80.5 % | 16,141 B | 48.971 | 80.6 % | 2,048 B | 0.011 bits | 186 kB |
+| 8192, `k = 16` | 29,329 B | 45.677 | 84.5 % | 33,425 B | 45.128 | 85.1 % | 4,096 B | 0.549 bits | 7.5 kB |
+| 8192, `k = 32` | 30,745 B | 45.218 | 85.0 % | 35,865 B | 44.889 | 85.3 % | 5,120 B | 0.329 bits | 15.6 kB |
 
 * **The constraint's price falls with `k`; the second map's price rises.**  The
   bits forgone by keeping one map are 0.55 at `k = 16` and 0.32 at `k = 32`,
   while the second map's own bytes grow from 4,096 to 5,120.  So per bit bought
-  the second map goes from 7.5 kB to 16.0 kB — away from the frontier's 3–5 kB
+  the second map goes from 7.5 kB to 15.6 kB — away from the frontier's 3–5 kB
   per bit, not towards it.  Once the clusters are fine enough, a word's
   successor and predecessor profiles agree well enough that a second assignment
   adds almost nothing, which is the prediction of "Why it might pay" confirmed
   in bytes rather than in the `assoc` accounting.
-* **At `V = 4,096, k = 16` the question does not arise**: 2,048 B buys 0.009
-  bits and 0.1 fit point, which is 228 kB per bit — the dearest of the three.
+* **At `V = 4,096, k = 16` the question does not arise**: 2,048 B buys 0.011
+  bits and 0.1 fit point, which is 186 kB per bit — the dearest of the three.
   In the smallest model the clusters are coarse enough that the left and right
   profiles agree least, and yet the extra resolution is still worth nothing:
   what binds there is the size of the word list, not the memberships.

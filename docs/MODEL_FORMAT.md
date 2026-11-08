@@ -42,8 +42,9 @@ any other.  The corpus tokeniser's stop token is not a symbol of the file at
 all: its row of the adjacency matrix is the **start state**, which is what makes
 the first token's distribution available, and its column does not exist because
 nothing is coded after the end.  The adjacency matrix the build works from is
-therefore `V0 × (V0 − 1)` for `V0 = V + 1` corpus symbols, which is `V × (V − 1)`
-in the file's numbering.  The start state needs a left cluster, and by
+therefore `V0 × (V0 − 1)` for `V0 = V + 1` corpus symbols, which is `V × (V + 1)`
+in the file's numbering (`V` columns, and a row for each of the file's `V`
+symbols plus the stop).  The start state needs a left cluster, and by
 convention it is **left cluster 0**: the build chooses which cluster that is —
 the one whose top tree codes the first-token distribution cheapest — and numbers
 it 0, permuting the other labels — and the leaves inside their trees — to match
@@ -167,13 +168,12 @@ q = 1`, the operating point, with the packed rule table.
 | magic | `NVM1` | 4 |
 | `V`, `k`, `q`, `len(alphabet)` | varints | 5 |
 | rules length | a varint, because the rule stream is not self-delimiting | 3 |
-| `rules` | 2 × (V − 63) child indices, coded by §4 | 21,109 |
+| `rules` | 2 × (V − 63) child indices, coded by §4 | 20,926 |
 | `alphabet` | `len(alphabet)` bytes, ids 0–62 | 63 |
-| `memberships` | `⌈log₂ k⌉` = 5 bits each, packed | 5,120 |
-| depth width | one byte, in bits | 1 |
-| `bottom_trees` | `V` depths at that width, right cluster by right cluster, ascending symbol id inside | 5,120 |
-| `top_trees` | `k(k + 1)` = 1,056 depths at the same width | 660 |
-| **total** | | **32,085** |
+| `memberships` | `⌈log₂ kq⌉` = 5 bits each, packed | 5,120 |
+| `bottom_trees` | `V` depths at 4 bits each, right cluster by right cluster, ascending symbol id inside | 4,096 |
+| `top_trees` | `k(k+1)` = 1,056 depths at 4 bits each | 528 |
+| **total** | | **30,745** |
 
 There is **no version byte**: `NVM1` is the version.  A change that would break a
 reader changes the magic to `NVM2`, and a reader must reject a magic it does not
@@ -181,6 +181,16 @@ know.  There is **no checksum**: the decoder already checks the magic, every chi
 against the rule's own limit, the completeness of every tree (the Kraft sum), the
 leaf counts against `memberships`, and that the file ends where the tables say it
 does.  A CRC-32 would add four bytes to catch nothing those checks do not.
+
+**Every depth is exactly four bits**, and there is **no width byte**.  The field
+stores `d − d_min` for its own tree, not the raw depth: `d_min` is not stored at
+all.  The decoder recovers it from the Kraft equality, per tree.  A complete
+tree has `Σ 2^(−d) = 1`, so with `d = δ + d_min` it computes
+`2^d_min = Σ 2^(−δ)` and takes `d_min = log₂` of it, which must be a whole
+number.  A tree with one leaf carries no depth at all — its symbol is coded in
+zero bits, and the decoder knows it is alone from `memberships`.  A depth table
+whose δ's give no integer offset is corrupt, so the equality is also a decoder
+invariant.  §3.1 is why four bits are enough at every point of the grid.
 
 A **varint** is a base-128, little-endian integer: each byte carries seven
 payload bits and the top bit says whether another byte follows.  So `V = 8,191`
@@ -193,153 +203,131 @@ is bit *i* mod 8 of byte *i* // 8, and bit 0 of the code is the first bit an
 encoder writes, so the padding of `ENCODING.md` §2 is the run of zeros *above*
 the code.  Integers are little-endian.
 
-The depth width is **5 bits measured, not assumed**: at the operating point the
-deepest word tree is 23 and the deepest top tree 19, and 5 bits holds the whole
-measured grid.  Six bits would be needed only above depth 31, which no point
-reaches, and a length limit would only be needed for a build that reaches it.
-The bias experiment below is the route down to 4 bits.
-
-The rest of the file is 10,976 B, so the model is **32.1 kB** — against the
-34.1 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
-part of the model.  The YAML of §2 is 182,509 B at the same point — 5.7 times
+The rest of the file is 9,819 B, so the model is **30.7 kB** — against the
+32.8 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
+part of the model.  The YAML of §2 is 182,472 B at the same point — 5.9 times
 as large: it is the portable form, and the binary is what the budget measures.
 
-### Experiment: a 4-bit depth field by biasing the weights
+### 3.1 Why four bits are enough: the weight bias
 
-The depth field costs `V + k(k+1)` depths at 5 bits: 5,780 B at the operating
-point, 1,156 B more than a 4-bit field (`V` and `k(k+1)` depths at 4 bits =
-4,096 + 528 B).  Four bits are not enough for the measured range (0–23),
-because a Huffman build puts a rare leaf much deeper than a common one.  The
-range can be compressed by *biasing* the weights before the build:
+Unbiased, a Huffman build puts a rare leaf far deeper than a common one: at
+8192/32 the word trees run from 0 to 23, so a raw depth needs five bits.  The
+range is compressed by adding a **bias** to every leaf weight before the merge,
+which lifts the smallest probabilities and shortens the tail.  The design
+proposed
 
     bias  =  max(0, (P_max − 32768 · P_min) / 32767)
 
-added to every leaf probability, where `P_max` and `P_min` are the largest and
-smallest positive leaf probabilities in that tree.  The bias lifts the smallest
-weight so that `P_max / P_min` is about `2^15`, and a Huffman tree cannot spread
-leaves whose weights differ by less than a factor `2^k` over more than `k`
-levels.  The deepest-to-shallowest difference is then meant to be at most 15, so
-the field holds `d − d_min` in 4 bits.
+on the hypothesis that a weight ratio of at most `2^15` bounds the depth span at
+15.  It does not, and why is the difference between an *ideal* code and a
+*Huffman* code.
 
-**Measured, the ratio alone is not enough.**  At 8192/32 it gives a bottom span
-of 15 but a top span of 17 and an overall span of 17, which is still 5 bits.
-The bound needs a second condition, in the same units: the shallowest leaf is
-never shorter than one bit, while the deepest can run a couple of bits past
-`−log₂ q_min`, so what bounds the *Huffman* span is the absolute floor
+**The formula bounds the wrong quantity.** Ideal (Shannon) depth is `−log₂ p`, so
+a ratio `P_max / P_min ≤ 2^15` does bound the *ideal* gap at 15 levels.  A
+Huffman tree is not the ideal code: its longest codeword obeys the **Fibonacci
+bound** `L_max ≤ log_phi(T / q_min)`, which is 1.44 times the Shannon depth at
+the same weight, and its shortest is floored near `−log₂ q_max`.  A
+distribution can satisfy the formula and still span more than 15 — and the grid
+does: at 8192/32 the stated bias leaves the top trees spanning **16** levels,
+while it has already flattened the bottom trees from 18 to **12**, three more
+than the field needs.  One formula, applied tree by tree, over-corrects one
+stage and under-corrects the other, because the two stages have different weight
+ratios, and what it costs in bits is what the search over the grid prices.
 
-    q_min  ≥  2^-15      i.e.   bias  ≥  T / 32768 − P_min
+**The formula is tied to 15.** It is an inequality about `2^15`, so it says
+nothing about a span of `s` for any other `s`, and cannot be scaled to a
+narrower field.
 
-with `T` the total weight.  Taking the larger of the two biases and then
-doubling it until the built tree spans 15 or less gives the guarantee, and the
-doubling stops at the first bias that works, so the fit cost stays minimal.
-Measured that way: every tree on the grid spans at most 15, bottom max 12 and
-top max 15 at 8192/32, so the field is 4 bits and the offsets are per tree.
+#### A worked example that does *not* tickle it
 
-The constant offset is recovered from the Kraft equality, per tree: a complete
-tree has `Σ 2^(−d) = 1`, so with `d = δ + o` the decoder computes
-`2^o = Σ 2^(−δ)` and takes `o = log₂` of it, which must be a whole number.  No
-byte is stored for `o`, no `d_min` field is needed, and a tree with one leaf
-carries no depth at all (its symbol is coded in zero bits, and the decoder knows
-it is alone from `memberships`).  The Kraft check is also a decoder invariant:
-a depth table whose δ's give no integer `o` is corrupt.
+The design's own `[1, 2, 4, 8, 16]`, as probabilities over 31.  Its Huffman
+depths are `4, 4, 3, 2, 1`: a span of 3, which a 4-bit field holds with no bias
+at all, and the formula agrees (it asks for zero).  So this example does not
+exhibit the bug at 15 bits.  It does exhibit it at a **one-bit** field: the same
+weights need a span of 1, the formula still asks for zero, and the least bias
+that fits is `4.5` — 15 % of the total mass — costing 0.42 bits per leaf.
 
-Zero-weight leaves are excluded from the bias: they are the terminator, they must
-stay the deepest leaf, and lifting them to `bias` would put them level with real
-leaves and could break invariant 7.
+#### A worked example that does
 
-**What it buys, measured** (`--depth-bias`, stride 10, seed 1).  "Span" is the
-worst single-tree spread of depths, and the field column is the width that spread
-needs — the width of a file that stores the per-tree offsets above.  Today's file
-stores raw depths, so its width is `bits(max)`, which is 5 at all three points:
+Twenty weights in the Fibonacci progression `1, 1, 2, 3, 5, …, 6765` (total
+17,710).  The deepest weight is `q_min = 2^-14.11`, so
+`log_phi(1/q_min) = 20.3`, and the unbiased tree spans **18** levels.  The ratio
+`P_max / P_min = 6765` is far below `2^15`, so the formula asks for zero bias —
+and the tree still spans 18, needing five bits.  The least bias that brings it
+to 15 is `0.067`, a lift of 0.0004 %, and it does so at no measurable bit cost.
+Nothing in the distribution's maximum-to-minimum ratio predicts that number; the
+shape of the whole tail does.  (`scripts/depth_bias.py` prints all of these
+trees.)
 
-| point | bias | bottom max | top max | worst span | field | bits/id | fit ≤64 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 8192/32 | off | 23 | 19 | 18 | 5 bits | 45.217 | 85.0 % |
-| 8192/32 | on | 15 | 16 | **15** | **4 bits** | 45.165 | 85.0 % |
-| 8192/16 | off | 23 | 12 | 18 | 5 bits | 45.676 | 84.5 % |
-| 8192/16 | on | 20 | 12 | **14** | **4 bits** | 45.664 | 84.6 % |
-| 4096/16 | off | 19 | 13 | 14 | 4 bits | 48.982 | 80.5 % |
-| 4096/16 | on | 15 | 13 | **13** | **4 bits** | 48.965 | 80.5 % |
+#### The sufficient condition, and why it is too expensive
 
-The fit rate does not move at any point, and the mean bits move the *right* way
-in all three (by 0.01–0.05, which is noise: the bias only lengthens the rarest
-leaves).  Shortening the field saves 1,156 B at the operating point, 1,058 B at
-8192/16 and 546 B at 4096/16 — 3.6 % of the largest file — so the 4-bit field is
-worth adopting.  What it needs is the offset convention above written into the
-format, which is why the layout in §3 still says one width per file.
+The Fibonacci bound does give a closed-form guarantee: `q_min ≥ phi^-15` forces
+`L_max ≤ 15`, hence a span of at most 15.  On the Fibonacci weights it works
+(span 7) but over-flattens badly, and on the real trees it is expensive: at
+8192/32 it gives a span of 11 and costs **0.22 bits per identifier** against
+the unbiased build.  A bound on the *longest* codeword is not a bound on the
+*span*, and the difference is paid in bits.
+
+#### So the bias is found, not computed
+
+The Huffman shape is a property of the whole distribution, and no single ratio
+describes it.  The build therefore brackets a working bias by doubling from the
+design's formula, then **bisects** the bracket for the least bias whose built
+tree spans 15 or less, to `2^-16` relative.  That is the least flattening the
+four-bit field allows, and measured it is what keeps the field's fit cost at
+nothing:
+
+| point | bias | bottom max | top max | worst span | bits/id | fit ≤64 |
+|---|---:|---:|---:|---:|---:|---:|
+| 8192/32 | off | 23 | 19 | 18 | 45.217 | 85.0 % |
+| 8192/32 | found | 20 | 17 | 15 | 45.218 | 85.0 % |
+| 8192/16 | off | 23 | 12 | 18 | 45.676 | 84.5 % |
+| 8192/16 | found | 21 | 12 | 15 | 45.677 | 84.5 % |
+| 4096/16 | off | 19 | 13 | 14 | 48.982 | 80.5 % |
+| 4096/16 | found | 19 | 13 | 14 | 48.982 | 80.5 % |
+
+Zero-weight leaves are excluded from the bias: they are the terminator, they
+must stay the deepest leaf, and lifting them to the bias would put them level
+with real leaves and could break invariant 7.
+
+The field is four bits at every point of the measured grid.  Shortening the
+depths from five bits to four takes the operating-point file from 31,901 B to
+30,745 B — **1,156 B, 3.6 %** — and the fit rate does not move at any point.
 
 ## 4. The rule table and how it is coded
 
-The rules are the largest object in the file: 21,109 of 32,085 B, two thirds of
+The rules are the largest object in the file: 20,926 of 30,745 B, two thirds of
 the model.  Rule *i* is a pair `(u, v)` of child ids, both below
-`N = len(alphabet) + i`, and the decoder's only choices are how to turn the pair
-into numbers and how to code a number known to lie in `[0, N)`.
+`N = len(alphabet) + i`, and the decoder knows `N` for each rule.  The file
+stores each child with a **static geometric ladder**, base 2, `b = 3`:
 
-* **plain** — `⌈log₂ N⌉` bits per child: 26,416 B at the operating point, and the
-  whole file 37,392 B.  Simple, obviously correct, and the form the round-trip
-  tests use.
-* **packed** — the grid of §4.1, whose best is 20,925 B.
+    B    = 2^b = 8 intervals
+    e_i  = N (2^i − 1) // (2^B − 1)           for i = 0 … B
+    x    = the child id, in [0, N)
+    i    = the interval with e_i <= x < e_{i+1}, written in b bits
+    r    = x − e_i, written in [0, e_{i+1} − e_i) by the variable-width code
 
-`scripts/rule_encoding.py` prices the grid on the 8,192-word list (8,128 rules,
-16,256 child indices).  The first axis combines the pair into one number; the
-second codes a number in `[0, N)`:
+Nothing is stored for the code: the decoder derives the eight edges from `N`
+and `b` with integer arithmetic, and at base 2 the index is exact in shifts.
+The two children are coded **separately** — Pair — rather than combined into one
+number.  That is the finding of the grid: the ladder exploits the frequency rank
+of each child, because a low id is an old, frequent word, so a rule
+`(common, rare)` gets a short code for the common child.  Any pairing sends both
+children through one number, and the common child loses its short code.  The
+adopted encoding is 20,925 B for the shipped list (10.298 bits per child); the
+fixed field costs 24,492 B, the variable field 22,948 B, and the best
+pair-combining scheme 21,162 B (Triangle) or 21,458 B (Square).
 
-| pairing | `x` stored | range |
-|---|---|---:|
-| Pair | `u` and `v`, two numbers | `N²` |
-| Triangle | `(u+v)(u+v−1)/2 + u` | `2N²` |
-| Square | `(v−1)² + u` if `u < v`, else `u(u−1) + v` | `(N−1)²` |
-
-| number code | bits |
-|---|---|
-| Fixed | `⌈log₂ N⌉` |
-| Variable | `L = ⌊log₂ N⌋`, `s = N − 2^L`: `L` bits, then one more when `x ≥ 2^L − s` |
-| Zipf | `b` bits of interval index, then Variable inside the interval |
-
-The measured grid, bytes for the whole 8,128-rule list (10.30 bits per child is
-the best; the arithmetic coder of old measured 21,109 B, 10.39):
-
-| encoding | bytes | bits/child |
-|---|---:|---:|
-| **Zipf b=3, base 2, / Pair** | **20,925** | **10.298** |
-| Zipf b=3, base √e, / Pair | 20,961 | 10.316 |
-| Zipf b=2, base e, / Pair | 20,983 | 10.326 |
-| Zipf b=3, base e, / Triangle | 21,162 | 10.415 |
-| Zipf b=3, base e, / Square | 21,248 | 10.457 |
-| Zipf b=2, base 2, / Pair | 21,416 | 10.539 |
-| Pair / Variable | 22,948 | 11.293 |
-| Square / Variable | 23,245 | 11.439 |
-| Triangle / Variable | 24,154 | 11.887 |
-| Pair / Fixed | 24,492 | 12.053 |
-| Square / Fixed | 24,071 | 11.846 |
-| Triangle / Fixed | 25,086 | 12.346 |
-
-Three findings, which answer the axes:
-
-* **Pair wins.**  Combining the pair costs more than it saves in every row that
-  can be compared.  Triangle can never win: it maps `N²` pairs into `2N²` values,
-  so it spends a full bit per rule before any coding starts.  Square is not
-  usable at all — it is *not injective*: `(0, 1)` and `(1, 0)` both give 0, and
-  both orders occur in the list.  Its rows are shown only for completeness.
-* **A `b`-bit interval index of a geometric ladder beats an arithmetic coder.**
-  The best static code is 184 B smaller than the Zipf-arithmetic stream the
-  format used to carry, and it needs no arithmetic coder: the decoder computes
-  the interval edges from `N` and `b` with integer arithmetic
-  (`N(2^i − 1) // 255` at base 2, `B = 2^b` intervals) and reads a
-  variable-width residual inside the interval it lands in.  Nothing is stored for
-  the code, and nothing is computed at start-up beyond those divisions.
-* **Use the whole field.**  The design writes `base^b` in the index formula,
-  which yields only `b` intervals and wastes most of a `b`-bit field; writing
-  `base^(2^b)` — the reading in the table — is 3–4 kB better at `b = 2` and does
-  not need `b` to be guessed.  `b = 3` is the optimum: `b = 4` costs 22,408 B
-  and `b = 5` 24,439 B, because a wider index divides the range into intervals
-  too narrow to carry their own residual.
-
-The base matters little (2, e and √e are within 0.3 % of each other at `b = 3`),
-so base 2 is the one to ship: its edges are exact integers.  The design's third
-exponent is stated as `s = −ln√2` with `base = exp(0.5)`, but under
-`base = 2^(−1/s)` it gives `exp(2)`; the table uses the stated bases, and
-`exp(2)` measures 23,610 B at `b = 3`, worse by 13 %.
+The grid that chose it — three pairings crossed with eight number codes, `b` from
+2 to 5, three bases, and the narrow and wide readings of the index formula — is
+[`RULE_ENCODING.md`](RULE_ENCODING.md).  Two of its conclusions are worth
+repeating here because they are about *this* code.  First, the ladder is
+**static**: the only thing computed at load is eight integer divisions.  Second,
+it is within 5 % of the pooled entropy of the child-index stream (9.80
+bits/child, 19,916 B), and a code that reached that limit would have to store
+the empirical distribution, which costs more than the kilobyte it saves.  The
+arithmetic coder the format used to carry measured 21,109 B; the ladder is 184 B
+better and needs no arithmetic coder at all.
 
 ## 5. What the file deliberately omits
 
@@ -353,6 +341,7 @@ exponent is stated as `s = −ln√2` with `base = exp(0.5)`, but under
 | codewords | canonical from the depths (`ENCODING.md` §3) |
 | leaf order within a depth | canonical from the labels |
 | padding and the terminator | fixed by the encoding, not by the model (`ENCODING.md` §2) |
+| the depth offset `d_min` | recovered per tree from the Kraft equality (§3) |
 | a version and a checksum | the magic is the version; the invariants are the check (§3) |
 | generation parameters (`κ`, sample, seed) | they do not change the code, and they would make rebuilds non-reproducible |
 

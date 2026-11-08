@@ -100,12 +100,7 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/SHARED_CLUSTERS.md`.
 - [x] **C27. Reserved stop clusters.** *Rejected.*
       `docs/NEWLINE_CLUSTER.md`.
-- [x] **C28. Cluster quarters.** *Overturned: `q = 1` ships.*  Adopted at
-      `q = 2` on the arithmetic accounting, rejected once the file was measured
-      under the shipped convention: the quarters buy 0.10 bits and 0.13 fit
-      points for 1,184 B at 8192/16, and at the operating point 8192/32 they
-      cost 1,664 B and lose both.  The terminator was most of what they were
-      buying, and the zero-weight STOP leaf now gives it away.
+- [x] **C28. Cluster quarters.** *Rejected: `q = 1` ships.*
       `docs/CLUSTER_QUARTERS.md`.
 - [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
       model term.*  `docs/CODESIGN.md`.
@@ -116,11 +111,8 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 - [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
       model.*  The two clouds of the adopted model, coloured by right cluster,
       as illustration.  `README.md`.
-- [x] **C32. Naming right clusters by position.** *Rejected.*  A position in the
-      stored tree marks a block of its leaves, so it cannot express the
-      survivors the build stopped at; forcing blocks would be an imposed
-      partition, which loses the gain it was meant to save.  The label per word
-      is inherent (`docs/CLUSTER_QUARTERS.md` §"The structural cost").
+- [x] **C32. Naming right clusters by position.** *Rejected.*
+      `docs/CLUSTER_QUARTERS.md` §"The structural cost".
 
 ## D. Corpus preprocessing
 
@@ -174,66 +166,24 @@ be steered toward it.  Design intent, scope and audiences:
       artefacts are not rebuilt.  See the build key below.*
 - [x] **H7. Rationalise the `(V, k)` grid.** *Done — the grid is
       `V ∈ {4096, 6144, 8192}`, `k` chosen per `V`; `V = 512` is testing-only.*
-      Measured, each word list has a best `k` and a file size: 15,685 B at
-      4096/32, 23,523 at 6144/24, 32,126 at 8192/32, and the marginal `V` step
-      rises to 5.4 kB per bit against the 3.9 the `k` direction charges.  A
-      `V = 12,288` list would cost 13.3 kB for at most 1.5 bits (8.9 kB/bit), so
-      the grid stops at 8,192 — extrapolated from the measured rule growth, not
-      built.  `docs/MODEL_BUDGET.md` §7, `docs/WORDLIST_BUDGET.md`.
+      `docs/MODEL_BUDGET.md` §7, `docs/WORDLIST_BUDGET.md`.
 - [x] **H9. Restructure the documentation.** *Done.*  `README.md`.
 - [x] **H10. Reconcile the codebook accounting.** *Settled.*
       `docs/CLUSTER_QUARTERS.md`, `docs/MODEL_BUDGET.md`.
-- [x] **H11. A complete review of the model-size accounting.** *Steps 1–5 done;
-      step 6 under way.*  `scripts/model_size.py` builds at `(V, k, q)`, writes
-      the YAML, packs the binary, reports the bytes per section and round-trips
-      held-out identifiers through the packed file.  Measured at the operating
-      point 8192/32: **32,085 B, 45.217 bits/id, 85.0 % in 64 bits.**  It forced
-      three design changes — the terminator moved to a zero-weight STOP leaf in
-      the top stage; the corpus stop token left the file altogether (its row is
-      the start state, its column is gone, so the matrix is `V0 × (V0−1)` and
-      the start cluster is numbered `0`); and the arithmetic rule coder became
-      a static geometric ladder — and it priced the alternatives in bytes: the
-      one-map constraint (0.32 bits for 5,120 B at the operating point), `q = 2`
-      (0.12 bits for 1,664 B), the flat yardstick (2.3–2.8 fit points for
-      93–385 kB), and a 4-bit depth field via the weight bias (1,156 B, no fit
-      cost).  Steps 4–5 are through the parts the oracle can speak to: the `V`
-      ladder and the map constraint are measured files, `WORDLIST_BUDGET.md` has
-      the ladder in bytes, `SHARED_CLUSTERS.md` and `CLUSTER_QUARTERS.md` the
-      two rejected structures in the packed file.  Still open: the tables that
-      belong to other models (the `assoc` sweep of `CLUSTER_WORDS.md`, the
-      pre-expansion records in `PRUNE_WORDS.md` and `DICTIONARY_RULES.md`) and
-      step 6, retiring the numbers no oracle produced.
-      `docs/MODEL_BUDGET.md` §7.
-- [x] **H12. Encode and decode the model file.** *Done for the shipped layout.*
-      The YAML writer, the independent reader, the binary packer and unpacker,
-      the geometric-ladder rule coder and the canonical codes live in
-      `scripts/model_size.py`; `--self-test` runs the worked example of
-      `MODEL_FORMAT.md` §6 end to end.  What is missing is the published
-      table-building tool (E10).  `docs/MODEL_FORMAT.md`.
-- [x] **H13. Choose the encoding of the rule list.** *Done — a static geometric
-      ladder, base 2, `b = 3`.*  The 3 × 8 grid of `MODEL_FORMAT.md` §4 was
-      priced on the 8,192-word list: Pair beats Triangle and Square (Square is
-      not injective, Triangle spends a full bit), and the wide Zipf ladder beats
-      a variable-width integer by 2.0 kB and the fixed field by 3.6 kB.  The
-      ladder is 184 B better than the arithmetic coder it replaced, needs no
-      arithmetic coder and no stored table: the decoder computes the interval
-      edges from `N` and `b` in integer arithmetic.  `scripts/rule_encoding.py`,
-      `docs/MODEL_FORMAT.md` §4.
-- [x] **H14. A 4-bit depth field by biasing the weights.** *Measured; not yet in
-      the layout.*  The bias of `MODEL_FORMAT.md` §3 alone does not bound the
-      span (17 measured at 8192/32); adding the floor `T/2^15 − P_min` and
-      doubling until the built tree spans 15 gives 4 bits at every point, and
-      the fit rate does not move.  Saves 1,156 B at the operating point.  The
-      offset per tree is recovered from the Kraft equality, so no byte is
-      stored for it.  `docs/MODEL_FORMAT.md` §3.
-- [~] **H15. Retire the arithmetic sizes.** *Under way.*  `MODEL_BUDGET.md` is
-      now Huffman-only — the frontier, the slices, the ladder, the yardstick and
-      the two rejected structures are packed files — and `CLUSTER_QUARTERS.md`
-      no longer carries the `CF`/`CQF`/`W` formulas at all: it prices the same
-      trade with `q = 1` and `q = 2` files.  Remaining: the arithmetic columns of
-      `CODING_OVERHEAD.md` and the `assoc` sweep of `CLUSTER_WORDS.md`, which are
-      within-model comparisons whose verdicts the bytes agree with.  See
-      `docs/MODEL_BUDGET.md` §7, step 6.
+- [x] **H11. A complete review of the model-size accounting.** *Done.*
+      `docs/MODEL_BUDGET.md` §5–§7.
+- [x] **H12. Encode and decode the model file.** *Done for the shipped
+      layout; the published table-building tool is E10.*
+      `docs/MODEL_FORMAT.md`.
+- [x] **H13. Choose the encoding of the rule list.** *Done — a static
+      base-2 geometric ladder, `b = 3`, on two child indices.*
+      `docs/RULE_ENCODING.md`, `docs/MODEL_FORMAT.md` §4.
+- [x] **H14. A 4-bit depth field by biasing the weights.** *Adopted — a
+      searched bias, the offset recovered from Kraft.*
+      `docs/MODEL_FORMAT.md` §3.1.
+- [~] **H15. Retire the arithmetic sizes.** *Under way: `MODEL_BUDGET.md` is
+      Huffman-only; `CODING_OVERHEAD.md`'s arithmetic column and the `assoc`
+      sweep of `CLUSTER_WORDS.md` remain.*  `docs/MODEL_BUDGET.md` §7, step 6.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 
