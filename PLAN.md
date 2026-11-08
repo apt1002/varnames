@@ -102,12 +102,14 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/NEWLINE_CLUSTER.md`.
 - [x] **C28. Cluster quarters.** *Rejected: `q = 1` ships.*
       `docs/CLUSTER_QUARTERS.md`.
-- [ ] **C29. Codesign the assignment and the code.** *Planned, re-scoped to the
-      model term.*  `docs/CODESIGN.md`.
-- [ ] **C30. Show the clusters on the factor clouds.** *Planned.*  Colour
-      `scripts/factor_cloud.py` by the shared assignment, so the co-clustering
-      can be seen rather than inferred.  `docs/CLUSTER_WORDS.md`,
-      `docs/HELLINGER_FACTORISATION.md`.
+- [x] **C29. Codesign the assignment and the code.** *Parked — negative.*  The
+      code term alone, at a matched `k`, loses 1.921 bits/identifier and buys no
+      bytes; only the `lambda_fit` sweep is untried.  `docs/CODESIGN.md`.
+- [x] **C30. Show the clusters on the factor clouds.** *Done —*
+      `scripts/factor_cloud.py --model standard/model.nvm1` colours both clouds
+      by the shipped assignment (or `--clusters K` for a fresh one), numbers the
+      centroids, marks the stop token, and writes the cluster as a CSV column.
+      `docs/CLUSTER_WORDS.md`, `docs/HELLINGER_FACTORISATION.md`.
 - [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
       model.*  The two clouds of the adopted model, coloured by right cluster,
       as illustration.  `README.md`.
@@ -125,8 +127,9 @@ The distant target.  **Not started** — recorded so the research lines above ca
 be steered toward it.  Design intent, scope and audiences:
 `docs/PRODUCTISATION.md`.
 
-- [~] **E1. Design the encoding.** *In progress — designed; which tables ship
-      is still open.*  `docs/ENCODING.md`.
+- [x] **E1. Design the encoding.** *Done — designed, measured and shipped: one
+      model file of 30,745 bytes, one canonical assignment, the stop as padding.*
+      `docs/ENCODING.md` §6.
 - [ ] **E2. Write up the best algorithm** — corpus, case normalisation, word
       list, tokenisation, adjacency matrix, clustering, encoding.
 - [ ] **E3. Write up rejected alternatives** — the gathered data as
@@ -134,16 +137,19 @@ be steered toward it.  Design intent, scope and audiences:
 - [ ] **E4. Ablation study** (design TBD).
 - [x] **E5. Study the 64-bit and 128-bit identifier sets.** *Done.*
       `docs/BUDGET64_STUDY.md`.
-- [ ] **E6. Propose a standard** — a language-neutral bijection between
-      identifiers and integers; define the 64-bit and 128-bit sets; decide how
-      to publish the lookup tables. (Hash fallback is out of scope.)
-- [ ] **E7. Reference implementation (Python)** — runnable, readable; for people
-      porting the library.
-- [ ] **E8. Engineering implementation (Rust)** — runnable, readable; for people
-      writing compilers.
-- [ ] **E9. Standard vs custom tables** — both implementations default to the
-      standardised tables but accept non-standard tables. (Hash fallback still
-      out of scope.)
+- [x] **E6. Propose a standard.** *Drafted (version 0.1): the code, the two
+      sets, conformance, and how the tables are published and identified.*
+      `docs/STANDARD.md`.
+- [x] **E7. Reference implementation (Python).** *Done — a package, not a
+      script: `pip install .`, a `varnames` console script, tests, and the
+      held-out rate reproduced exactly (45.218 bits, 85.0 % / 99.0 %).*
+      `python/`.
+- [x] **E8. Engineering implementation (Rust).** *Done — a crate with no
+      dependencies; the standard tables are compiled in and digest-checked; the
+      CLI mirrors the Python one.*  `rust/`.
+- [x] **E9. Standard vs custom tables.** *Done — `Codec(Model.from_path(p))`
+      and `--model PATH` on both sides; the digest is how a deployment finds out
+      it is not on the standard.*  `docs/STANDARD.md` §9.
 - [ ] **E10. Publish table-building tools** — easy to use and modify; need not
       be language-neutral.
 - [x] **E11. Licence.** *Settled — `MIT OR Apache-2.0` for the code and the
@@ -181,9 +187,16 @@ be steered toward it.  Design intent, scope and audiences:
 - [x] **H14. A 4-bit depth field by biasing the weights.** *Adopted — a
       searched bias, the offset recovered from Kraft.*
       `docs/MODEL_FORMAT.md` §3.1.
-- [~] **H15. Retire the arithmetic sizes.** *Under way: `MODEL_BUDGET.md` is
-      Huffman-only; `CODING_OVERHEAD.md`'s arithmetic column and the `assoc`
-      sweep of `CLUSTER_WORDS.md` remain.*  `docs/MODEL_BUDGET.md` §7, step 6.
+- [x] **H15. Retire the arithmetic *sizes*, keep the arithmetic *argument*.**
+      *Done — and the distinction is the point.*  `MODEL_BUDGET.md` prices the
+      Huffman file only, and the frontier there is measured.  `CODING_OVERHEAD.md`
+      is **not** retired: it is where arithmetic coding is rejected, on the
+      zero-padded stop putting Huffman about a bit per identifier ahead and
+      lifting the 64-bit fit rate ~1.5 points, and that argument stands on its
+      own numbers.  What was retired is arithmetic *sizes* being read as the
+      model's size — the `assoc` sweep of `CLUSTER_WORDS.md` is a comparison of
+      factorisations and is labelled as one.  `docs/MODEL_BUDGET.md` §7, step 6;
+      `docs/BUDGET64_STUDY.md` §1.
 
 ## Build-directory key (`work/` is gitignored, so the key lives here)
 

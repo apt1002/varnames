@@ -42,9 +42,11 @@ Exceptionally long or rare identifiers do not fit in the budget; it is left to
 the caller to decide how to handle these cases. We think it would be sensible to
 reject them, or to encode them using a hash function and decode them using a
 hash map. The 64-bit budget is a little restrictive: at the current operating
-point about one identifier in six in the training corpus cannot be encoded,
-though they tend to be pretty ugly ones. The 128-bit budget is enough for
-almost any identifier.
+point about one identifier in six cannot be encoded, though they tend to be
+pretty ugly ones. The 128-bit budget is enough for almost any identifier. Both
+figures are measured on held-out identifiers, and what the sets contain, where
+the length boundary falls and what kind of name fails are in
+[`docs/BUDGET64_STUDY.md`](docs/BUDGET64_STUDY.md).
 
 Compressing long identifiers into small integers is an exercise in information
 theory. The bulk of the work is statistics, not programming. What you will find
@@ -52,7 +54,11 @@ in this repo are the tools we used to study the statistics and to come up with a
 simple, compact model that can form the basis of the standard.
 
 The model itself is a portable file, versioned and human-readable, whose format
-is specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md).
+is specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md). The standard the
+file serves is proposed in [`docs/STANDARD.md`](docs/STANDARD.md), and there are
+two implementations of it: a reference one in [`python/`](python/) and an
+engineering one in [`rust/`](rust/), both defaulting to the published tables and
+both accepting others.
 
 ## The strategy
 
@@ -220,6 +226,7 @@ varnames/
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
+│   ├── STANDARD.md                      # the proposed standard: code, sets, tables
 │   ├── CLUSTER_QUARTERS.md              # the quarter code: q right clusters per left
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
 │   ├── TOKENISATION.md                  # tokeniser speed: precedence vs bucket parser
@@ -261,6 +268,7 @@ varnames/
 │   ├── hfactor_words.py                 # Hellinger factorisation + structural zeros
 │   ├── prune_words.py                   # overshoot-and-prune the word list by removal cost
 │   ├── cluster_words.py                 # K-means co-clustering of the word matrix
+│   ├── codesign.py                      # assignment vs code term at a matched k (a negative)
 │   ├── cluster_loss_attribution.py      # attribute the assoc loss to cluster-pair cells
 │   ├── block_structure.py               # rank/sparsity of a high-loss cluster-pair block
 │   ├── matrix_compress.py               # direct compression of the matrix (residual + top-N)
@@ -276,7 +284,9 @@ varnames/
 │   ├── wordlist_order.py                # creation order vs unigram order in a built list
 │   ├── model_fit_rates.py               # held-out fit rates; cost of quantising the tables
 │   ├── k_frontier.py                    # the bytes-for-fit frontier as a curve
-│   ├── budget64_study.py                # 64/128-bit sets: coverage, boundary, generation
+│   ├── budget64_study.py                # 64/128-bit sets (arithmetic account; superseded)
+│   ├── budget64_sets.py                 # 64/128-bit sets through the packed model
+│   ├── build_standard_model.py          # build the one standard model + its digest
 │   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── boundary_trigram.py              # bits the boundary trigram (u,v,\n) is worth
@@ -290,6 +300,22 @@ varnames/
 │   ├── c26_closeout.py                  # shared-clusters close-out vs the interpolated frontier
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   └── run_break_open_prior.sh          # run the break-open-prior sweep
+├── python/                              # reference implementation, runnable and readable
+│   ├── pyproject.toml                   # packaging; `varnames` console script
+│   ├── README.md                        # the API, the CLI, the sets
+│   ├── varnames/                        # bitio, ladder, model, codec, standard, cli
+│   │   └── data/model.nvm1              # the standard tables, 30,745 B, digest-checked
+│   └── tests/                           # unit tests + the held-out rate test
+├── rust/                                # engineering implementation, no dependencies
+│   ├── Cargo.toml                       # no dependencies, no build script
+│   ├── README.md
+│   ├── src/                             # bitio, ladder, model, codec, standard, sha256
+│   │   └── bin/varnames.rs              # the CLI
+│   ├── data/model.nvm1                  # the same tables, compiled in
+│   └── tests/golden.txt                 # 250 identifiers + codes, read by both ports
+├── standard/
+│   ├── model.nvm1                       # the published model file
+│   └── model.yaml                       # its human-readable form (MODEL_FORMAT.md §2)
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```
