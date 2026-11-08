@@ -1,0 +1,25 @@
+[package]
+name = "varnames"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Encode programming-language identifiers as 64- or 128-bit integers"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://example.invalid/varnames"
+keywords = ["identifier", "compression", "huffman", "bijection"]
+categories = ["compression", "encoding", "no-std"]
+
+[lib]
+name = "varnames"
+path = "src/lib.rs"
+
+[[bin]]
+name = "varnames"
+path = "src/bin/varnames.rs"
+
+[dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
