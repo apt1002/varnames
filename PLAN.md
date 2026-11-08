@@ -126,10 +126,10 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 ## E. Productisation (long-term horizon)
 
 The distant target.  **In progress** — the encoding and the plan for the
-product are settled: the packed model, the standard, both implementations and
-the table-building tools are done, and the algorithm and its rejected
-alternatives are written up; the ablation study (E4) is open.  Design intent,
-scope and audiences: `docs/PRODUCTISATION.md`.
+product are settled: the packed model, the standard, both implementations
+and the table-building tools are done, and the algorithm, its rejected
+alternatives and a priced ablation of the model's pieces are written up.
+Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
 
 - [x] **E1. Design the encoding.** *Done — designed, measured and shipped: one
       model file of 30,745 bytes, one canonical assignment, the stop as padding.*
@@ -140,7 +140,10 @@ scope and audiences: `docs/PRODUCTISATION.md`.
 - [x] **E3. Write up rejected alternatives.** *Done — every measured negative
       in one place, with the number that killed it and the note it came from.*
       `docs/ALTERNATIVES.md`.
-- [ ] **E4. Ablation study** (design TBD).
+- [x] **E4. Ablation study.** *Done — one harness, one held-out set, one table:
+      every model-side piece and case normalisation, each priced in bytes, bits
+      and fit points at the operating point.*
+      `docs/ABLATION.md`.
 - [x] **E5. Study the 64-bit and 128-bit identifier sets.** *Done.*
       `docs/BUDGET64_STUDY.md`.
 - [x] **E6. Propose a standard.** *Drafted (version 0.1): the code, the two

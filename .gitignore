@@ -1,5 +1,6 @@
 # large downloaded / unpacked raw data (regenerable)
 /work/
+/build/
 /data/
 /requests-src/
 /tmpdl/

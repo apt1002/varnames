@@ -532,7 +532,9 @@ def prepared_matrix(directory, kappa):
     """The build's matrix: prior added, stop column dropped, stop row kept.
 
     Returns `Mw` (V x V over the file's symbols), `start` (the V-vector of
-    first-token counts, i.e. the old stop row) and the dictionary.
+    first-token counts, i.e. the old stop row), `end` (the stop column, i.e.
+    how many identifiers *finish* with each symbol — used only by the ablation
+    that gives the stop its true weight) and the dictionary.
     """
     chars, rules, _sym = tw.load_dictionary(directory)
     M, _uni, _, _, _ = hf.dense_matrix(directory)
@@ -549,14 +551,16 @@ def prepared_matrix(directory, kappa):
     keep[stop] = False
     keep_idx = np.flatnonzero(keep)
     start = M[stop, keep_idx].astype(np.float64)
+    end = M[keep_idx, stop].astype(np.float64)
     Mw = M[np.ix_(keep_idx, keep_idx)]
     del M
-    return dict(Mw=Mw, start=start, chars=chars, rules=rules, nchars=nchars,
-                V=V0 - 1)
+    return dict(Mw=Mw, start=start, end=end, chars=chars, rules=rules,
+                nchars=nchars, V=V0 - 1)
 
 
 def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
-                shared_weight=1.0, bias=True, labels=None, prepared=None):
+                shared_weight=1.0, bias=True, labels=None, prepared=None,
+                stop_weight=False):
     """Build the model tables from a dictionary directory.
 
     The file has no stop symbol.  The corpus tokeniser emits one, but it is not
@@ -574,6 +578,7 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
     """
     p = prepared or prepared_matrix(directory, kappa)
     Mw, start, chars, rules = p['Mw'], p['start'], p['chars'], p['rules']
+    end = p['end'] if stop_weight else None
     V, nchars = p['V'], p['nchars']
     c = Mw.sum(0)                      # unigram: the column mass
 
@@ -621,10 +626,16 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
         if rows.size:
             S[L] = np.bincount(ql, weights=Mw[rows].sum(0), minlength=kq)
 
+    # the stop's mass per left cluster, for the ablation that charges for it
+    stopmass = (np.bincount(np.asarray(lcl, dtype=np.int64), weights=end,
+                            minlength=k).astype(np.float64)
+                if end is not None else None)
+
     def top_depths(Smass):
         out = np.zeros((k, kq + 1), dtype=np.int64)
         for L in range(k):
-            w = np.concatenate([[0.0], Smass[L]])
+            w0 = 0.0 if stopmass is None else stopmass[L]
+            w = np.concatenate([[w0], Smass[L]])
             lens, _, _ = huffman_trunc(w, 1, bias=bias)
             out[L] = lens.astype(np.int64)
         return out

@@ -107,7 +107,9 @@ The whole of it, in one sequence with the cost of each stage, is
 [`docs/ALGORITHM.md`](docs/ALGORITHM.md). Each of those steps had alternatives,
 and most of them were built and measured before being dropped; they are
 collected, with the numbers that killed them, in
-[`docs/ALTERNATIVES.md`](docs/ALTERNATIVES.md).
+[`docs/ALTERNATIVES.md`](docs/ALTERNATIVES.md). What the shipped model does
+keep is priced the same way, one piece at a time, in
+[`docs/ABLATION.md`](docs/ABLATION.md).
 
 It is important that the model is small and efficient, otherwise nobody will want
 to use it. The pertinent optimisation criterion is the fraction of identifiers
@@ -269,6 +271,7 @@ varnames/
 │   ├── SMALL_DICT.md                    # the V=512 testing vocabulary: what it can and cannot show
 │   ├── ALGORITHM.md                     # the whole design in one sequence, corpus to integer
 │   ├── ALTERNATIVES.md                  # what was rejected, and why: the measured negatives
+│   ├── ABLATION.md                      # what the shipped model's pieces are worth, priced
 │   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
@@ -327,6 +330,7 @@ varnames/
 │   ├── build_tables.py                  # one command from identifiers to model.nvm1
 │   ├── build_standard_model.py          # build the one standard model + its digest
 │   ├── case_ablation.py                 # case-normalisation ablation (paired CamelCase test)
+│   ├── ablation.py                      # leave-one-piece-out at matched bytes, one table
 │   ├── break_open_prior.py              # break-open prior vs P_mar on held-out data
 │   ├── boundary_trigram.py              # bits the boundary trigram (u,v,\n) is worth
 │   ├── run_lengths.py                   # run-length statistics of the corpus
