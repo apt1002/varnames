@@ -55,15 +55,18 @@ def read_tables(path):
                     continue
                 frontier.append(dict(kB=_num(c[0]) / 1000.0, V=int(_num(c[1])),
                                      k=int(_num(c[2])), fit=_num(c[4])))
-        # The extra-points table: "| point | kB | fit ≤64 | note |"
-        if len(head) >= 3 and head[0] == "point" and "kB" in head[1]:
+        # The oracle table of the shipped files, library charged:
+        # "| point | model file | + library | bits/id | fit ≤ 64 | ..."
+        if (len(head) >= 5 and head[0] == "point"
+                and "library" in head[2]):
             for row in lines[i + 2:]:
                 if not row.startswith("|"):
                     break
                 c = _cells(row)
-                if len(c) < 3 or _num(c[1]) is None:
+                if len(c) < 5 or _num(c[2]) is None or _num(c[4]) is None:
                     continue
-                extra.append(dict(label=c[0], kB=_num(c[1]), fit=_num(c[2])))
+                extra.append(dict(label=c[0].replace("*", ""),
+                                  kB=_num(c[2]), fit=_num(c[4])))
     return frontier, extra
 
 
@@ -101,8 +104,8 @@ def main():
                 mfc="none", mec="#444444", mew=1.2, zorder=4,
                 label="shipped code" if j == 0 else None)
         ax.annotate(e["label"], (e["kB"], 100.0 - e["fit"]),
-                    textcoords="offset points", xytext=(-10, 4 - 12 * j),
-                    ha="right", fontsize=6.5, color="#444444")
+                    textcoords="offset points", xytext=(0, 9),
+                    ha="center", fontsize=6.5, color="#444444")
 
     ax.set_xlabel("model size (kB, word list and code included)")
     ax.set_ylabel("unencodable at 64 bits (%)")

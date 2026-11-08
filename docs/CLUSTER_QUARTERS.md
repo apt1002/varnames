@@ -6,11 +6,11 @@ clusters.  The name is historical — `q = 2` gives halves.  The idea changes th
 top stage from `k` leaves to `q·k` and leaves the encoder untouched
 ([`ENCODING.md`](ENCODING.md) §§2–4).  It works, it is cheap to implement, and
 `MODEL_FORMAT.md` keeps `q` for that reason.  It does not pay: measured in the
-packed file, `q = 2` buys 0.12 bits per identifier for 1,664 B at the operating
-point — 14 kB per bit, against a frontier that sells bits for 3–5
-([`MODEL_BUDGET.md`](MODEL_BUDGET.md) §6).  The arithmetic accounting that used
-to be quoted here credited it 1.10 bits for 1,184 B; the bits were overstated by
-a factor of nine, and this note records why.
+packed file, `q = 2` buys 0.12 bits per identifier for 1,536 B at the operating
+point — 13 kB per bit, against a frontier that sells bits for 3–5
+([`MODEL_BUDGET.md`](MODEL_BUDGET.md) §6).  The arithmetic accounting that
+used to be quoted here credited it 1.10 bits for about 1.2 kB; the bits were
+overstated by a factor of nine, and this note records why.
 
 ## The idea
 
@@ -49,15 +49,15 @@ question is only whether the move is worth its bytes.
 The cost is not a formula, it is two tables:
 
 * **The map widens.**  One label per word at `⌈log₂ k·q⌉` bits instead of
-  `⌈log₂ k⌉`: +1,024 B at `V = 8,191` for `k = 16, q = 2`, and the same at
-  `k = 32` (4 → 5 bits, and 5 → 6 bits).
+  `⌈log₂ k⌉`: +1,024 B at `V = 8,191` at both `k` (4 → 5 bits at `k = 16`,
+  and 5 → 6 bits at `k = 32`).
 * **The top stage grows as `k·(k·q + 1)`.**  From `k(k+1)` depths to `k(kq+1)`:
-  +160 B at `k = 16` (272 → 528 depths) and +640 B at `k = 32` (1,056 → 2,080),
-  both at the measured 5-bit field.
+  +128 B at `k = 16` (272 → 528 depths) and +512 B at `k = 32` (1,056 → 2,080),
+  both at the 4-bit field the format uses.
 
 Nothing else moves: the rules are the same word list, the bottom depths are the
-same `V` rows, the alphabet is the same.  So the price of `q = 2` is 1,184 B at
-`k = 16` and 1,664 B at `k = 32`, and it is exact — these are byte counts from
+same `V` rows, the alphabet is the same.  So the price of `q = 2` is 1,152 B at
+`k = 16` and 1,536 B at `k = 32`, and it is exact — these are byte counts from
 packed files.
 
 ## What it buys: measured
@@ -67,10 +67,10 @@ the same dictionary directory as the shipped point:
 
 | point | `q` | model file | rules | map | top depths | bits/id | fit ≤64 | fit ≤128 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 8192/16 | 1 | 30,571 B | 21,109 | 4,096 | 170 | 45.676 | 84.5 % | 98.9 % |
-| 8192/16 | 2 | 31,755 B | 21,109 | 5,120 | 330 | 45.559 | 84.8 % | 99.0 % |
-| 8192/32 | 1 | **32,085 B** | 21,109 | 5,120 | 660 | **45.217** | **85.0 %** | **99.0 %** |
-| 8192/32 | 2 | 33,749 B | 21,109 | 6,144 | 1,300 | 45.099 | 85.1 % | 98.9 % |
+| 8192/16 | 1 | 29,329 B | 20,926 | 4,096 | 136 | 45.677 | 84.5 % | 98.9 % |
+| 8192/16 | 2 | 30,481 B | 20,926 | 5,120 | 264 | 45.559 | 84.8 % | 99.0 % |
+| 8192/32 | 1 | **30,745 B** | 20,926 | 5,120 | 528 | **45.218** | **85.0 %** | **99.0 %** |
+| 8192/32 | 2 | 32,281 B | 20,926 | 6,144 | 1,040 | 45.100 | 85.1 % | 99.0 % |
 
 Priced the way every other decision in this project is priced — against the
 frontier's own slope at the same size (`MODEL_BUDGET.md` §6, which is 3–5 kB per
@@ -78,8 +78,8 @@ bit and 2.9–3.0 kB per fit point at these points):
 
 | point | `q = 2` costs | buys | per bit | buys | per point |
 |---|---:|---:|---:|---:|---:|
-| 8192/16 | +1,184 B | 0.117 bits | 10.1 kB | +0.3 pt | 3.9 kB |
-| 8192/32 | +1,664 B | 0.118 bits | **14.1 kB** | +0.1 pt | **16.6 kB** |
+| 8192/16 | +1,152 B | 0.118 bits | 9.8 kB | +0.3 pt | 3.8 kB |
+| 8192/32 | +1,536 B | 0.118 bits | **13.0 kB** | +0.1 pt | **15.4 kB** |
 
 Three readings:
 
@@ -88,7 +88,7 @@ Three readings:
   accounting claimed (1.10) and half of what the arithmetic-coded estimate of
   the same tables gave.  At 14 kB per bit the quarters are 3–5× too dear.
 * **The operating point is not the place to argue about it.**  At `k = 32` the
-  gain is 0.1 fit point for 1,664 B; the frontier buys 0.5 points for 1,514 B
+  gain is 0.1 fit point for 1,536 B; the frontier buys 0.5 points for 1,474 B
   (8192/16 → 8192/32), and every point of the measured curve is cheaper than
   that.  `q = 2` is dominated at the point that ships.
 * **At `k = 16` it is close on fit rate and not on bits** (3.9 kB/pt against the
@@ -100,8 +100,9 @@ Three readings:
 
 ## Why the refund disappeared
 
-The arithmetic accounting adopted `q = 2` on 0.9 fit points for 1,184 B, and the
-arithmetic-coded measurement of the same tables still gave it 1.10 bits.  Almost
+The arithmetic accounting adopted `q = 2` on the strength of 0.9 fit points for
+about 1.2 kB, and the arithmetic-coded measurement of the same tables still gave
+it 1.10 bits.  Almost
 all of that was the terminator.  Both codes were paying for the end of an
 identifier there: the old bottom trees carried a zero-weight stop leaf and the
 old top stage carried the stop's right cluster, so the word step was priced with

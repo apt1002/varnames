@@ -50,31 +50,31 @@ cheapest `k` on each word list, `q = 1`, one map, stride-10 held-out:
 
 | `V` | `k` | word list | labels | depths | header | file | bits/id | fit ≤64 | fit ≤128 |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 512 | 32 | 894 | 320 | 980 | 75 | 2,269 | 65.449 | 60.4 % | 94.5 % |
-| 4,096 | 32 | 9,806 | 2,560 | 3,220 | 75 | 15,661 | 48.866 | 80.5 % | 98.4 % |
-| 6,144 | 24 | 15,360 | 3,840 | 4,215 | 75 | 23,490 | 46.731 | 83.2 % | 98.7 % |
-| 8,192 | 32 | 21,109 | 5,120 | 5,780 | 76 | **32,085** | **45.217** | **85.0 %** | **99.0 %** |
+| 512 | 32 | 936 | 320 | 784 | 74 | 2,114 | 65.535 | 60.3 % | 94.5 % |
+| 4,096 | 32 | 9,787 | 2,560 | 2,576 | 74 | 14,997 | 48.866 | 80.5 % | 98.4 % |
+| 6,144 | 24 | 15,259 | 3,840 | 3,372 | 74 | 22,545 | 46.735 | 83.2 % | 98.7 % |
+| 8,192 | 32 | 20,926 | 5,120 | 4,624 | 75 | **30,745** | **45.218** | **85.0 %** | **99.0 %** |
 
 * **The word list is the largest object, and it grows to two thirds of the
-  file.**  39 % of the file at `V = 512`, 63 % at 4,096, 65 % at 6,144 and 66 %
-  at 8,192 (21,109 of 32,085 B).  The rule "buy words first, clusters last" is
+  file.**  44 % of the file at `V = 512`, 65 % at 4,096 and 68 % at 6,144 and
+  8,192 (20,926 of 30,745 B).  The rule "buy words first, clusters last" is
   therefore a statement about the biggest single term, not a tie-break.
 * **At a fixed byte budget the largest `V` that fits still wins.**  The
-  cheapest file measured at `V = 8,192` is 29,422 B (`k = 8`: 21,109 of rules,
-  5,120 of bottom depths, 3,072 of labels), and at `V = 6,144` it is 20,824 B
+  cheapest file measured at `V = 8,192` is 28,205 B (`k = 8`: 20,926 of rules,
+  4,096 of bottom depths, 4,096 of labels), and at `V = 6,144` it is 19,951 B
   (`k = 4`).  So a 23.5 kB budget cannot hold an 8,192 file at any `k` measured,
-  and the best 6,144 file there is 46.731 bits at 83.2 %; the best 4,096 file is
-  48.866 at 80.5 % for 15.7 kB.
+  and the best 6,144 file there is 46.735 bits at 83.2 %; the best 4,096 file is
+  48.866 at 80.5 % for 15.0 kB.
   The measured ladder is 512 → 4,096 → 6,144 → 8,192 with the bytes going
-  2.3 → 15.7 → 23.5 → 32.1 kB and the bits 65.7 → 48.9 → 46.8 → 45.2: the first
-  step is worth 16.8 bits for 13.4 kB, and the later ones 2.2 and 1.6 bits for
-  7.8 and 8.6 kB, i.e. 3.7 and 5.5 kB per bit.
+  2.1 → 15.0 → 22.5 → 30.7 kB and the bits 65.5 → 48.9 → 46.7 → 45.2: the first
+  step is worth 16.7 bits for 12.9 kB, and the later ones 2.1 and 1.5 bits for
+  7.5 and 8.2 kB, i.e. 3.5 and 5.4 kB per bit.
 * **The leftover still goes to `k`, but it has stopped paying much.**  Within
-  `V = 8,192`, `k` from 8 to 32 buys 0.88 bits and 1.1 fit points for 2,663 B;
-  from 32 to 64 it gives back 0.13 bits for another 2,964 B (`MODEL_BUDGET` §7).
+  `V = 8,192`, `k` from 8 to 32 buys 0.80 bits and 0.8 fit points for 2,540 B;
+  from 32 to 64 a further 0.27 bits and 0.3 points for 2,576 B (`MODEL_BUDGET` §7).
   At the smaller word lists the curve is flatter rather than overturned: at
-  4,096 the next step (`k = 64`) buys 0.24 bits for 2,452 B, 10 kB per bit, and
-  at 6,144 `k = 48` buys 0.29 bits for 1,863 B, 6.3 — both above the 2–6 kB/bit
+  4,096 the next step (`k = 64`) buys 0.34 bits for 2,064 B, 6.2 kB per bit, and
+  at 6,144 `k = 64` buys 0.37 bits for 2,320 B, 6.3 — both above the 2–6 kB/bit
   the grid charges elsewhere, which is why the knees above are 32, 24 and 32.
   So the order of the two knobs is unchanged by the byte accounting: words
   first, then the `k` the remaining bytes can justify.

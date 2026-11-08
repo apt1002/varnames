@@ -279,7 +279,7 @@ Neither idea changes how a codeword is written; both are written up separately.
   instead of `k` (plus the STOP leaf of §2).  The encoding is unchanged: this
   note with `q·k` in place of `k` in the top stage, and nothing else.  It was
   adopted at `q = 2` on the arithmetic accounting; measured in the packed file
-  it buys 0.12 bits per identifier for 1,184–1,664 B — 10–14 kB a bit, three
+  it buys 0.12 bits per identifier for 1,152–1,536 B — 9.8–13 kB a bit, three
   times the frontier's price — so `q = 1` ships.  The
   label set is one set either way: a word's label is its right cluster, and its
   left cluster is that label divided by `q` (`MODEL_FORMAT.md` §1).
