@@ -45,7 +45,7 @@ The file contains exactly what that algorithm needs, and nothing else:
 | a **top tree** per left cluster, the first leaf reserved for the all-zeros case | `k` trees of `k·q + 1` leaves |
 | a **bottom tree** per right cluster | `k·q` trees |
 | a **rule** per word: the first `len(alphabet)` ids are single characters, every other word is a pair of earlier words | `V − len(alphabet)` rules |
-| the **alphabet** the model can code | `len(alphabet)` characters |
+| the **alphabet** the model can code | `len(alphabet)` characters, UTF-8 |
 | the parameters `V`, `k`, `q` and the format's name | a header |
 
 The trees are stored as the depth of each leaf in label order, and a membership
@@ -82,7 +82,9 @@ top_trees:                             # one tree per left cluster
 Every sequence is a YAML sequence of integers; the file is ASCII with LF
 newlines, two-space indentation, and no anchors, aliases, tags or maps other
 than the top level.  A writer may add comments and blank lines; a reader must
-ignore them.
+ignore them.  `alphabet` is a JSON string, so a non-ASCII character is written
+as a `\u` escape and the YAML stays ASCII; the binary form is where UTF-8 is
+spelled out.
 
 The numbering is the **file's**, and only the file's is normative.  A build
 working on the corpus tokeniser's alphabet will number the characters `0 … 62`,
@@ -91,10 +93,12 @@ one.  That shift is the whole of `to_file_id` in `scripts/model_size.py`.
 
 ### The keys
 
-* `alphabet` — the characters the model can code, as ids `0 … len(alphabet) − 1`.
-  The shipped model uses the 63 ASCII characters that occur in identifiers; the
-  field is carried explicitly so a reader can check the file against a corpus
-  instead of assuming that set.  A toy model may use fewer.
+* `alphabet` — the characters the model can code, as ids
+  `0 … len(alphabet) − 1`.  The shipped model uses the 63 ASCII characters that
+  occur in identifiers; the field is carried explicitly so a reader can check
+  the file against a corpus instead of assuming that set.  A toy model may use
+  fewer, and a model for a corpus that is not ASCII may use any characters:
+  the binary stores the list as UTF-8 (§3).
 * `left_clusters` — `k`, the number of left clusters.  It fixes the number of
   top trees, the left-hand alphabet, and the length of each `top_trees` entry
   once `q` is known (`k·q + 1`).
@@ -106,7 +110,8 @@ one.  That shift is the whole of `to_file_id` in `scripts/model_size.py`.
 * `rules` — the word list as pairs of child ids.  Entry *i* defines word id
   `len(alphabet) + i`, and its children are strictly smaller ids, so the list is
   a topological order of the merge tree.  Rule *i* may not name its own id, and
-  its two children must differ (no run words, `DICTIONARY_RULES.md`).
+  its two children must differ (no run words, `DICTIONARY_RULES.md`).  The list
+  may be empty: `V = len(alphabet)` is a model that codes characters only.
 * `memberships` — one label per symbol id, `0 ≤ label < k·q`: that symbol's
   right cluster.  Labels `c·q … c·q + q − 1` are the right clusters of left
   cluster `c`, so the left cluster is that label divided by `q`.  This is the
@@ -165,11 +170,24 @@ q = 1`, the operating point, with the packed rule table.
 | `V`, `k`, `q`, `len(alphabet)` | varints | 5 |
 | rules length | a varint, because the rule stream is not self-delimiting | 3 |
 | `rules` | 2 × (V − 63) child indices, coded by §4 | 20,926 |
-| `alphabet` | `len(alphabet)` bytes, ids 0–62 | 63 |
+| `alphabet` | `len(alphabet)` characters in UTF-8, ids 0–62; one byte each here | 63 |
 | `memberships` | `⌈log₂ kq⌉` = 5 bits each, packed | 5,120 |
 | `bottom_trees` | `V` depths at 4 bits each, right cluster by right cluster, ascending symbol id inside | 4,096 |
 | `top_trees` | `k(k+1)` = 1,056 depths at 4 bits each | 528 |
 | **total** | | **30,745** |
+
+**The alphabet is UTF-8**, and the header counts characters, not bytes.  The
+section is not length-prefixed in bytes because UTF-8 delimits itself: the
+decoder reads exactly `len(alphabet)` characters and the section ends where the
+last one ends.  Every character of the shipped alphabet is ASCII, so the count
+and the byte length agree and the 63 bytes are the same bytes a raw-ASCII
+alphabet would have written.  A non-ASCII character costs its UTF-8 length —
+two bytes for accented Latin, Greek and Cyrillic, three for Han, kana and
+Hangul, four for emoji — and that is the whole cost of a wider alphabet here;
+the symbols themselves cost their table entries as usual.  Because a reader
+that predates this rejects a non-ASCII alphabet outright, widening it needed no
+new magic: every file that existed before is unchanged, and a file that uses
+the widening is refused cleanly by an older reader rather than misread.
 
 There is **no version byte**: `NVM1` is the version.  A change that would break a
 reader changes the magic to `NVM2`, and a reader must reject a magic it does not

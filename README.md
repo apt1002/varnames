@@ -69,8 +69,10 @@ default to the standard ASCII `.nvm1` file.
 The experimental strategy is as follows:
 
 - **Build a corpus** — harvest identifiers from ten ecosystems and union them;
-  see [`docs/CORPUS.md`](docs/CORPUS.md). The corpus is ASCII-only; what that
-  leaves out is measured in [`docs/UNICODE.md`](docs/UNICODE.md).
+  see [`docs/CORPUS.md`](docs/CORPUS.md). The shipped corpus is ASCII-only;
+  what that leaves out is measured in [`docs/UNICODE.md`](docs/UNICODE.md).
+  Your own corpus may use any characters: the tool reads UTF-8 and the
+  alphabet is stored as UTF-8.
 - **Case-normalise it** — split into lower_case / UPPER_CASE / CamelCase,
   convert the first two to CamelCase, merge and de-duplicate. On the current
   union that is 4,441,974 identifiers in, 4,226,707 out; normalisation makes
@@ -312,7 +314,7 @@ varnames/
 │   ├── pair_matrix.py                   # CLI: build adjacency M + low-rank factors
 │   ├── choose_kappa.py                  # choose the prior strength κ by held-out likelihood
 │   ├── tree_words.py                    # dictionary (pair merge) + word × word adjacency model
-│   ├── check_tree_words.py              # regression test for the dictionary + tokeniser
+│   ├── check_tree_words.py              # regression test for the dictionary, tokeniser, UTF-8 reader
 │   ├── check_merge_delta.py             # regression test for the merge delta
 │   ├── word_build_rescan.py             # time/verify the rescan dictionary builder
 │   ├── token_cache.py                   # cache a tokenised corpus for a dictionary

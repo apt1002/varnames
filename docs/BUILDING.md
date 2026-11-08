@@ -119,11 +119,13 @@ the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
 * **Changing the format.** The file is the standard; adding a section or a
   symbol is a new version of it, not a build option
   ([`STANDARD.md`](STANDARD.md) §9).
-* **Non-ASCII identifiers.** The alphabet is the ASCII characters the corpus
-  uses, so a name outside it has no id, no rule and no codeword. The tool
-  checks the corpus on entry, prints the offending lines and stops; it does not
-  transliterate them for you. How rare those names are, and why the exclusion
-  is cheap, is [`UNICODE.md`](UNICODE.md).
+* **Non-ASCII identifiers.** The tool reads UTF-8 and takes its alphabet from
+  every character in the corpus, so a corpus of your own may contain accented
+  Latin, Cyrillic, Greek, Han or anything else; the alphabet is stored as UTF-8
+  and those names get ids and codewords like any others. The standard corpus
+  has none — the extractor blanks any run that touches a non-ASCII byte — so
+  the shipped model's alphabet is the 63 ASCII characters. How rare those names
+  are, and what a wider alphabet costs, is [`UNICODE.md`](UNICODE.md).
 
 ## Using the result
 

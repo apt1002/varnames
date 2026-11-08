@@ -85,9 +85,9 @@ def split(merged, outdir, stride):
     train = os.path.join(outdir, 'train.txt')
     val = os.path.join(outdir, 'val.txt')
     n_train = n_val = 0
-    with open(merged, 'r', encoding='ascii') as src, \
-            open(train, 'w', encoding='ascii') as tr, \
-            open(val, 'w', encoding='ascii') as va:
+    with open(merged, 'r', encoding='utf-8') as src, \
+            open(train, 'w', encoding='utf-8') as tr, \
+            open(val, 'w', encoding='utf-8') as va:
         for i, line in enumerate(src):
             if stride and i % stride == 0:
                 va.write(line)
@@ -97,59 +97,6 @@ def split(merged, outdir, stride):
                 n_train += 1
     print(f'  {n_train:,} training, {n_val:,} held out', flush=True)
     return train, val
-
-
-def non_ascii_lines(path, limit=5):
-    """The first lines holding a non-ASCII byte, and how many there are.
-
-    The model's alphabet is ASCII: a character outside it has no id, no rule
-    and no code, so a corpus that uses one cannot be built.  Checking here, on
-    bytes, keeps the failure at the entrance instead of letting it surface
-    later as a codec error inside the dictionary (`docs/UNICODE.md`).
-    """
-    bad = []
-    n = 0
-    with open(path, 'rb') as f:
-        for i, line in enumerate(f, 1):
-            if line.isascii():
-                continue
-            n += 1
-            if len(bad) < limit:
-                bad.append((i, line.rstrip(b'\n')))
-    return n, bad
-
-
-def require_ascii(path):
-    n, bad = non_ascii_lines(path)
-    if not n:
-        return
-    examples = '\n'.join(
-        f'  line {i}: {s.decode("utf-8", "replace")}' for i, s in bad)
-    more = f'\n  … {n - len(bad):,} more' if n > len(bad) else ''
-    raise SystemExit(
-        f'{path}: {n:,} line(s) contain non-ASCII bytes.\n{examples}{more}\n'
-        'The model alphabet is the 63 ASCII characters that occur in\n'
-        'identifiers, so a character outside it has no id, no dictionary\n'
-        'rule and no codeword.  Transliterate or drop those identifiers\n'
-        'before building; how much that leaves out is measured in\n'
-        'docs/UNICODE.md.')
-
-
-def alphabet_of(path, sample):
-    """The characters the dictionary will see: sorted, from the sampled lines.
-
-    This is the rule `tree_words.read_corpus_array` applies, reproduced here so
-    that `--V` can be turned into a word count before the build starts.
-    """
-    seen = set()
-    with open(path, 'rb') as f:
-        for i, line in enumerate(f):
-            if sample > 1 and i % sample:
-                continue
-            s = line.rstrip(b'\n')
-            if s:
-                seen.update(s)
-    return ''.join(sorted(chr(c) for c in seen))
 
 
 def even_sample(path, limit):
@@ -227,7 +174,8 @@ def main():
                     help='prior mass per row')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--sample', type=int, default=20,
-                    help='build the dictionary from every Nth line')
+                    help='build the dictionary from every Nth line; the '
+                         'alphabet still comes from every line')
     ap.add_argument('--holdout-stride', type=int, default=10,
                     help='hold out every Nth surviving line (0 = none)')
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
@@ -240,7 +188,6 @@ def main():
     os.makedirs(ARGS.out, exist_ok=True)
     t0 = time.time()
     print(f'corpus {ARGS.corpus} -> {ARGS.out}', flush=True)
-    require_ascii(ARGS.corpus)
 
     stage('normalise')
     if ARGS.skip_normalise:
@@ -253,7 +200,7 @@ def main():
     train_path, val_path = split(merged, ARGS.out, ARGS.holdout_stride)
 
     stage('dictionary and adjacency')
-    chars = alphabet_of(train_path, ARGS.sample)
+    chars = tw.alphabet_of(train_path)
     nchars = len(chars)
     words = ARGS.words if ARGS.words is not None else ARGS.V - 1 - nchars
     if words < 1:

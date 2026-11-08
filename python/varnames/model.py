@@ -9,6 +9,8 @@ The reader is deliberately strict: every invariant the format states is checked,
 so a corrupt or truncated file fails at load rather than at decode.
 """
 
+import codecs
+
 from .bitio import BitReader
 from .ladder import ceil_log2, ladder_get, read_varint
 
@@ -18,6 +20,31 @@ DEPTH_BITS = 4
 
 class ModelError(ValueError):
     """The bytes are not a model this reader understands."""
+
+
+def _read_alphabet(buf, pos, nchars):
+    """Decode exactly `nchars` characters of UTF-8: `(alphabet, bytes used)`.
+
+    The header counts characters, not bytes.  UTF-8 delimits itself, so the
+    section ends where the `nchars`-th character ends; an ASCII alphabet is one
+    byte a character, which is why the shipped file's section is `nchars`
+    bytes.  A byte that cannot start or continue a sequence is a model error,
+    not a decode fallback: the file has no other way to say "unknown".
+    """
+    dec = codecs.getincrementaldecoder("utf-8")()
+    out = []
+    used = 0
+    while len(out) < nchars:
+        if pos + used >= len(buf):
+            raise ModelError("truncated alphabet")
+        try:
+            ch = dec.decode(buf[pos + used:pos + used + 1])
+        except UnicodeDecodeError:
+            raise ModelError("the alphabet is not valid UTF-8") from None
+        used += 1
+        if ch:
+            out.append(ch)
+    return "".join(out), used
 
 
 class Tree:
@@ -146,8 +173,8 @@ class Model:
             rules_len, pos = read_varint(buf, pos)
         except IndexError:
             raise ModelError("the header is truncated") from None
-        if V <= nchars:
-            raise ModelError("V does not leave room for a rule list")
+        if V < nchars:
+            raise ModelError("V is smaller than the alphabet")
         if pos + rules_len > len(buf):
             raise ModelError("the rule table runs past the end of the file")
         kq = k * q
@@ -163,10 +190,8 @@ class Model:
             rules.append((a, b))
         pos += rules_len
 
-        if pos + nchars > len(buf):
-            raise ModelError("truncated alphabet")
-        alphabet = buf[pos:pos + nchars].decode("ascii")
-        pos += nchars
+        alphabet, used = _read_alphabet(buf, pos, nchars)
+        pos += used
 
         width = ceil_log2(kq)
         nbytes = (V * width + 7) // 8

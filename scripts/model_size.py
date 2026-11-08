@@ -54,6 +54,7 @@ Usage:
     model_size.py --dir work/tw8192ns --k 16 --q 2 --yaml work/model.yaml
 """
 import argparse
+import codecs
 import json
 import os
 import sys
@@ -685,6 +686,8 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
 
 def model_yaml(m):
     lines = ['format: varnames-model',
+             # json.dumps escapes non-ASCII, so the YAML stays a text file
+             # that any editor can open, whatever is in the alphabet.
              f'alphabet: {json.dumps(m["alphabet"])}',
              f'left_clusters: {m["k"]}',
              f'right_clusters_per_left: {m["q"]}',
@@ -856,7 +859,7 @@ def pack(m, depth_bits=DEPTH_BITS, packed_rules=True):
     add('rules_length', varint(len(rules_data)))
     add('rules', rules_data)
     sections['rules_bits'] = rule_bits
-    add('alphabet', m['alphabet'].encode('ascii'))
+    add('alphabet', m['alphabet'].encode('utf-8'))
 
     width = ceil_log2(kq)
     bw = BitWriter()
@@ -892,6 +895,31 @@ def pack(m, depth_bits=DEPTH_BITS, packed_rules=True):
     return bytes(out), sections
 
 
+def decode_alphabet(buf, pos, nchars):
+    """Read `nchars` characters of UTF-8: `(alphabet, bytes used)`.
+
+    The header stores the number of *characters*, not the number of bytes.
+    UTF-8 is self-delimiting, so the section ends where the `nchars`-th
+    character ends and no second length is needed.  An ASCII alphabet is one
+    byte a character, which is why the shipped model's section is still
+    `len(alphabet)` bytes.
+    """
+    dec = codecs.getincrementaldecoder('utf-8')()
+    out = []
+    used = 0
+    while len(out) < nchars:
+        if pos + used >= len(buf):
+            raise ValueError('truncated alphabet')
+        try:
+            ch = dec.decode(buf[pos + used:pos + used + 1])
+        except UnicodeDecodeError:
+            raise ValueError('the alphabet is not valid UTF-8') from None
+        used += 1
+        if ch:
+            out.append(ch)
+    return ''.join(out), used
+
+
 def unpack(buf, packed_rules=True):
     """Read the binary back; the only thing the decoder sees."""
     assert buf[:4] == MAGIC, 'bad magic'
@@ -913,8 +941,8 @@ def unpack(buf, packed_rules=True):
         rules = [tuple(children[2 * i:2 * i + 2])
                  for i in range(V - nchars)]
     pos += rules_len
-    alphabet = buf[pos:pos + nchars].decode('ascii')
-    pos += nchars
+    alphabet, used = decode_alphabet(buf, pos, nchars)
+    pos += used
 
     width = ceil_log2(kq)
     nbytes = (V * width + 7) // 8
@@ -1180,6 +1208,15 @@ def self_test():
     assert np.array_equal(back['bottom'], m['bottom'])
     assert np.array_equal(back['top'], m['top'])
     assert [tuple(p) for p in back['rules']] == m['rules']
+    # The alphabet is UTF-8 and counted in characters: `abé世€` is five
+    # characters in ten bytes, and the header still says five.
+    wide = dict(m, alphabet='ab\u00e9\u4e16\u20ac')
+    buf_wide, sections_wide = pack(wide)
+    assert len(buf_wide) == len(buf) + 5, (len(buf_wide), len(buf))
+    back_wide = unpack(buf_wide)
+    assert back_wide['alphabet'] == wide['alphabet']
+    assert back_wide['nchars'] == 5
+    assert sections_wide['alphabet'] == 10
     print(f'self-test ok: {len(buf)} B packed, sections '
           + ', '.join(f'{k}={v}' for k, v in sections.items()
                       if not k.endswith('_bits')))

@@ -9,14 +9,17 @@ those shortcuts has been a source of silent drift in the past (lost counts
 across the `None` holes left by merges; a stale heap key after a decrement), so
 this script re-derives the same answers the slow, obvious way and compares.
 
-Three checks, all on random synthetic corpora plus the real `tw*` dictionaries:
+Four checks, on random synthetic corpora, one UTF-8 corpus, and optionally the
+real `tw*` dictionaries:
 
   1. `builder`   the greedy build (rules and their order) against a
                  from-scratch recount-and-replace builder;
   2. `tokenize`  the fast plan replay against an independent, obviously-correct
                  replay of the same compiled plan;
   3. `adjacency` the incremental bigram matrix against a direct count over the
-                 independently tokenised cycles.
+                 independently tokenised cycles;
+  4. `utf8`      the corpus reader: one id per character, not per byte, with
+                 two-, three- and four-byte characters expanded back exactly.
 
 Exit status is 0 when every check passes.  `--real` also checks the saved
 `work/tw{512,2040,4414}ns` dictionaries against a fresh replay.
@@ -219,6 +222,48 @@ def check_real(verbose):
     return bad
 
 
+def check_utf8(verbose=False):
+    """The corpus is UTF-8: ids are characters, not bytes.
+
+    The reader maps a character to one id whatever its length, so a three-byte
+    Han character must not arrive as three ids and a two-character alphabet
+    must not be reachable by sharing bytes.  Expanding the tokenised ids back
+    through `sym` must reproduce every line.
+    """
+    import tempfile
+    lines = ['café', 'données', 'Ελληνικά', 'кириллица', '日本語', '한국어',
+             'ไทย', 'العربية', 'שלום', 'देवनागरी', 'e\u0301clair', '🐱x']
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8', suffix='.txt',
+                                     delete=False) as f:
+        f.write('\n'.join(lines) + '\n')
+        path = f.name
+    try:
+        chars, arr = tw.read_corpus_array(path)
+    finally:
+        os.unlink(path)
+    want = sorted(set(''.join(lines)))
+    if chars != want:
+        print('  utf8: alphabet mismatch')
+        return 1
+    cid = {c: i for i, c in enumerate(chars)}
+    first = [cid[c] for c in lines[0]]
+    if [int(x) for x in arr[:len(first)]] != first:
+        print("  utf8: the first line's ids do not match its characters")
+        return 1
+    _chars, rules, sym = tw.build_dictionary_arr(chars, arr.copy(), 12)
+    plan = tw.make_plan(rules, len(chars))
+    bad = 0
+    for s in lines:
+        back = ''.join(sym[t] for t in tw.tokenize(s, cid, plan, len(chars)))
+        if back != s:
+            bad += 1
+            if verbose:
+                print(f'    {s!r} -> {back!r}')
+    print(f"utf8: {len(chars)} characters, {len(lines)} names, "
+          f"{'OK' if bad == 0 else f'{bad} BAD'}")
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--trials', type=int, default=600)
@@ -230,8 +275,9 @@ def main():
     bad_tok, bad_adj = check_tokenize_and_adjacency(args.trials, args.verbose)
     print(f"synthetic: {args.trials} trials — builder mismatches {bad_build}, "
           f"tokenize {bad_tok}, adjacency {bad_adj}")
+    bad_utf8 = check_utf8(args.verbose)
     bad_real = check_real(args.verbose) if args.real else 0
-    total = bad_build + bad_tok + bad_adj + bad_real
+    total = bad_build + bad_tok + bad_adj + bad_utf8 + bad_real
     print("PASS" if total == 0 else f"FAIL ({total})")
     return 0 if total == 0 else 1
 

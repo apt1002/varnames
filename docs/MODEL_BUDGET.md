@@ -202,7 +202,7 @@ wide; the right-hand column is the operating point.
 | bottom — depths | the decoder | `V` depths, 4-bit field | 2,048 | 4,096 | 4,096 | no |
 | bottom — cluster map | the decoder | `V` labels, 4 or 5 bits | 2,048 | 4,096 | 5,120 | no |
 | top — depths | the decoder | `k(k+1)` depths, 4-bit field | 136 | 136 | 528 | no |
-| header, alphabet | the decoder | magic, varints, 63 bytes | 74 | 75 | 75 | — |
+| header, alphabet | the decoder | magic, varints, 63 bytes (UTF-8; one byte a character here) | 74 | 75 | 75 | — |
 | terminator | — | the all-zeros path | 0 | 0 | 0 | yes |
 | padding | — | high zero bits of the integer | 0 | 0 | 0 | yes |
 | cluster → words index | — | from the map | 0 | 0 | 0 | yes |

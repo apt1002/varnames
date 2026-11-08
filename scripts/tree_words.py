@@ -44,7 +44,7 @@ def read_lines(path, stride=0, limit=0):
     """Read one identifier per line.  `stride` = keep every k-th line (spread
     across the sorted corpus); 0 = all.  `limit` caps the number of lines."""
     lines = []
-    with open(path, 'r', encoding='ascii') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         for i, line in enumerate(f):
             if stride and i % stride:
                 continue
@@ -60,59 +60,77 @@ SEP = -1
 RADIX = 1 << 16          # pair key = a * RADIX + b; ids are < 2**16
 
 
-def _lut(chars):
-    """char -> id lookup table over the byte range (the corpus is ASCII).
+def alphabet_of(path):
+    """Every character in the corpus, sorted by code point.
 
-    `\\n` is left at `SEP` by construction, so mapping a byte buffer through
-    this table puts the separator in place in one vectorised step."""
-    tbl = np.full(256, SEP, dtype=np.int32)
-    for i, c in enumerate(chars):
-        tbl[ord(c)] = i
-    return tbl
+    The alphabet is the corpus's character set, so it is read from every line
+    rather than from a sample: `stride` thins the identifiers the dictionary
+    learns from, not the characters the model can code.  Sorting is what makes
+    the ids deterministic.
+    """
+    seen = set()
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            s = line.rstrip('\n')
+            if s:
+                seen.update(s)
+    return ''.join(sorted(seen))
 
 
 def read_corpus_array(path, stride=0, limit=0, chars=None):
     """Stream a one-identifier-per-line corpus into one int32 id array with
     `SEP` between identifiers.
 
-    One pass over the file into a byte buffer, then one table lookup.  This is
-    what makes the full-corpus (stride 0) build fit in memory: a Python list of
-    strings, or a list of lists of ids, is 10-100x bigger than the packed array.
-    Selection rules match `read_lines` (skip empty lines, `stride`, `limit`).
+    The corpus is UTF-8.  `stride` thins the *identifiers* only: unless
+    `chars` is given, every line read is still scanned for the character set,
+    so a character that falls outside the sample keeps its id.  `limit` does
+    stop the read, so with a limit the alphabet covers the prefix it saw.
+    `chars`, when given, must cover the file.
+
+    The mapping stays vectorised: one `str.translate` onto code points
+    `0 .. len(chars)`, then a UTF-32 view.  This is what makes the full-corpus
+    (stride 0) build fit in memory — a list of strings, or a list of lists of
+    ids, is 10-100x bigger than the packed array.
     """
     buf = bytearray()
+    seen = set()
     kept = 0
     with open(path, 'rb') as f:
         for i, line in enumerate(f):
-            if stride and i % stride:
-                continue
             s = line.rstrip(b'\n')
             if not s:
+                continue
+            if chars is None:
+                seen.update(s.decode('utf-8'))
+            if stride and i % stride:
                 continue
             buf += s
             buf += b'\n'
             kept += 1
             if limit and kept >= limit:
                 break
-    if chars is None:
-        chars = sorted(chr(c) for c in set(buf) if c != 10)
-    high = sorted({ord(c) for c in chars if ord(c) > 127})
-    if high:
-        where = ', '.join(f'0x{b:02x}' for b in high[:8])
-        more = f' and {len(high) - 8} more' if len(high) > 8 else ''
+    text = buf.decode('utf-8')
+    chars = sorted(seen) if chars is None else list(chars)
+    missing = set(text) - set(chars) - {'\n'}
+    if missing:
+        shown = ', '.join(repr(c) for c in sorted(missing)[:8])
+        more = f' and {len(missing) - 8} more' if len(missing) > 8 else ''
         raise ValueError(
-            f'{path}: non-ASCII bytes ({where}{more}) have no id in the model '
-            'alphabet, which is ASCII-only; transliterate or drop those '
-            'identifiers (docs/UNICODE.md)')
-    b = np.frombuffer(buf, dtype=np.uint8)
-    arr = _lut(chars)[b]
-    return chars, arr
+            f'{path}: character(s) {shown}{more} are not in the alphabet; '
+            'pass every character in the corpus')
+    nchars = len(chars)
+    table = {ord(c): chr(i) for i, c in enumerate(chars)}
+    table[10] = chr(nchars)             # the separator, past the last id
+    codes = np.frombuffer(text.translate(table).encode('utf-32-le'),
+                          dtype='<u4').astype(np.int32)
+    codes[codes == nchars] = SEP
+    return chars, codes
 
 
 def _iter_line_chunks(path, chunk=50000, stride=0):
     """Yield lists of at most `chunk` non-empty identifiers."""
     buf = []
-    with open(path, 'r', encoding='ascii') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         for i, line in enumerate(f):
             if stride and i % stride:
                 continue
@@ -400,7 +418,7 @@ def build_dictionary_arr(chars, arr, num_pairs, verbose=False):
 
 
 def save_dictionary(outdir, chars, rules, sym):
-    with open(os.path.join(outdir, 'dict.txt'), 'w', encoding='ascii') as f:
+    with open(os.path.join(outdir, 'dict.txt'), 'w', encoding='utf-8') as f:
         f.write('\t'.join(c if c != STOP else STOP_LABEL for c in chars) + '\n')
         for _, (a, b), _nid in rules:
             f.write(f"P\t{a}\t{b}\n")
@@ -414,7 +432,7 @@ def load_dictionary(outdir):
     nchars = len(chars)
     rules = []
     next_id = nchars + 1
-    with open(os.path.join(outdir, 'dict.txt'), 'r', encoding='ascii') as f:
+    with open(os.path.join(outdir, 'dict.txt'), 'r', encoding='utf-8') as f:
         next(f)                                          # the charset line
         for line in f:
             parts = line.rstrip('\n').split('\t')

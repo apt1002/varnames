@@ -149,6 +149,48 @@ fn depths_from_offsets(deltas: &[u32]) -> Result<Vec<u32>, Error> {
         .collect()
 }
 
+/// Decode exactly `nchars` characters of UTF-8: `(alphabet, bytes used)`.
+///
+/// The header counts characters, not bytes.  UTF-8 delimits itself, so the
+/// section ends where the `nchars`-th character ends; an ASCII alphabet is one
+/// byte a character, which is why the shipped file's section is `nchars` bytes.
+/// A byte that cannot start a sequence, or a sequence that is not valid UTF-8,
+/// is a model error rather than a replacement character.
+fn read_alphabet(
+    buf: &[u8],
+    pos: usize,
+    nchars: u32,
+) -> Result<(Vec<char>, usize), Error> {
+    let mut alphabet = Vec::with_capacity(
+        (nchars as usize).min(buf.len().saturating_sub(pos)),
+    );
+    let mut p = pos;
+    while (alphabet.len() as u32) < nchars {
+        let b = *buf.get(p).ok_or(Error::Truncated("truncated alphabet"))?;
+        let len = match b {
+            0x00..=0x7f => 1,
+            0xc2..=0xdf => 2,
+            0xe0..=0xef => 3,
+            0xf0..=0xf4 => 4,
+            _ => return Err(Error::Model("the alphabet is not valid UTF-8")),
+        };
+        let end = p
+            .checked_add(len)
+            .filter(|&end| end <= buf.len())
+            .ok_or(Error::Truncated("truncated alphabet"))?;
+        let s = std::str::from_utf8(&buf[p..end])
+            .map_err(|_| Error::Model("the alphabet is not valid UTF-8"))?;
+        let mut chars = s.chars();
+        let c = chars.next().expect("a non-empty UTF-8 slice");
+        if chars.next().is_some() {
+            return Err(Error::Model("the alphabet is not valid UTF-8"));
+        }
+        alphabet.push(c);
+        p = end;
+    }
+    Ok((alphabet, p - pos))
+}
+
 /// A loaded model: the tables plus every derived view the codec needs.
 #[derive(Clone, Debug)]
 pub struct Model {
@@ -284,7 +326,7 @@ impl Model {
         let q = read_varint(buf, &mut pos)?;
         let nchars = read_varint(buf, &mut pos)?;
         let rules_len = read_varint(buf, &mut pos)?;
-        if v <= nchars || v > u32::MAX as u64 || k == 0 || q == 0 || k > 1 << 16 {
+        if v < nchars || v > u32::MAX as u64 || k == 0 || q == 0 || k > 1 << 16 {
             return Err(Error::Model("the header is inconsistent"));
         }
         let (v, k, q, nchars, rules_len) =
@@ -308,15 +350,8 @@ impl Model {
         }
         pos = end;
 
-        let stop = pos
-            .checked_add(nchars as usize)
-            .filter(|&stop| stop <= buf.len())
-            .ok_or(Error::Truncated("truncated alphabet"))?;
-        if buf[pos..stop].iter().any(|&b| !b.is_ascii()) {
-            return Err(Error::Model("the alphabet is not ASCII"));
-        }
-        let alphabet: Vec<char> = buf[pos..stop].iter().map(|&b| b as char).collect();
-        pos = stop;
+        let (alphabet, used) = read_alphabet(buf, pos, nchars)?;
+        pos += used;
 
         let width = ceil_log2(kq);
         let nbytes = ((v as u64 * width as u64 + 7) / 8) as usize;
@@ -505,4 +540,77 @@ fn require_kraft(depths: &[u32]) -> Result<(), Error> {
         return Err(Error::Model("a word tree over-fills the code space"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bitio::BitWriter;
+    use crate::ladder::{ladder_put, put_varint};
+    use crate::Codec;
+
+    /// The same fixture `python/tests/test_varnames.py` builds: `V = 4`,
+    /// `k = q = 1`, alphabet `aé`.  Two characters, three bytes, so the
+    /// header's `nchars` and the section's length have to differ.
+    fn tiny_utf8_model() -> Vec<u8> {
+        let mut rules = BitWriter::new();
+        for (i, &(a, b)) in [(0u32, 1u32), (0, 2)].iter().enumerate() {
+            let n = 2 + i as u32;
+            ladder_put(&mut rules, a, n);
+            ladder_put(&mut rules, b, n);
+        }
+        let rules = rules.finish();
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"NVM1");
+        put_varint(4, &mut buf);
+        put_varint(1, &mut buf);
+        put_varint(1, &mut buf);
+        put_varint(2, &mut buf);
+        put_varint(rules.as_bytes().len() as u64, &mut buf);
+        buf.extend_from_slice(rules.as_bytes());
+        buf.extend_from_slice("aé".as_bytes());
+        buf.extend_from_slice(&[0, 0]); // bottom depths: 4 leaves, 4 bits each
+        buf.extend_from_slice(&[0]); // top depths: 2 leaves, 4 bits each
+        buf
+    }
+
+    #[test]
+    fn the_alphabet_is_utf8() {
+        let buf = tiny_utf8_model();
+        assert_eq!(buf.len(), 17);
+        let model = Model::from_bytes(&buf).expect("a valid model");
+        assert_eq!(model.nchars(), 2);
+        assert_eq!(model.alphabet(), &['a', 'é']);
+        let codec = Codec::new(model);
+        let code = codec.encode("aé").expect("an encodable name");
+        assert_eq!(code.bits, 2);
+        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+    }
+
+    #[test]
+    fn a_model_without_words_is_legal() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"NVM1");
+        put_varint(2, &mut buf); // v: two characters and no rules
+        put_varint(1, &mut buf);
+        put_varint(1, &mut buf);
+        put_varint(2, &mut buf);
+        put_varint(0, &mut buf); // no rule bytes
+        buf.extend_from_slice("aé".as_bytes());
+        buf.extend_from_slice(&[0]); // bottom depths: two leaves at depth 1
+        buf.extend_from_slice(&[0]); // top depths: STOP and one right cluster
+        let model = Model::from_bytes(&buf).expect("v == nchars is legal");
+        assert_eq!(model.rules().len(), 0);
+        let codec = Codec::new(model);
+        let code = codec.encode("aé").expect("an encodable name");
+        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+    }
+
+    #[test]
+    fn a_broken_alphabet_byte_is_refused() {
+        let mut buf = tiny_utf8_model();
+        let start = 4 + 4 + 1 + 2; // magic, header, rules length, rules
+        buf[start + 1] = 0xff; // the lead byte of é
+        assert!(matches!(Model::from_bytes(&buf), Err(Error::Model(_))));
+    }
 }

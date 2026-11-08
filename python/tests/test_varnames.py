@@ -162,6 +162,68 @@ class TestModel(unittest.TestCase):
         self.assertEqual(Model.from_path(MODEL).info(), self.model.info())
 
 
+class TestUtf8Alphabet(unittest.TestCase):
+    """The alphabet section is UTF-8, counted in characters, not bytes.
+
+    The fixture is the smallest model that can say so: V = 4, k = q = 1, two
+    characters, two rules.  Its alphabet is `aé` — two characters in three
+    bytes — so the header says 2 and the section is longer than 2.  The Rust
+    crate builds the same 17 bytes in `model::tests`.
+    """
+
+    @staticmethod
+    def fixture():
+        bw = BitWriter()
+        for i, (a, b) in enumerate([(0, 1), (0, 2)]):
+            N = 2 + i
+            ladder_put(bw, a, N)
+            ladder_put(bw, b, N)
+        rules = bw.finish()
+        out = bytearray(b"NVM1")
+        out += varint(4) + varint(1) + varint(1) + varint(2)
+        out += varint(len(rules)) + rules
+        out += "a\u00e9".encode("utf-8")
+        bw = BitWriter()
+        for _ in range(4):                      # bottom depths, 4 leaves
+            bw.put(0, 4)
+        out += bw.finish()
+        bw = BitWriter()
+        for _ in range(2):                      # top depths, 2 leaves
+            bw.put(0, 4)
+        out += bw.finish()
+        return bytes(out)
+
+    def test_section_is_utf8(self):
+        buf = self.fixture()
+        self.assertEqual(len(buf), 17)
+        self.assertEqual(buf[11:14], "a\u00e9".encode("utf-8"))
+        m = Model.from_bytes(buf)
+        self.assertEqual(m.alphabet, "a\u00e9")
+        self.assertEqual(m.nchars, 2)
+        self.assertEqual(m.nchars, len(m.alphabet))
+        codec = Codec(m)
+        value, bits = codec.encode("a\u00e9")
+        self.assertEqual(bits, 2)
+        self.assertEqual(codec.decode(value), "a\u00e9")
+
+    def test_zero_rules_is_legal(self):
+        out = bytearray(b"NVM1")
+        out += varint(2) + varint(1) + varint(1) + varint(2) + varint(0)
+        out += "a\u00e9".encode("utf-8")
+        out += bytes(2)                     # one depth byte per tree
+        m = Model.from_bytes(bytes(out))
+        self.assertEqual(len(m.rules), 0)
+        codec = Codec(m)
+        value, _bits = codec.encode("a\u00e9")
+        self.assertEqual(codec.decode(value), "a\u00e9")
+
+    def test_broken_utf8_is_refused(self):
+        buf = bytearray(self.fixture())
+        buf[12] = 0xFF                          # the lead byte of é
+        with self.assertRaises(ModelError):
+            Model.from_bytes(bytes(buf))
+
+
 class TestCodec(unittest.TestCase):
 
     @classmethod

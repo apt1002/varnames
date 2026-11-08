@@ -186,7 +186,7 @@ def raw_arm(raw_corpus, normalised_val, outdir, V, sample, jobs):
                 n_tr += 1
     print(f'  raw arm: {n_tr:,} training, {n_va:,} held out', flush=True)
 
-    chars = bt.alphabet_of(train_path, sample)
+    chars = tw.alphabet_of(train_path)
     nchars = len(chars)
     words = V - 1 - nchars
     directory = os.path.join(outdir, f'tw{V}')
@@ -214,7 +214,7 @@ def flat_arm(corpus, V, outdir, sample, jobs, stride, seed):
 
     os.makedirs(outdir, exist_ok=True)
     train_path, _val = bt.split(corpus, outdir, stride)
-    chars = bt.alphabet_of(train_path, sample)
+    chars = tw.alphabet_of(train_path)
     nchars = len(chars)
     words = V - 1 - nchars
     if words < 1:

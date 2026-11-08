@@ -13,19 +13,21 @@ the design; the decision and its one-line justification are in
 An identifier in the corpus matches `[A-Za-z_][A-Za-z0-9_]*`, and the
 extractor blanks any run that touches a non-ASCII byte before tokenising, so
 `café` disappears whole rather than leaving `caf` behind
-([`extract.py`](../scripts/extract.py)). The model therefore carries a
+([`extract.py`](../scripts/extract.py)). The shipped model therefore carries a
 63-character alphabet, and an identifier written in Cyrillic, Han, kana or
 accented Latin cannot be coded at all — it has to fall through to the hash
 fallback ([`STANDARD.md`](STANDARD.md) §10).
 
-A non-ASCII corpus is **refused**, not silently degraded. `build_tables.py`
-checks its input on entry, prints the offending lines and stops; the
-dictionary builder refuses the same input naming the byte values, because
-underneath it reads the corpus as bytes and would otherwise make each UTF-8
-byte its own "character" (`café` as `cafÃ©`). Even then the packed file could
-not carry the result: the alphabet section is `len(alphabet)` raw bytes,
-written with `encode('ascii')` and read back the same way, so the format
-itself is ASCII by construction.
+Nothing in the **format** forces this.  The alphabet is a list of characters
+stored as UTF-8 ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3), and
+`build_tables.py` takes its alphabet from every character in the corpus, so a
+corpus of your own may contain any of these names: they get ids, rules and
+codewords like ASCII ones.  What a non-ASCII alphabet costs is bytes — two a
+character for accented Latin, Greek and Cyrillic, three for Han, kana and
+Hangul, four for emoji — plus the word list it displaces from `V`.  The
+**standard** corpus is ASCII because the extractor blanks non-ASCII runs, and
+the shipped model is built from that corpus; that choice is what this note
+measures the cost of.
 
 The question this note answers is how large that population is. The short
 answer: non-ASCII is common in comments and string literals, uncommon in
@@ -172,23 +174,40 @@ Three forces, all visible in the numbers above:
   recommends ASCII identifiers and ASCII-only APIs even while allowing
   Unicode ones.
 
-## 8. What support would cost
+## 8. What a wider alphabet costs
 
-The cost is not uniform across scripts, which is why "support Unicode" is not
-one decision:
+The format and the builder carry it already (§1); these are the sizes, not a
+question of whether it is possible.  The cost is not uniform across scripts:
 
 * **Accented Latin, Greek, Cyrillic** — on the order of a few hundred
   characters (about 60 in Latin-1's letter range, 128 in Latin Ext.-A, 144
-  Greek, 256 Cyrillic). Each is a single-character word in the dictionary, a
-  rule, and a wider membership field: a modest change.
+  Greek, 256 Cyrillic).  Two bytes each in the alphabet, plus the membership
+  label and the depth that every symbol carries — about 1.1 bytes at the
+  operating point — so a few hundred characters is 1–2 kB, taken from the
+  word list because `V` is fixed.  A 30 kB model absorbs it.
 * **Han, kana, Hangul** — 20,992 code points in the base CJK block plus 6,592
-  in Extension A, 11,172 Hangul syllables, about 90 kana each. Tens of
-  thousands of single-character words, each needing a rule and a code, in a
-  model whose whole file is 30 kB.
+  in Extension A, 11,172 Hangul syllables, about 90 kana each.  Three bytes
+  each in the alphabet and the same 1.1 bytes of tables, but the count is the
+  problem: a modest 3,000 Han would cost about 12 kB and displace a third of
+  the word list of a 30 kB model.
 * **The dictionary model itself** — a pair-merge dictionary assumes a word is
-  a few characters, and an identifier a few words. In Han, a *word* is one to
+  a few characters, and an identifier a few words.  In Han, a *word* is one to
   three characters and the alphabet is the vocabulary; the merge rule
   degenerates and the adjacency matrix becomes the model.
+
+Three names in three scripts are enough to see the alphabet section grow:
+
+```console
+$ printf 'café\nкириллица\n日本語\n' > /tmp/ids.txt
+$ python3 scripts/build_tables.py --corpus /tmp/ids.txt --out /tmp/uni \
+    --V 64 --k 4 --skip-normalise --holdout-stride 0
+  …
+    alphabet              26
+```
+
+That model is 56 bytes and its 13 characters take 26 bytes.  With no repeated
+pair in three identifiers there is no rule at all, which the format allows: a
+character-only model (`MODEL_FORMAT.md` §2).
 
 ## 9. What it means for the standard
 
