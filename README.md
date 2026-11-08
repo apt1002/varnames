@@ -68,7 +68,7 @@ The experimental strategy is as follows:
 - **Build word lists** — the "words" the model is made of. The adopted word
   list is a **pair-merge dictionary**: start from the character alphabet and
   greedily merge the most frequent adjacent pair, so that every word is a
-  string paired from two earlier words. The decoder can replay the rules.
+  pair of two earlier words. The decoder can replay the rules.
   See [`docs/DICTIONARY_RULES.md`](docs/DICTIONARY_RULES.md) for the rule
   choice, [`docs/TREE_WORDS.md`](docs/TREE_WORDS.md) for the dictionary model
   and the merge theory, and [`docs/PRUNE_WORDS.md`](docs/PRUNE_WORDS.md) for
