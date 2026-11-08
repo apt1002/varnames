@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "varnames"
+version = "0.1.0"
+description = "Encode programming-language identifiers as 64- or 128-bit integers"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "the varnames project" }]
+keywords = ["identifier", "compression", "huffman", "bijection"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+  "Topic :: Software Development :: Compilers",
+]
+
+[project.scripts]
+varnames = "varnames.cli:main"
+
+[tool.setuptools]
+packages = ["varnames"]
+
+[tool.setuptools.package-data]
+varnames = ["data/*.nvm1", "data/*.txt"]
