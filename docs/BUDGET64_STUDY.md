@@ -1,176 +1,164 @@
 # The 64-bit and 128-bit identifier sets
 
-Status: **results (grid).**  What fraction of real identifiers the fixed budgets
-cover, where the boundary lies in *character* length, what kind of identifier
-fails, and what a random member of the set looks like — measured on models that
-actually fit the byte budget ([`MODEL_BUDGET.md`](MODEL_BUDGET.md)), not on the
-full table.
+Status: **results at the shipped model.**  What fraction of real identifiers
+the two budgets cover, where the boundary lies in *character* length, what kind
+of identifier fails, and what a random integer of the set decodes to — all
+measured by encoding and decoding with the packed standard file
+([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3), not with an arithmetic transition
+standing in for it.
 
 ## Setup
 
-`scripts/budget64_study.py`.  Three configurations, at the `k` that is
-nearest-optimal for each vocabulary's byte budget (22.0 / 29.9 / 39.8 kB from
-[`MODEL_BUDGET.md`](MODEL_BUDGET.md)), `kappa = 300`, held-out validation at
-stride 10 (`n = 42,268` distinct identifiers).  The `assoc` transition is
-evaluated from the stored numbers `(c, D)`; sampling needs only the `k` distinct
-left-cluster rows.
+`scripts/budget64_sets.py`.  Every held-out identifier (stride 10,
+`n = 42,268`) is tokenised, encoded and decoded by the standard model —
+30,745 bytes at `V = 8,191`, `k = 32`, `q = 1` — and its code length is the
+number of bits the file actually spends.  The 64-bit set is "code length ≤ 64"
+and the 128-bit set "≤ 128"; nothing here is estimated, sampled or rounded.
+
+The comparison row is the **flat yardstick** of [`MODEL_BUDGET.md`](MODEL_BUDGET.md)
+§5.2: one tree per left cluster over all `V` words, the same convention with
+the factorisation removed.  It is a ceiling on what a Huffman code can do at
+this vocabulary, and it is not shippable.
 
 ## 1. Coverage
 
-| model | size | mean bits | fit ≤64 | fit ≤128 |
-|---|---:|---:|---:|---:|
-| `V = 4,096`, full table | 16.8 MB | 42.149 | 90.3 % | 99.5 % |
-| `V = 4,096`, `k = 32` | 22.0 kB | 51.245 | 78.1 % | 98.1 % |
-| `V = 6,144`, full table | 37.7 MB | 40.786 | 92.0 % | 99.6 % |
-| `V = 6,144`, `k = 16` | 29.9 kB | 49.317 | 80.5 % | 98.5 % |
-| `V = 8,192`, full table | 67.1 MB | 39.949 | 93.1 % | 99.7 % |
-| `V = 8,192`, `k = 16` | 39.8 kB | 47.727 | 82.5 % | 98.8 % |
+| code | file | mean bits | fit ≤64 |
+|---|---:|---:|---:|
+| the shipped model, `(8,191, 32)` | 30,745 B | 45.218 | **85.0 %** |
+| factored, `(8,191, 16)` | 29,329 B | 45.677 | 84.5 % |
+| flat, `(8,191, 16)` | 123,401 B | 43.333 | 86.9 % |
+| flat, `(8,191, 64)` | 420,361 B | 42.134 | 88.4 % |
 
-The 64-bit set is the discriminating one; 128 bits is essentially "everything
-except the generated long tail".  Clustering costs far more 64-bit coverage than
-it costs mean bits — 12.2 / 11.5 / 10.6 points against 9.1 / 8.5 / 7.8 bits — so
-the budget question is really a 64-bit-coverage question, and the penalty
-*shrinks* as the vocabulary grows.  The full-table rows are 760–1,700× the size
-of the clustered model and are not a shipping option; they are the ceiling.
+The 128-bit set covers 99.0 % of the corpus; it is essentially "everything
+except the generated long tail", so every question below is a 64-bit question.
 
-The occurrence-weighted view is not measured here (the source-code occurrence
-sampler was retired, see [`CODE_LENGTHS.md`](CODE_LENGTHS.md)); that earlier
-study found the 64-bit threshold covered ~92 % of identifier *occurrences* and
-was insensitive to model sharpening, because occurrences are dominated by
-short, predictable names.  The static rates above are the pessimistic end.
+**The earlier study overstated the price of the factorisation.**  It compared
+the clustered model with an arithmetic *full table* and reported a cost of
+10.6–12.2 points of 64-bit coverage.  That ceiling is not a code anyone can
+decode: it is `k·V` numbers, 67 MB at `V = 8,192`, and its depths would not fit
+the four-bit field ([`MODEL_BUDGET.md`](MODEL_BUDGET.md) §5.2).  Against the
+flat *Huffman* code at the same `k` (`8,192/16`: 123,401 B, 43.333 bits,
+86.9 %), the factorisation costs **2.4 points and 2.3 bits**, and the shipped
+`k = 32` model is 1.9 points and 1.9 bits behind that flat code — the extra
+`k` buys back half a point.
+
+The flat code is still not the buy.  Recovering 1.9 points on the frontier —
+`8192/32` → `8192/64` — costs 2.6 kB for 0.3 points, about 8.5 kB a point, so
+the whole 1.9 would cost roughly 16 kB; the flat file costs 94 kB more than the
+factored one at the same `k`.  Factorisation remains domination, but it is a
+small loss, not the dominant one it once looked.
 
 ## 2. The boundary in uncompressed length
 
 Code length is **not** monotone in character length, so there is no clean length
-cut — only an overlap that *widens* with the vocabulary:
+cut — only an overlap:
 
-| model | longest that fits | shortest that fails | failures inside the range |
-|---|---:|---:|---:|
-| `V = 4,096`, `k = 32` | 53 chars | 8 chars | 8,963 of 9,257 (96.8 %) |
-| `V = 6,144`, `k = 16` | 53 chars | 8 chars | 7,963 of 8,242 (96.6 %) |
-| `V = 8,192`, `k = 16` | 59 chars | 9 chars | 7,232 of 7,397 (97.8 %) |
+* the longest identifier that fits is **59 characters** (60 bits);
+* the shortest that fails is **9 characters** (71 bits);
+* of the 34,919 identifiers between 9 and 59 characters, **6,207 (17.8 %)** fail.
 
-Fit rate by character length (`V = 8,192`, `k = 16`):
+Fit by character length (every second length from ten upwards):
 
 | len | n | fit ≤64 | | len | n | fit ≤64 |
 |---:|---:|---:|---|---:|---:|---:|
-| 1–8 | 7,198 | 100.0 % | | 24 | 783 | 60.0 % |
-| 10 | 2,354 | 98.7 % | | 28 | 531 | 43.9 % |
-| 12 | 2,474 | 96.9 % | | 32 | 320 | 29.4 % |
-| 14 | 2,409 | 93.9 % | | 36 | 180 | 17.2 % |
-| 16 | 2,035 | 90.7 % | | 40 | 91 | 8.8 % |
-| 18 | 1,648 | 85.5 % | | 44+ | ~420 | ~3.4 % |
-| 20 | 1,325 | 76.9 % | | | | |
+| 1–8 | 7,198 | **100.0 %** | | 24 | 783 | 66.4 % |
+| 9 | 2,131 | 99.8 % | | 26 | 636 | 60.2 % |
+| 10 | 2,354 | 99.8 % | | 28 | 531 | 50.1 % |
+| 12 | 2,474 | 98.1 % | | 30 | 358 | 37.7 % |
+| 14 | 2,409 | 95.8 % | | 32 | 320 | 34.7 % |
+| 16 | 2,035 | 94.1 % | | 34 | 249 | 24.1 % |
+| 18 | 1,648 | 88.7 % | | 36 | 180 | 22.8 % |
+| 20 | 1,325 | 81.7 % | | 40 | 91 | 12.1 % |
+| 22 | 1,045 | 71.8 % | | 44+ | 693 | 3.8 % |
 
-The two ends of the overlap, in full — the longest compressed sizes that fit,
-and the shortest uncompressed sizes that do not (`V = 8,192`, `k = 16`):
+Every identifier of eight characters or fewer fits (7,198 of them) — the short
+end is *healed* by the vocabulary, as it was before.  The two ends of the
+overlap, in full:
 
 | longest fitting | shortest failing |
 |---|---|
-| `operationInputTestGetObject_78` 30 ch, 64.00 b; `releasePreflightProgressMember` 30, 64.00; `PFN_vkUpdateDescriptorSets` 26, 64.00; `Hvt_amd64` 9, 64.00 | `AixBosRte` 9 ch, 65.44 b; `aaaaaaaaa` 9, 71.20; `eNOTEMPTY` 9, 71.25; `bGtCwr2zD` 9, 76.54 |
+| `GoogleAdsSearchads360V23ServicesCustomerClientLinkOperation` 59 ch, 60 b; `PutBucketNotificationConfigurationResponseDeserializer` 54, 57; `updateApplicationDeployment_argsStandardSchemeFactory` 53, 63 | `aaaaaaaaa` 9 ch, 71 b; `bGtCwr2zD` 9, 70; `sbbqMiSxl` 9, 68; `vqtbl1qP8` 9, 67 |
 
-A 30-character identifier can fit while a 9-character one fails, and the short
-failure misses by up to twelve bits — it is a genuinely unpredictable name, not
-a rounding error at the boundary.  The vocabulary also *heals the short end*:
-at `V = 8,192` **every** identifier of 8 characters or fewer fits (7,198 of
-them).  It moves the top of the range much faster than the bottom — 53 → 59
-characters fitting against 8 → 9 characters failing — so a bigger vocabulary
-*widens* the overlap rather than sharpening the cut.
-
-**The encoder cannot decide from the length** — it must encode and test.  A
-"short names always fit" rule holds only up to 8 characters; past that an
-unpredictable 9-character name fails while a predictable 30-character one
-succeeds.
+A 59-character identifier fits while a 9-character one misses by seven bits.
+**The encoder cannot decide from the length**: it must encode and test.  A
+"short names always fit" rule holds only up to eight characters.
 
 ## 3. What fails
 
-A caution about reading those example lists: they are sorted by *character*
-length, so the "shortest failing" column selects freaks by construction — the
-shortest thing the model cannot price is bound to look like an instruction
-mnemonic.  The failure *mass* is not like that.  Marking each identifier
-(`V = 8,192`, `k = 16`):
+The example lists above are sorted by *character* length, so the "shortest
+failing" column selects freaks by construction.  The failure *mass* is not like
+that.  Marking each identifier:
 
 | feature | share of fitters | share of failers | over-represented by |
 |---|---:|---:|---:|
-| `_` followed by a capital (`t_NEWLINE`) | 2.5 % | **13.8 %** | **5.5×** |
-| a run of ≥2 capitals (`RADIX_u32`) | 5.8 % | **19.5 %** | 3.4× |
-| contains `_` | 7.8 % | **24.7 %** | 3.2× |
-| contains a digit | 10.0 % | **20.9 %** | 2.1× |
-| no `aeiou` vowel (`_sngl`, `bGtCwr2zD`) | 2.4 % | **0.2 %** | *under*-represented (12×) |
-| none of the above | 84.3 % | **62.7 %** | — |
+| `_` followed by a capital (`t_NEWLINE`) | 2.7 % | **14.6 %** | **5.4×** |
+| a run of ≥2 capitals (`RADIX_u32`) | 6.0 % | **20.4 %** | 3.4× |
+| contains `_` | 8.1 % | **26.0 %** | 3.2× |
+| contains a digit | 10.1 % | **21.8 %** | 2.2× |
+| no `aeiou` vowel (`_sngl`, `bGtCwr2zD`) | 2.3 % | 0.2 % | *under*-represented (13×) |
+| none of the above | 80.0 % | **53.7 %** | — |
 
-**The strongest single marker is unconventional capitalisation** — an underscore
-followed by an all-caps word, as in `t_NEWLINE`, `DW_OP_nop`,
-`SSL_CTX_remove_session` — 5.5× over-represented among failures.  These are
-exactly the identifiers the corpus's case normalisation *declines* to touch:
-`classify_identifiers.py` only rewrites the all-lower and all-upper classes,
+**The strongest single marker is still unconventional capitalisation** — an
+underscore followed by an all-caps word, as in `t_NEWLINE`, `DW_OP_nop`,
+`SSL_CTX_remove_session` — 5.4× over-represented among failures.  These are
+exactly the identifiers the corpus's case normalisation declines to touch:
+`classify_identifiers.py` rewrites only the all-lower and all-upper classes,
 leaving genuinely mixed-case names verbatim, because rewriting them would
 collide across classes ([`CASE_NORMALISATION.md`](CASE_NORMALISATION.md)).
-`t_NEWLINE` really would compress as `t_newline` or `tNewline` — but recovering
+`t_NEWLINE` really would compress as `t_newline` or `tNewline` — recovering
 which of those it was needs the case class stored, which is a design change, not
 a free win.
 
-The vowel row is the mirror image and the interesting new one: a consonant-only
-name is usually a short mnemonic (`bcmp`, `cls`, `getc`), so it is a *better*
-than average fitter.  The feature is not a defect; it is a length proxy.
+The vowel row is the mirror image: a consonant-only name is usually a short
+mnemonic (`bcmp`, `cls`, `getc`), so it is a *better* than average fitter.  The
+feature is not a defect; it is a length proxy.
 
-Even so, **63 % of the failures carry none of these markers**.  The bulk of the
+Even so, **54 % of the failures carry none of these markers**.  The bulk of the
 loss is ordinary CamelCase identifiers — an unseen *combination* of ordinary
 words — not a distinguishable syntactic class that could be special-cased.
 
-## 4. A generative view
+## 4. What a random integer of the set decodes to
 
-50,000 identifiers drawn from the model (a cycle from the stop token back to
-it):
+Fifty thousand uniform draws from `[0, 2^64)`:
 
-| model | mean len (corpus 16.25) | valid syntax | real identifier | mean bits | fit ≤64 | fit ≤128 |
-|---|---:|---:|---:|---:|---:|---:|
-| `V = 4,096`, `k = 32` | 16.21 | 98.2 % | 2.19 % | 51.694 (51.245) | 72.1 % (78.1) | 94.3 % (98.1) |
-| `V = 6,144`, `k = 16` | 16.24 | 96.9 % | 2.32 % | 49.936 (49.317) | 73.8 % (80.5) | 95.0 % (98.5) |
-| `V = 8,192`, `k = 16` | 16.30 | 97.2 % | 2.18 % | 48.692 (47.727) | 75.0 % (82.5) | 95.6 % (98.8) |
+| mean length | pass the lexical rule | are a held-out identifier |
+|---:|---:|---:|
+| 24.88 characters (corpus 16.25) | 99.1 % | 0.00 % |
 
-(bracketed values are the corpus's own, for comparison.)  Examples at
-`V = 8,192`: `RecTypeId`, `partitionMathFromCustomClient`, `ref`,
-`rect_SLoadAes`, `ProviderTextArgsFilter`, `Nodes`, `colorCall`.  At `V = 6,144`
-the samples start including empty strings and bad starts (`HttpSet`, `noData`,
-`Binary`, ``, `encode`).
+Examples: `GlNvIBplainSemantic`, `readPathakeFilePathInclusiveCases`,
+`VsizeWeightedSolveWorkload`, `icountmixEicSeconds`,
+`patEntityFunctionndWriteLocations`, `namedrowTickConma__pro`.
 
-Three things show up consistently:
+Two readings, both useful for the standard:
 
-* **The model reproduces the identifier *shape* almost exactly** — the length
-  distribution matches the corpus to a tenth of a character (16.2–16.3 against
-  16.25).
-* **Almost none of it is real.** Only ~2.2 % of samples are an actual identifier
-  in the reference set, so the residual mass of the bijection lands on
-  plausible-looking but unreal names.
-* **The generative tail is heavier than the empirical one.**  A sample's own
-  coverage is *below* the corpus's by 6–7.5 points at 64 bits and by 3–4 at 128,
-  and the gap does *not* shrink with the vocabulary (6.0 → 6.7 → 7.5).  So the
-  tail of the 64-bit set behaves worse than the average real identifier, and a
-  bigger word list buys coverage without making the tail more realistic.  What
-  the bigger list does buy is well-formedness: the 96.9–98.2 % syntax rate is
-  flat, where the pre-grid study fell to 94.2 % at 11,758 words.
+* **The set is the whole decodable space, not a name list.**  Every one of the
+  2⁶⁴ integers decodes; none of 50,000 lands on a real identifier, and the mean
+  draw is nine characters longer than life.  Membership in the 64-bit set says
+  nothing about whether a string is a name a programmer would write — that
+  judgement lives in the language model, not in the code.
+* **The decode is total and cheap.**  A tenth of a percent of draws fail only
+  the *lexical* rule (a leading digit, say); the rest are well-formed strings.
+  The bijection has no holes to guard against, which is what makes the decoder
+  a table walk with no error path.
 
 ## What it shows
 
-* The 64-bit set covers 78 % of distinct identifiers at 22 kB, 81 % at 30 kB and
-  83 % at 40 kB; the 128-bit set 98–99 %.  Whether that is *useful* depends on
-  the occurrence weighting (retired finding: ~92 % of occurrences) and on how
-  much model size the standard is willing to carry — the 83 % figure needs
-  40 kB, not 20 kB ([`MODEL_BUDGET.md`](MODEL_BUDGET.md)).
+* At 30,745 bytes the shipped model covers **85.0 %** of distinct held-out
+  identifiers within 64 bits and **99.0 %** within 128.
+* The factorisation costs 1.9 points against the flat code, and the flat code
+  charges 94 kB for the 2.4 points it wins at a matched `k` where the frontier
+  charges about 20 kB.
 * Membership is not a length rule: failures are unpredictable identifiers of
-  ordinary length, and a bigger vocabulary widens the length overlap while
-  healing the short end.
-* Sampling is a cheap check on the *decoder*: the model gets the shape right and
-  the tail wrong, so the two ends of the set behave differently.
-* The gap between the clustered model and the full table (10.6–12.2 points of
-  64-bit coverage, 7.8–9.1 bits) is the largest single loss in the system, and
-  it is a `k`-and-`V` question, not a coding question.
+  ordinary length, and the vocabulary heals the short end while widening the
+  overlap at the long end.
+* The 64-bit space is overwhelmingly fabricated names.  A standard should say
+  so, because it means the set is defined by the code, not by the corpus.
 
 ## Reproducing
 
 ```sh
-python3 scripts/budget64_study.py --dir work/tw4096ns --ks 32 --stride 10
-python3 scripts/budget64_study.py --dir work/tw6144ns --ks 16 --stride 10
-python3 scripts/budget64_study.py --dir work/tw8192ns --ks 16 --stride 10
+python3 scripts/budget64_sets.py
 ```
+
+The old arithmetic version of this study is at `scripts/budget64_study.py`; it
+is kept for the record, and its sizes are not the model's.
