@@ -186,6 +186,10 @@ and the rule list.
   `MODEL_FORMAT.md` §2) is published alongside it, so the binary can be checked
   by converting it back.  The binary is normative for bytes; the YAML is
   normative for meaning.
+* In this repository the two are `standard/model.nvm1` and
+  `standard/model.yaml`; the same bytes are compiled into both implementations
+  (`python/varnames/data/model.nvm1`, `rust/data/model.nvm1`), and each checks
+  the digest above before it uses them.
 * The published tables are `CC0-1.0`, the code and specification
   `MIT OR Apache-2.0`.
 
