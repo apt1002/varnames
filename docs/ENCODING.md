@@ -246,8 +246,8 @@ model-building-time only.
 | code | bits/identifier | penalty |
 |---|---:|---:|
 | arithmetic (reference) | 56.368 | — |
-| one tree per left cluster over the *joint* `P(b|a)` | 56.558 | +0.190 (0.34 %) |
-| two trees: `P(cluster|cluster)` × `P(word|cluster)` | 57.770 | +1.402 (2.49 %) |
+| one tree per left cluster over the *joint* `P(b\|a)` | 56.558 | +0.190 (0.34 %) |
+| two trees: `P(cluster\|cluster)` × `P(word\|cluster)` | 57.770 | +1.402 (2.49 %) |
 
 The factorised code loses ~7× the flat code because the flat code is the Huffman
 code of the joint distribution, while a product of two prefix codes is not

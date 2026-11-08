@@ -208,7 +208,7 @@ wide; the right-hand column is the operating point.
 | cluster → words index | — | from the map | 0 | 0 | 0 | yes |
 | canonical codes | — | from the depths | 0 | 0 | 0 | yes |
 | program code | the library | — | 2,048 | 2,048 | 2,048 | — |
-| **total** | | | **16,141** | **31,377** | **32,793** |
+| **total** | | | | **16,141** | **31,377** | **32,793** |
 
 The depth field is **four bits, always** (`MODEL_FORMAT.md` §3): the stored
 value is `d − d_min` inside its own tree, and the offset is recovered from the
