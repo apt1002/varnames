@@ -127,15 +127,16 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 
 The distant target.  **In progress** — the encoding and the plan for the
 product are settled: the packed model, the standard, both implementations and
-the table-building tools are done, and the rejected alternatives are written
-up; the best-algorithm write-up and the ablation study (E2, E4) are open.
-Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
+the table-building tools are done, and the algorithm and its rejected
+alternatives are written up; the ablation study (E4) is open.  Design intent,
+scope and audiences: `docs/PRODUCTISATION.md`.
 
 - [x] **E1. Design the encoding.** *Done — designed, measured and shipped: one
       model file of 30,745 bytes, one canonical assignment, the stop as padding.*
       `docs/ENCODING.md` §6.
-- [ ] **E2. Write up the best algorithm** — corpus, case normalisation, word
-      list, tokenisation, adjacency matrix, clustering, encoding.
+- [x] **E2. Write up the best algorithm.** *Done — the stages in sequence,
+      from corpus to integer and back, with what each stage costs.*
+      `docs/ALGORITHM.md`.
 - [x] **E3. Write up rejected alternatives.** *Done — every measured negative
       in one place, with the number that killed it and the note it came from.*
       `docs/ALTERNATIVES.md`.
