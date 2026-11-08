@@ -12,18 +12,24 @@ rates**.  The arms:
     q=2             two right clusters per left cluster
     stop weighted   the top trees built with the stop's true mass, so the
                     terminator has to be coded instead of arriving as padding
-    bias off        no depth-flattening bias; the depths then need five bits,
-                    which is a different file, so only its bits are measured
+    5-bit depths     no depth-flattening bias, so a depth needs five bits
+                    instead of four; that is a different file, so only its
+                    bits are measured
     no case norm.   a dictionary built on the raw corpus instead of the
                     normalised one, scored on the identifiers normalisation
                     leaves unchanged (the only ones both models can code
                     identically)
+    k = V           clustering off: one right cluster per word, at a
+                    vocabulary small enough to cost about what the shipped
+                    model costs
 
-The last arm needs `--raw-corpus` and builds its dictionary, which takes a few
-minutes; the rest reuse an existing dictionary directory.
+The last two arms need their own dictionaries, which takes minutes: the case
+arm from `--raw-corpus`, the flat arm from `--flat-corpus`.  The rest reuse an
+existing dictionary directory.
 
     ablation.py --dir work/tw8192ns
     ablation.py --dir work/tw8192ns --raw-corpus corpus/identifiers.multilang.txt
+    ablation.py --dir work/tw8192ns --flat 240
 
 The measurements land in `docs/ABLATION.md`.  Nothing here is a research
 script: it exists to answer "what is each piece worth" in one table, and the
@@ -111,11 +117,17 @@ def row(name, what, res, base=None, fmt='{:,}'):
     b = res.get('bytes', res.get('bytes_estimate'))
     bb = None if base is None else \
         base.get('bytes', base.get('bytes_estimate'))
-    d_bytes = '' if bb is None else f"{b - bb:+,}"
-    d_bits = '' if base is None else f"{res['mean_bits'] - base['mean_bits']:+.3f}"
-    d_fit = '' if base is None else \
-        f"{100 * (res['fit64'] - base['fit64']):+.1f}"
-    bytes_s = '—' if b is None else fmt.format(b)
+
+    def delta(x):
+        # the table uses a real minus sign, as the notes do
+        return x.replace('-', '\u2212')
+
+    d_bytes = '\u2014' if bb is None else delta(f"{b - bb:+,}")
+    d_bits = '\u2014' if base is None else \
+        delta(f"{res['mean_bits'] - base['mean_bits']:+.3f}")
+    d_fit = '\u2014' if base is None else \
+        delta(f"{100 * (res['fit64'] - base['fit64']):+.1f}")
+    bytes_s = '\u2014' if b is None else fmt.format(b)
     return (f"| {name} | {what} | {bytes_s} | {d_bytes} | "
             f"{res['mean_bits']:.3f} | {d_bits} | "
             f"{100 * res['fit64']:.1f} % | {d_fit} |")
@@ -190,6 +202,35 @@ def raw_arm(raw_corpus, normalised_val, outdir, V, sample, jobs):
                 rules=rules)
 
 
+def flat_arm(corpus, V, outdir, sample, jobs, stride, seed):
+    """A model with no clustering: `k = V`, so each right cluster is a word.
+
+    The vocabulary has to be small, because the top stage is `V` trees of
+    `V + 1` leaves and grows as `V²/2` bytes.  `V = 240` lands at about the
+    shipped file's size.  The corpus is the normalised one, split the same way
+    the standard was, so the held-out identifiers are the same.
+    """
+    import build_tables as bt
+
+    os.makedirs(outdir, exist_ok=True)
+    train_path, _val = bt.split(corpus, outdir, stride)
+    chars = bt.alphabet_of(train_path, sample)
+    nchars = len(chars)
+    words = V - 1 - nchars
+    if words < 1:
+        raise SystemExit(f'--flat {V} leaves nothing for words: the corpus '
+                         f'has {nchars} characters')
+    directory = os.path.join(outdir, f'tw{V}')
+    ns = argparse.Namespace(corpus=train_path, num_pairs=words,
+                            sample=sample, stride=0, outdir=directory,
+                            jobs=jobs)
+    tw.cmd_train(ns)
+    m = msz.build_model(directory, V, 1, kappa=300.0, seed=seed)
+    buf, _ = msz.pack(m)
+    _chars, rules, _sym = tw.load_dictionary(directory)
+    return dict(buf=buf, chars=_chars, rules=rules, V=V, words=words)
+
+
 # ------------------------------------------------------------------- main
 
 def main():
@@ -209,6 +250,15 @@ def main():
                     help='also run the case-normalisation arm on this corpus')
     ap.add_argument('--raw-out', default='build/ablation_raw',
                     help='working directory for the raw-corpus arm')
+    ap.add_argument('--flat', type=int, metavar='V',
+                    help='also build a flat model: k = V, one right cluster '
+                         'per word, at V symbols')
+    ap.add_argument('--flat-corpus', default='work/camel/merged.txt',
+                    help='normalised corpus the flat model is built from')
+    ap.add_argument('--flat-stride', type=int, default=10,
+                    help='held-out stride for the flat build (the standard)')
+    ap.add_argument('--flat-out', default='build/ablation_flat',
+                    help='working directory for the flat arm')
     ap.add_argument('--sample', type=int, default=20)
     ap.add_argument('--jobs', type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
@@ -264,8 +314,8 @@ def main():
     extra = (V + k * (k * mb['q'] + 1) + 7) // 8
     r['bytes_estimate'] = len(msz.pack(base)[0]) + extra
     r['seconds'] = round(time.time() - t0, 1)
-    res['bias off'] = dict(res=r, what='no depth bias; depths need five bits')
-    print(f'  bias off         {r["bytes_estimate"]:>7,} B (five-bit field)  '
+    res['5-bit depths'] = dict(res=r, what='no depth bias; five bits a depth')
+    print(f'  5-bit depths     {r["bytes_estimate"]:>7,} B (five-bit field)  '
           f'{r["mean_bits"]:.3f} bits  {100 * r["fit64"]:.1f} %', flush=True)
 
     if args.raw_corpus:
@@ -288,14 +338,34 @@ def main():
               f'{rn["mean_bits"]:.3f} bits  {100 * rn["fit64"]:.1f} %',
               flush=True)
 
+    if args.flat:
+        t0 = time.time()
+        fm = flat_arm(args.flat_corpus, args.flat, args.flat_out, args.sample,
+                      args.jobs, args.flat_stride, args.seed)
+        r = score(fm['buf'], lines, fm['chars'], fm['rules'])
+        r['seconds'] = round(time.time() - t0, 1)
+        if r['n'] != res['base']['res']['n']:
+            print(f'  note: the flat arm scored {r["n"]:,} identifiers, '
+                  f'not {res["base"]["res"]["n"]:,}', flush=True)
+        name = f'k = V = {fm["V"]}'
+        res[name] = dict(
+            res=r, what=f'clustering off, {fm["words"]} words, one tree '
+                        f'per word')
+        print(f'  {name:<16} {r["bytes"]:>7,} B  {r["mean_bits"]:.3f} bits  '
+              f'{100 * r["fit64"]:.1f} %', flush=True)
+
     print('\n| arm | what changes | bytes | Δ bytes | mean bits | Δ bits '
           '| fit ≤64 | Δ fit (pt) |')
     print('|---|---|---:|---:|---:|---:|---:|---:|')
     for name, item in res.items():
         # the case arms are compared with each other, on their own identifier
         # set: their deltas are not differences from the shipped row
-        ref = res['case norm.']['res'] if name in ('no case norm.', 'case norm.') \
-            else res['base']['res']
+        if name == 'base':
+            ref = None
+        elif name in ('no case norm.', 'case norm.'):
+            ref = res['case norm.']['res']
+        else:
+            ref = res['base']['res']
         print(row(name, item['what'], item['res'], base=ref,
                   fmt='~{:,}' if 'bytes_estimate' in item['res']
                   and 'bytes' not in item['res'] else '{:,}'))
