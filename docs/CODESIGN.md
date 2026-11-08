@@ -4,17 +4,21 @@ The idea changes which clusters exist, not how they are coded: the decoder
 cannot tell a codesigned model from any other with the same `V` and `k`
 (`ENCODING.md` §§2–4).
 
-**Status: a design sketch, not implemented.**  `scripts/codesign.py` does not
-exist.  What has changed since it was written: the code side is now measured as
-nearly exhausted (the flat Huffman penalty is 0.13–0.19 bits/identifier and the
-zero-weight stop more than pays it back — `ENCODING.md` §2–3,
-`CODING_OVERHEAD.md`), while the
-model is not (7.8–9.1 bits above the full table, `BUDGET64_STUDY.md`).
-So the thing worth codesigning is the **model term** — which cells share a
-block entry and a membership — not the codeword assignment.  The budget for any
-such idea is the factorisation penalty itself, now measured at
-**0.87–1.39 bits/identifier** across the grid (`CODING_OVERHEAD.md`), not the
-1.2 it was when this was drafted.  The plan item is in `PLAN.md`.
+**Status: the first diagnostic is measured and the idea is parked — negative.**
+`scripts/codesign.py` now walks step 2 of the plan below: at a matched `k`, an
+assignment chosen by the code term alone is **1.921 bits per identifier worse**
+than the shipped Hellinger assignment, at the same file size (§"The first
+diagnostic").  Since the code term cannot choose cells, the model term must,
+and that is what the existing build already does.
+
+Why the sketch was written in those terms: the code side is nearly exhausted
+(the flat Huffman penalty is 0.13–0.19 bits/identifier and the zero-weight stop
+more than pays it back — `ENCODING.md` §§2–3, `CODING_OVERHEAD.md`), while the
+model is not (7.8–9.1 bits above the full table, `BUDGET64_STUDY.md`).  So the
+thing worth codesigning is the **model term** — which cells share a block entry
+and a membership — not the codeword assignment.  The budget for any such idea is
+the factorisation penalty itself, measured at **0.87–1.39 bits/identifier**
+across the grid (`CODING_OVERHEAD.md`), not the 1.2 it was at the draft.
 
 The quarters are a fixed lattice imposed before the code is built; a better
 design changes the clustering *and* the trees together.  The objective is
@@ -107,7 +111,43 @@ subtrees must be whatever the greedy build produced — the inequality at the to
 words are in the same **cell** (above), not how the tree inside a
 cell is shaped.
 
-**Walking (`scripts/codesign.py`, ~150 lines, reuses `cluster_words.py`):**
+## The first diagnostic
+
+Step 2 of the walk below, done: hold everything fixed (`V = 8,191`, `k = 32`,
+`q = 1`, `kappa = 300`, the same packing, the same held-out sample of 42,268)
+and change only the assignment.  With the Hellinger term switched off the
+compound merge key *is* Huffman, so the code-only endpoint is the
+two-lightest-cell merge down to 32 cells.
+
+| assignment | file | mean bits | fit ≤64 | fit ≤128 |
+|---|---:|---:|---:|---:|
+| the shipped model's own (`standard/model.nvm1`) | 30,745 B | **45.218** | **85.0 %** | **99.0 %** |
+| a fresh Hellinger assignment | 30,745 B | 45.218 | 85.0 % | 99.0 % |
+| mass-merge, the code term alone | 30,745 B | 47.138 | 83.3 % | 98.7 % |
+
+Two things follow.
+
+* **The build is reproducible.**  Recomputing the clustering from scratch
+  reproduces the shipped file's bits *exactly* — same assignment, same trees,
+  same 30,745 bytes — which is the check the standard needs anyway.
+* **The code term alone loses 1.9 bits and 1.6 fit points**, 4.2 % of the code
+  length, and buys nothing in bytes: the membership map and the depth tables are
+  the same size whatever the partition.  Huffman-optimal cells are
+  mass-stratified — one huge cell plus a tail of small ones — and a block model
+  over those cells cannot predict the next word, because the cells no longer
+  group words that *follow the same kind of word*.  Similarity has to choose the
+  cells; the code can only shape them afterwards.
+
+That closes the question the sketch was asking.  A codesign that improves on the
+shipped assignment would have to gain its bits from the model term — which is
+the same term the Hellinger clustering attacks — and would then pay them back on
+the code side.  The measured room in the factorisation is 1.9 bits
+(`BUDGET64_STUDY.md` §1), and the mass-merge experiment says the code term
+alone cannot find any of it.  The `lambda_fit` sweep of step 3 is the only part
+left untried, and on this evidence it is a search for a second-order correction
+to a clustering that is already chosen for the right reason.
+
+**The full walk (`scripts/codesign.py`, ~150 lines, reuses `cluster_words.py`):**
 
 1. For an existing `k`-means assignment at `(V, k)`, build the real Huffman
    trees and record `Σ N(b)·len(b)` — the current code's cost.

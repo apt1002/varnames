@@ -556,7 +556,7 @@ def prepared_matrix(directory, kappa):
 
 
 def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
-                shared_weight=1.0, bias=True):
+                shared_weight=1.0, bias=True, labels=None, prepared=None):
     """Build the model tables from a dictionary directory.
 
     The file has no stop symbol.  The corpus tokeniser emits one, but it is not
@@ -572,12 +572,16 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
     is — the one whose top tree codes the first-token distribution cheapest —
     and then permutes the labels so it is numbered 0.
     """
-    p = prepared_matrix(directory, kappa)
+    p = prepared or prepared_matrix(directory, kappa)
     Mw, start, chars, rules = p['Mw'], p['start'], p['chars'], p['rules']
     V, nchars = p['V'], p['nchars']
     c = Mw.sum(0)                      # unigram: the column mass
 
-    if shared:
+    if labels is not None:
+        # codesign: take the assignment as given and build the trees for it.
+        lcl = rcl = np.asarray(labels, dtype=np.int64)
+        assert lcl.shape == (V,), lcl.shape
+    elif shared:
         lcl = rcl = shared_labels(Mw, k, np.random.default_rng(seed),
                                   shared_weight)
     else:

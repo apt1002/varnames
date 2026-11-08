@@ -41,7 +41,12 @@ Storage: **assoc** is `k² + 2V` numbers; **1-sided** is `k·V`.  The Hellinger
 factorisation of [`HELLINGER_FACTORISATION.md`](HELLINGER_FACTORISATION.md) is
 `2VL`.  All models are fit to the same `kappa = 300` reference `M_ref`, and the
 held-out mean bits use a stride-`40` sample of `work/camel/merged_validation.txt`
-(`n = 10,567` identifiers).  The vocabularies are the grid builds
+(`n = 10,567` identifiers).  **The bits below are an arithmetic account**, used
+to compare *factorisations* with each other on equal terms; they are not the
+size of a shippable model, and the ordering they give is what was carried
+forward.  The shipped file is priced in `MODEL_BUDGET.md` §7, where the frontier
+is the measured Huffman code, and the 64-bit coverage it buys is in
+`BUDGET64_STUDY.md`.  The vocabularies are the grid builds
 `work/tw4096ns`, `work/tw6144ns`, `work/tw8192ns`
 (`--sample 20 --stride 0`); `scripts/cluster_words.py`.
 

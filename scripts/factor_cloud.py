@@ -16,8 +16,16 @@ Design (change with the flags):
   * point size    -- default |dim 1| coordinate, since the leading latent
                      dimension roughly tracks probability mass; `--size mass`
                      uses the observed unigram mass instead;
-  * point colour  -- log10 observed unigram mass (so rare junk words are visible);
+  * point colour  -- log10 observed unigram mass (so rare junk words are visible),
+                     or, with `--model` or `--clusters`, the word's cluster;
   * the `--label N` most massive points per cloud are annotated with the word.
+
+Colouring by the cluster is what shows the co-clustering rather than leaving it
+to be inferred: pass the packed model (`--model standard/model.nvm1`) to use the
+very assignment the build chose, or `--clusters K` to compute one on the spot.
+The same label is used in both clouds, so a cluster that is a tight clump in the
+left cloud *and* in the right cloud is what a good shared assignment looks
+like.
 
 `--divide-unigram` divides each of the three plotted coordinates by the **square
 root** of the word's 1-gram probability, stripping the mass/gain trend so the
@@ -27,6 +35,8 @@ It is self-contained: it needs `numpy`, `matplotlib`, and only the files
 `<dir>/adj.npz` and `<dir>/sym.npy` (e.g. copy `work/tw2040/`; ~3.4 MB).
 
 Usage:
+    factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1 --no-show
+    factor_cloud.py --dir work/tw2040 --clusters 16 --no-show
     factor_cloud.py --dir work/tw2040                 # show and save PNG
     factor_cloud.py --dir work/tw2040 --size mass --save cloud.png
     factor_cloud.py --dir work/tw2040 --axes 1,2,3 --size 4 --no-show
@@ -78,6 +88,38 @@ def axes_and_size(coords, dims, size_spec, uni, divide_unigram=False):
     return xyz, s
 
 
+def model_labels(path, V0):
+    """The right-cluster label of every point, from a packed model file.
+
+    The model numbers the words from the first id after the alphabet; the
+    adjacency matrix carries the stop token in the middle of its symbol list, so
+    the stop is skipped and everything after it shifts down one.  Returns a
+    label per adjacency symbol, `-1` for the stop.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), 'python'))
+    import varnames
+
+    model = varnames.Model.from_path(path)
+    nchars = model.nchars
+    if model.V + 1 != V0:
+        sys.exit(f'{path}: V={model.V} does not match the adjacency ({V0 - 1})')
+    labels = np.full(V0, -1, dtype=np.int64)
+    for i in range(V0):
+        if i == nchars:
+            continue                      # the stop token
+        labels[i] = model.memberships[i if i < nchars else i - 1]
+    return labels
+
+
+def cluster_labels(M_ref, k, seed):
+    """The row half of the shared assignment, computed on the spot."""
+    import cluster_words as cw
+
+    labels, _centers = cw.cluster_axis(M_ref, k, np.random.default_rng(seed), 0)
+    return np.asarray(labels, dtype=np.int64)
+
+
 def scale(kind, v, lo, hi):
     if kind == 'log':
         v = np.log10(np.maximum(v, 1.0))
@@ -107,6 +149,14 @@ def main():
     ap.add_argument('--clip', type=float, default=99.0,
                     help='set axis limits to this percentile range so the bulk '
                          'is visible (100 = show full range)')
+    ap.add_argument('--model', metavar='PATH',
+                    help='an NVM1 model whose cluster assignment colours the '
+                         'points (the assignment the build chose)')
+    ap.add_argument('--clusters', type=int, metavar='K',
+                    help='colour by a fresh K-means assignment of this size, '
+                         'when no model is given')
+    ap.add_argument('--seed', type=int, default=1,
+                    help='seed for `--clusters`')
     ap.add_argument('--save', default='factor_cloud.png')
     ap.add_argument('--no-show', action='store_true')
     args = ap.parse_args()
@@ -128,16 +178,47 @@ def main():
     if len(dims) != 3:
         sys.exit('--axes needs exactly three dims')
 
+    labels = None
+    V0 = len(sym)
+    if args.model:
+        labels = model_labels(args.model, V0)
+        print(f"  coloured by {args.model}: "
+              f"{len(set(labels[labels >= 0]))} clusters")
+    elif args.clusters:
+        labels = cluster_labels(M_ref, args.clusters, args.seed)
+        print(f"  coloured by {args.clusters} fresh clusters")
+
     fig = plt.figure(figsize=(13, 6.5))
+    clusters = None if labels is None else sorted(set(labels[labels >= 0]))
+    cmap = plt.get_cmap('hsv', len(clusters)) if clusters else None
+    sc = None
     for i, (name, coords) in enumerate((('left (row) cloud  U*sqrt(sigma)', left),
                                         ('right (col) cloud  V*sqrt(sigma)', right))):
         xyz, size_raw = axes_and_size(coords, dims, args.size, uni,
                                        args.divide_unigram)
         ax = fig.add_subplot(1, 2, i + 1, projection='3d')
-        col = scale('log', uni, 0.0, 1.0)
         siz = scale('log' if args.size == 'mass' else 'lin', size_raw, 3.0, 90.0)
-        sc = ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=siz, c=col,
-                        cmap='viridis', alpha=0.6, edgecolors='none')
+        if labels is None:
+            col = scale('log', uni, 0.0, 1.0)
+            sc = ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=siz, c=col,
+                            cmap='viridis', alpha=0.6, edgecolors='none')
+        else:
+            keep = labels >= 0
+            sc = ax.scatter(xyz[keep, 0], xyz[keep, 1], xyz[keep, 2],
+                            s=siz[keep], c=labels[keep], cmap=cmap,
+                            vmin=-0.5, vmax=len(clusters) - 0.5,
+                            alpha=0.7, edgecolors='none')
+            stop = np.flatnonzero(labels < 0)
+            if stop.size:
+                ax.scatter(xyz[stop, 0], xyz[stop, 1], xyz[stop, 2],
+                           s=120, c='black', marker='x', linewidths=1.5)
+            for j, label in enumerate(clusters):      # number each cluster
+                idx = labels == label
+                c = xyz[idx].mean(axis=0)
+                ax.text(c[0], c[1], c[2], str(label), fontsize=9,
+                        fontweight='bold', color='black',
+                        bbox=dict(boxstyle='round,pad=0.1', fc='white',
+                                  ec='none', alpha=0.65))
         # annotate the most massive words
         for w in np.argsort(uni)[::-1][:args.label]:
             nm = sym[w] if len(sym[w]) > 1 else repr(sym[w])
@@ -151,11 +232,15 @@ def main():
                                  (xyz[:, 0], xyz[:, 1], xyz[:, 2])):
                 setlim(np.percentile(v, lo), np.percentile(v, hi))
         ax.set_title(name, fontsize=10)
-    cb = fig.colorbar(sc, ax=fig.axes, fraction=0.02, pad=0.06)
-    cb.set_label('log10 unigram mass')
+    if sc is not None and labels is None:
+        cb = fig.colorbar(sc, ax=fig.axes, fraction=0.02, pad=0.06)
+        cb.set_label('log10 unigram mass')
     size_lbl = 'unigram mass' if args.size == 'mass' else f'|dim {args.size}|'
+    colour_lbl = ('cluster' if labels is not None
+                  else 'log10 unigram mass')
     fig.suptitle(f"{args.dir}  sqrt(M_ref) rank-{len(s)}   "
-                 f"size = {size_lbl} (log-scaled)", fontsize=11)
+                 f"size = {size_lbl} (log-scaled)   colour = {colour_lbl}",
+                 fontsize=11)
     if args.save:
         fig.savefig(args.save, dpi=170, bbox_inches='tight')
         print(f"wrote {args.save}")
@@ -165,11 +250,17 @@ def main():
     import csv
     with open(out, 'w', newline='', encoding='utf-8') as f:
         wr = csv.writer(f)
-        wr.writerow(['id', 'word', 'mass']
+        header = ['id', 'word', 'mass']
+        if labels is not None:
+            header.append('cluster')
+        wr.writerow(header
                     + [f'U{d + 1}' for d in range(left.shape[1])]
                     + [f'V{d + 1}' for d in range(right.shape[1])])
         for w in range(len(sym)):
-            wr.writerow([w, sym[w], f'{uni[w]:.0f}']
+            row = [w, sym[w], f'{uni[w]:.0f}']
+            if labels is not None:
+                row.append(int(labels[w]))
+            wr.writerow(row
                         + [f'{x:.6g}' for x in left[w]]
                         + [f'{x:.6g}' for x in right[w]])
     print(f"wrote {out}")
