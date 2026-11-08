@@ -30,9 +30,12 @@ bit — that padding is the terminator, and it costs nothing.  The algorithm is:
 
 The two stages are there because a word transition is coded in two parts: the
 top tree says *which group of words* comes next, the bottom tree says *which
-word* within it.  `q` is the number of right clusters per left cluster.  It is
-1 in the standard — one right cluster to a left cluster, so the two stages read
-the same label — but the format carries it, and
+word* within it.  Every right cluster is a leaf of every top tree, so the top
+stage may pair right clusters that belong to different left clusters; a left
+cluster owns `q` of them, which is why the next left cluster is the right
+cluster divided by `q`.  `q` is the number of right clusters per left cluster.
+It is 1 in the standard — one right cluster to a left cluster, so the two
+stages read the same label — but the format carries it, and
 [`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md) measures what `q > 1` buys.
 
 The file contains exactly what that algorithm needs, and nothing else:
