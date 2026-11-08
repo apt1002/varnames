@@ -110,9 +110,11 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       by the shipped assignment (or `--clusters K` for a fresh one), numbers the
       centroids, marks the stop token, and writes the cluster as a CSV column.
       `docs/CLUSTER_WORDS.md`, `docs/HELLINGER_FACTORISATION.md`.
-- [ ] **C31. A factor-cloud figure for `README.md`.** *Blocked on the final
-      model.*  The two clouds of the adopted model, coloured by right cluster,
-      as illustration.  `README.md`.
+- [x] **C31. A factor-cloud figure for `README.md`.** *Done —*
+      `docs/factor-cloud.png`: the rank-4 clouds of the shipped model coloured
+      by right cluster.  Dims 1–3 and size by mass, not the default dims 2–4:
+      the mass axis is what separates the arms, and the default projection buries
+      the structure in a dense core.  `README.md`.
 - [x] **C32. Naming right clusters by position.** *Rejected.*
       `docs/CLUSTER_QUARTERS.md` §"The structural cost".
 

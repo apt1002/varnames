@@ -177,7 +177,12 @@ rank 4 on `tw2040` the leading singular values are 2749 / 1129 / 603 / 508
 structure while the left cloud is closer to isotropic.  The apparent
 "gain × shape" factorisation of these clouds is tested — and found to be largely
 a reconstruction artefact — in `scripts/shape_gain_test.py`; see the section
-"Is the factor-cloud 'gain × shape' structure real?" below.)*
+"Is the factor-cloud 'gain × shape' structure real?" below.  At the shipped
+vocabulary the tool colours both clouds by the model's assignment
+(`--model standard/model.nvm1`), or by a fresh one (`--clusters K`), which is
+how the co-clustering is seen rather than inferred, and it reads the equation
+above off the table with a Lanczos SVD, since the dense one is cubic; that
+figure is in `README.md`.)*
 
 ## Compressing the table directly
 

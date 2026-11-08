@@ -148,6 +148,23 @@ compression only a little: in the word model the `V × V` table shrinks to
 few hundred clusters come within a fraction of a bit of its exact-context bound
 ([`docs/SUCCESSOR_MODEL.md`](docs/SUCCESSOR_MODEL.md)).
 
+![The word table's left and right factor clouds, coloured by cluster](docs/factor-cloud.png)
+
+The figure is the word table seen as two clouds. It is the rank-4 square-root
+factorisation of the table
+([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)), so every
+word has a *row* coordinate (left panel) and a *column* coordinate
+(right panel); a point's size is the word's unigram mass and its colour is the
+**right cluster** the shipped model assigns it to, which is also its left
+cluster because the assignment is shared. Words that the model groups together
+sit in the same neighbourhood of *both* clouds — the red-and-orange arm, the
+green bulk, the cyan spur — which is what a single assignment has to buy: one
+table of relationships, used from both sides. The tool that draws it is
+`scripts/factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1
+--axes 1,2,3 --size mass --no-cluster-labels`; a fresh clustering can be
+computed on the spot with `--clusters K`, and the CSV it writes carries the
+cluster so the plot can be redrawn elsewhere.
+
 Along the way, we tried a lot of things that didn't work:
 
 - **Runs as words.** A rule that merges a character with a copy of itself, to
@@ -224,6 +241,7 @@ varnames/
 │   ├── MODEL_FORMAT.md                  # the portable YAML model + its binary form
 │   ├── RULE_ENCODING.md                 # encoding the rule list: the pair/code grid
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
+│   ├── factor-cloud.png                 # the words as two clouds, coloured by cluster
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
 │   ├── STANDARD.md                      # the proposed standard: code, sets, tables

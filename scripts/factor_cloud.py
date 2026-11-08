@@ -33,9 +33,14 @@ remaining (angular) structure is visible.
 
 It is self-contained: it needs `numpy`, `matplotlib`, and only the files
 `<dir>/adj.npz` and `<dir>/sym.npy` (e.g. copy `work/tw2040/`; ~3.4 MB).
+`scipy` is optional and is used above `V = 3,000`: the dense SVD is cubic, so
+the shipped vocabulary takes it from ~40 minutes to under a minute (`--exact`
+forces the dense path anyway).
 
 Usage:
     factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1 --no-show
+    factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1 \
+        --axes 1,2,3 --size mass --label 8 --no-cluster-labels --no-show
     factor_cloud.py --dir work/tw2040 --clusters 16 --no-show
     factor_cloud.py --dir work/tw2040                 # show and save PNG
     factor_cloud.py --dir work/tw2040 --size mass --save cloud.png
@@ -65,12 +70,31 @@ def load_model(d, kappa):
     return M + alpha * P_mar, uni, sym
 
 
-def factorise(M_ref, rank):
-    """Rank-`rank` SVD of the elementwise sqrt (Hellinger embedding)."""
+def factorise(M_ref, rank, exact=False):
+    """Rank-`rank` SVD of the elementwise sqrt (Hellinger embedding).
+
+    The dense SVD is O(V^3) and dominates the run at the shipped vocabulary:
+    on a machine with a reference BLAS it is ~40 minutes at `V = 8,192`, for
+    four singular vectors.  So the default above `--exact-v` is the Lanczos
+    (`svds`) route, which needs only a few dozen matrix-vector products, and
+    the signs are fixed so the coordinates are reproducible.  `exact=True`
+    forces the dense path, which is what the small vocabularies use anyway.
+    """
     A = np.sqrt(np.maximum(M_ref, 0.0))
-    U, s, Vt = np.linalg.svd(A, full_matrices=False)
-    L = min(rank, len(s))
-    U, s, Vt = U[:, :L], s[:L], Vt[:L]
+    V = A.shape[0]
+    if not exact and V > 3000 and rank <= 64:
+        from scipy.sparse.linalg import svds
+        U, s, Vt = svds(A, k=rank)             # ascending
+        order = np.argsort(s)[::-1]
+        U, s, Vt = U[:, order], s[order], Vt[order]
+        for j in range(len(s)):                # fix the sign of each vector
+            if U[np.argmax(np.abs(U[:, j])), j] < 0:
+                U[:, j] *= -1
+                Vt[j] *= -1
+    else:
+        U, s, Vt = np.linalg.svd(A, full_matrices=False)
+        L = min(rank, len(s))
+        U, s, Vt = U[:, :L], s[:L], Vt[:L]
     left = U * np.sqrt(s)          # V x L
     right = Vt.T * np.sqrt(s)      # V x L
     return left, right, s
@@ -134,6 +158,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dir', default='work/tw2040')
     ap.add_argument('--rank', type=int, default=4)
+    ap.add_argument('--exact', action='store_true',
+                    help='force the dense SVD (slow above V ~ 3,000); the '
+                         'default is Lanczos, which is what makes V = 8,192 '
+                         'bearable')
     ap.add_argument('--kappa', type=float, default=300.0,
                     help='prior mass per row (0 = no prior)')
     ap.add_argument('--axes', default='2,3,4',
@@ -157,6 +185,9 @@ def main():
                          'when no model is given')
     ap.add_argument('--seed', type=int, default=1,
                     help='seed for `--clusters`')
+    ap.add_argument('--no-cluster-labels', action='store_true',
+                    help='do not number the cluster centroids (they crowd '
+                         'when the clouds have a dense core)')
     ap.add_argument('--save', default='factor_cloud.png')
     ap.add_argument('--no-show', action='store_true')
     args = ap.parse_args()
@@ -167,7 +198,7 @@ def main():
     import matplotlib.pyplot as plt
 
     M_ref, uni, sym = load_model(args.dir, args.kappa)
-    left, right, s = factorise(M_ref, args.rank)
+    left, right, s = factorise(M_ref, args.rank, exact=args.exact)
     print(f"{args.dir}: V={M_ref.shape[0]}  top singular values "
           + ", ".join(f"{x:.1f}" for x in s))
     print(f"  sqrt(M_ref) rank-{len(s)} captures "
@@ -198,6 +229,17 @@ def main():
                                        args.divide_unigram)
         ax = fig.add_subplot(1, 2, i + 1, projection='3d')
         siz = scale('log' if args.size == 'mass' else 'lin', size_raw, 3.0, 90.0)
+        # the axis limits first, so a label can be dropped when its point is
+        # outside them: 3D text is not clipped and strays into the margins
+        lims = []
+        for v in (xyz[:, 0], xyz[:, 1], xyz[:, 2]):
+            if args.clip < 100.0:
+                lo, hi = (100.0 - args.clip) / 2.0, (100.0 + args.clip) / 2.0
+                lims.append((np.percentile(v, lo), np.percentile(v, hi)))
+            else:
+                lims.append((v.min(), v.max()))
+        inside = np.all([(xyz[:, j] >= lims[j][0]) & (xyz[:, j] <= lims[j][1])
+                         for j in range(3)], axis=0)
         if labels is None:
             col = scale('log', uni, 0.0, 1.0)
             sc = ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=siz, c=col,
@@ -212,25 +254,28 @@ def main():
             if stop.size:
                 ax.scatter(xyz[stop, 0], xyz[stop, 1], xyz[stop, 2],
                            s=120, c='black', marker='x', linewidths=1.5)
-            for j, label in enumerate(clusters):      # number each cluster
-                idx = labels == label
+            for j, label in enumerate(clusters if not args.no_cluster_labels
+                                      else []):       # number each cluster
+                idx = (labels == label) & inside      # visible members only
+                if not idx.any():
+                    continue
                 c = xyz[idx].mean(axis=0)
-                ax.text(c[0], c[1], c[2], str(label), fontsize=9,
-                        fontweight='bold', color='black',
+                ax.text(c[0], c[1], c[2], str(label), fontsize=8,
+                        fontweight='bold', color='black', ha='center',
                         bbox=dict(boxstyle='round,pad=0.1', fc='white',
-                                  ec='none', alpha=0.65))
-        # annotate the most massive words
+                                  ec='none', alpha=0.7))
+        # annotate the most massive words, if their point is on the plot
         for w in np.argsort(uni)[::-1][:args.label]:
+            if not inside[w]:
+                continue
             nm = sym[w] if len(sym[w]) > 1 else repr(sym[w])
             ax.text(xyz[w, 0], xyz[w, 1], xyz[w, 2], f' {nm}', fontsize=7)
         ax.set_xlabel(f'dim {dims[0]}')
         ax.set_ylabel(f'dim {dims[1]}')
         ax.set_zlabel(f'dim {dims[2]}')
-        if args.clip < 100.0:
-            lo, hi = (100.0 - args.clip) / 2.0, (100.0 + args.clip) / 2.0
-            for setlim, v in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim),
-                                 (xyz[:, 0], xyz[:, 1], xyz[:, 2])):
-                setlim(np.percentile(v, lo), np.percentile(v, hi))
+        for setlim, (lo, hi) in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim),
+                                    lims):
+            setlim(lo, hi)
         ax.set_title(name, fontsize=10)
     if sc is not None and labels is None:
         cb = fig.colorbar(sc, ax=fig.axes, fraction=0.02, pad=0.06)
@@ -240,7 +285,8 @@ def main():
                   else 'log10 unigram mass')
     fig.suptitle(f"{args.dir}  sqrt(M_ref) rank-{len(s)}   "
                  f"size = {size_lbl} (log-scaled)   colour = {colour_lbl}",
-                 fontsize=11)
+                 fontsize=11, y=0.97)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     if args.save:
         fig.savefig(args.save, dpi=170, bbox_inches='tight')
         print(f"wrote {args.save}")
