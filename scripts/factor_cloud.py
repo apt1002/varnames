@@ -34,13 +34,14 @@ remaining (angular) structure is visible.
 It is self-contained: it needs `numpy`, `matplotlib`, and only the files
 `<dir>/adj.npz` and `<dir>/sym.npy` (e.g. copy `work/tw2040/`; ~3.4 MB).
 `scipy` is optional and is used above `V = 3,000`: the dense SVD is cubic, so
-the shipped vocabulary takes it from ~40 minutes to under a minute (`--exact`
-forces the dense path anyway).
+at the shipped vocabulary it takes 5 minutes here (40 against a reference BLAS)
+where the Lanczos route takes 40 seconds, and the two agree (`--exact` forces
+the dense path anyway).
 
 Usage:
     factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1 --no-show
     factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1 \
-        --axes 1,2,3 --size mass --label 8 --no-cluster-labels --no-show
+        --divide-unigram --label 8 --no-cluster-labels --no-show   # the README plot
     factor_cloud.py --dir work/tw2040 --clusters 16 --no-show
     factor_cloud.py --dir work/tw2040                 # show and save PNG
     factor_cloud.py --dir work/tw2040 --size mass --save cloud.png
@@ -74,11 +75,17 @@ def factorise(M_ref, rank, exact=False):
     """Rank-`rank` SVD of the elementwise sqrt (Hellinger embedding).
 
     The dense SVD is O(V^3) and dominates the run at the shipped vocabulary:
-    on a machine with a reference BLAS it is ~40 minutes at `V = 8,192`, for
-    four singular vectors.  So the default above `--exact-v` is the Lanczos
-    (`svds`) route, which needs only a few dozen matrix-vector products, and
-    the signs are fixed so the coordinates are reproducible.  `exact=True`
-    forces the dense path, which is what the small vocabularies use anyway.
+    measured at `V = 8,192` it is 5 minutes here with a threaded OpenBLAS (and
+    40 minutes against a reference one) for four singular vectors.  So the
+    default above `V = 3,000` is the Lanczos (`svds`) route, which needs only a
+    few dozen matrix-vector products and takes ~40 seconds; the two agree — the
+    leading singular values and, after the sign fix below, every coordinate to
+    the precision written out.  `exact=True` forces the dense path, which is
+    what the small vocabularies use anyway.
+
+    Whichever route is taken, each vector is signed so that its largest-magnitude
+    entry is positive: LAPACK's signs are arbitrary, and without this two runs
+    differ by a mirror.
     """
     A = np.sqrt(np.maximum(M_ref, 0.0))
     V = A.shape[0]
@@ -87,14 +94,14 @@ def factorise(M_ref, rank, exact=False):
         U, s, Vt = svds(A, k=rank)             # ascending
         order = np.argsort(s)[::-1]
         U, s, Vt = U[:, order], s[order], Vt[order]
-        for j in range(len(s)):                # fix the sign of each vector
-            if U[np.argmax(np.abs(U[:, j])), j] < 0:
-                U[:, j] *= -1
-                Vt[j] *= -1
     else:
         U, s, Vt = np.linalg.svd(A, full_matrices=False)
         L = min(rank, len(s))
         U, s, Vt = U[:, :L], s[:L], Vt[:L]
+    for j in range(len(s)):                    # fix the sign of each vector
+        if U[np.argmax(np.abs(U[:, j])), j] < 0:
+            U[:, j] *= -1
+            Vt[j] *= -1
     left = U * np.sqrt(s)          # V x L
     right = Vt.T * np.sqrt(s)      # V x L
     return left, right, s

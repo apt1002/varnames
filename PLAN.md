@@ -112,9 +112,9 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
       `docs/CLUSTER_WORDS.md`, `docs/HELLINGER_FACTORISATION.md`.
 - [x] **C31. A factor-cloud figure for `README.md`.** *Done —*
       `docs/factor-cloud.png`: the rank-4 clouds of the shipped model coloured
-      by right cluster.  Dims 1–3 and size by mass, not the default dims 2–4:
-      the mass axis is what separates the arms, and the default projection buries
-      the structure in a dense core.  `README.md`.
+      by right cluster, on the default axes with `--divide-unigram` (dividing each
+      coordinate by `sqrt(p)` strips the mass trend, without which the clouds are
+      one dense blob).  `README.md`.
 - [x] **C32. Naming right clusters by position.** *Rejected.*
       `docs/CLUSTER_QUARTERS.md` §"The structural cost".
 

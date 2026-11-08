@@ -153,17 +153,21 @@ few hundred clusters come within a fraction of a bit of its exact-context bound
 The figure is the word table seen as two clouds. It is the rank-4 square-root
 factorisation of the table
 ([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)), so every
-word has a *row* coordinate (left panel) and a *column* coordinate
-(right panel); a point's size is the word's unigram mass and its colour is the
-**right cluster** the shipped model assigns it to, which is also its left
-cluster because the assignment is shared. Words that the model groups together
-sit in the same neighbourhood of *both* clouds — the red-and-orange arm, the
-green bulk, the cyan spur — which is what a single assignment has to buy: one
-table of relationships, used from both sides. The tool that draws it is
-`scripts/factor_cloud.py --dir work/tw8192ns --model standard/model.nvm1
---axes 1,2,3 --size mass --no-cluster-labels`; a fresh clustering can be
-computed on the spot with `--clusters K`, and the CSV it writes carries the
-cluster so the plot can be redrawn elsewhere.
+word has a *row* coordinate (left panel) and a *column* coordinate (right
+panel). Each panel plots latent dimensions 2–4, divided by the square root of
+the word's unigram probability, which removes the mass trend and leaves the
+angular structure the clustering works on; a point's size is `|dim 1|` and its
+colour is the **right cluster** the shipped model assigns it to, which is also
+its left cluster because the assignment is shared.
+
+What to look for is that one assignment produces *regions* rather than confetti
+in both panels — green upper left, the magenta-and-red band, orange at the right
+edge of the left cloud; red in a lobe of its own, purple and cyan above, green
+below in the right one. A single table of relationships, read from both sides,
+is what buys that. The tool is `scripts/factor_cloud.py --dir work/tw8192ns
+--model standard/model.nvm1 --divide-unigram --no-cluster-labels`; a fresh
+clustering can be computed on the spot with `--clusters K`, and the CSV it
+writes carries the cluster so the plot can be redrawn elsewhere.
 
 Along the way, we tried a lot of things that didn't work:
 
