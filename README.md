@@ -53,14 +53,16 @@ theory. The bulk of the work is statistics, not programming. What you will find
 in this repo are the tools we used to study the statistics and to come up with a
 simple, compact model that can form the basis of the standard.
 
-The model itself is a portable file, versioned and human-readable, whose format
-is specified in [`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md). The standard the
-file serves is proposed in [`docs/STANDARD.md`](docs/STANDARD.md), and there are
-two implementations of it: a reference one in [`python/`](python/) and an
-engineering one in [`rust/`](rust/), both defaulting to the published tables and
-both accepting others. A corpus of your own can be turned into tables either
-will read with `scripts/build_tables.py`; the command, its stages and its cost
-are in [`docs/BUILDING.md`](docs/BUILDING.md).
+The model itself is a portable `.nvm1` file, whose format is specified in
+[`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md). The proposed standard
+[`docs/STANDARD.md`](docs/STANDARD.md) includes a `.nvm1` file trained on ASCII
+identifiers. A corpus of your own can be turned into a `.nvm1` file with
+`scripts/build_tables.py`; see [`docs/BUILDING.md`](docs/BUILDING.md).
+This would be useful for Lisp, Forth or Javascript, for example, all of which
+have unusually liberal definitions of an identifier. We ship two
+standard-compliant implementations that consume `.nvm1` files: a reference one
+in [`python/`](python/) and an engineering one in [`rust/`](rust/). Both
+default to the standard ASCII `.nvm1` file.
 
 ## The strategy
 
@@ -112,6 +114,8 @@ collected, with the numbers that killed them, in
 keep is priced the same way, one piece at a time, in
 [`docs/ABLATION.md`](docs/ABLATION.md).
 
+### The size vs fit frontier
+
 It is important that the model is small and efficient, otherwise nobody will want
 to use it. The pertinent optimisation criterion is the fraction of identifiers
 in the training corpus that fit in 64 bits, measured as a function of the model
@@ -132,6 +136,8 @@ furthest bottom-left. Filled points are the measured packed files, one curve
 per word list (the small numbers are `k`); the hollow diamonds charge the
 library code as well, so they sit to the right of their model-only points.
 
+### Characters or words
+
 We tried two main strategies, and found that the second one is much better:
 
 - Rejected: encode each character conditionally on the context that precedes it
@@ -142,7 +148,8 @@ We tried two main strategies, and found that the second one is much better:
   words**. See [`docs/WORD_COMPRESSIBILITY.md`](docs/WORD_COMPRESSIBILITY.md).
 
 In the above, "word" means any string that is commonly used in identifiers; many
-are in fact English words or abbreviations but many are not.
+are in fact English words or abbreviations but many are not. We let the
+statistics decide.
 
 We explored many ways of defining "word". It turns out that the list of words is
 the most important part of the model, and it therefore accounts for the majority
@@ -150,6 +157,8 @@ of the model size — two thirds of the shipped file, 20,926 of 30,745 bytes at
 the operating point. See ([`docs/WORDLIST_BUDGET.md`](docs/WORDLIST_BUDGET.md))
 for details of the compromise. The best idea for the rejected strategy was
 different from the best idea for the adopted strategy (cited above).
+
+### Clustering
 
 In both strategies, we found that there is a huge benefit from clustering words
 with similar statistics. This reduces the model size a lot, but worsens
@@ -163,27 +172,26 @@ few hundred clusters come within a fraction of a bit of its exact-context bound
 
 The figure is the word table seen as two clouds. It is the rank-4 square-root
 factorisation of the table
-([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)), so every
-word has a *row* coordinate (left panel) and a *column* coordinate (right
-panel). Each panel plots latent dimensions 2–4, divided by the square root of
-the word's unigram probability, which removes the mass trend and leaves the
-angular structure the clustering works on; a point's size is `|dim 1|` and its
-colour is the **right cluster** the shipped model assigns it to, which is also
-its left cluster because the assignment is shared.
+([`docs/HELLINGER_FACTORISATION.md`](docs/HELLINGER_FACTORISATION.md)). The
+measured probability that a word `u` is followed by a word `v` is related to the
+dot product of `u` in the left panel with `v` in the right panel. Neither panel
+truly fits in 3D space; the figure plots latent dimensions 2–4 only, divided by
+the square root of the word's unigram probability. This removes the mass trend
+and leaves the angular structure the clustering works on. A point's size is
+`|dim 1|` and its colour is the cluster the model assigns it to.
 
-What to look for is that one assignment produces *regions* rather than confetti
-in both panels — green upper left, the magenta-and-red band, orange at the right
-edge of the left cloud; red in a lobe of its own, purple and cyan above, green
-below in the right one. The 100 most massive words are labelled, and they are
-what makes the regions readable: `Response`, `FileName`, `Name` and `Key` in the
-green upper left, `Create`, `For`, `Set` and `Is` at the orange right edge,
-`Statement`, `OnError` and `Value` in the purple band of the right cloud. A
-single table of relationships, read from both sides, is what buys that.
+Note that similar words end up close together, and the same colour. The 100 most
+common words are labelled, and they are what makes the regions readable:
+`Response`, `FileName`, `Name` and `Key` in the green upper left, `Create`,
+`For`, `Set` and `Is` at the orange right edge, `Statement`, `OnError` and
+`Value` in the purple band of the right cloud.
 
 The tool is `scripts/factor_cloud.py --dir work/tw8192ns --model
 standard/model.nvm1 --divide-unigram --no-cluster-labels`; a fresh clustering
 can be computed on the spot with `--clusters K`, and the CSV it writes carries
 the cluster so the plot can be redrawn elsewhere.
+
+### Rejected ideas
 
 Along the way, we tried a lot of things that didn't work:
 
