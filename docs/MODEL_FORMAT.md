@@ -15,48 +15,41 @@ produces a byte-identical file.
 
 ## 1. What the file contains
 
-It is the three published tables of [`MODEL_BUDGET.md`](MODEL_BUDGET.md) §1,
-plus enough header to identify the format:
+The file is a code.  Decoding an integer reads its bits starting at the least
+significant one, emits characters, and may read zeros beyond the highest stored
+bit — that padding is the terminator, and it costs nothing.  The algorithm is:
 
-| table (MODEL_BUDGET §1) | key | derivation |
-|---|---|---|
-| the word list, `V − len(alphabet)` index pairs | `rules:` | — |
-| the word trees, `V` leaves over `k·q` trees | `bottom_trees:`, `memberships:` | right cluster → words; canonical codes |
-| the cluster trees, `k` trees of `k·q + 1` leaves | `top_trees:` | canonical codes; leaf 0 is the terminator |
-| the alphabet | `alphabet:` | ids `0 … len(alphabet) − 1` |
-| — | `format:`, `left_clusters:`, `right_clusters_per_left:` | — |
+* **Start in left cluster 0.**
+* **Read a codeword in that left cluster's top tree.**  If the codeword is the
+  all-zeros leaf, the identifier has ended.
+* **Otherwise the leaf names a right cluster.**  Read a codeword in that right
+  cluster's bottom tree; it names a *word*.  Walk the word depth-first,
+  emitting its characters.
+* **Continue from the left cluster of that word**, which is its right cluster
+  divided by `q`.
 
-The code has two alphabets.  A word belongs to a **right cluster**, which is
-what the word step codes; the `k·q` right clusters are grouped `q` to a **left
-cluster**, which is what the cluster step codes.  The top stage is therefore `k`
-trees of `k·q` leaves, not `k·q` trees of `k·q`; `MODEL_FORMAT` keeps `q`
-because the format is general, and `q = 1` ships
-([`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md) has the measurement).
+The two stages are there because a word transition is coded in two parts: the
+top tree says *which group of words* comes next, the bottom tree says *which
+word* within it.  `q` is the number of right clusters per left cluster.  It is
+1 in the standard — one right cluster to a left cluster, so the two stages read
+the same label — but the format carries it, and
+[`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md) measures what `q > 1` buys.
 
-Each top tree has one leaf more than there are right clusters: a zero-weight
-**STOP** leaf, listed first.  It is never emitted — the padding is what the
-decoder reads there — and it is what makes the identifier end for free.  **The
-word trees have no terminator leaf.**  An identifier ends when the top stage
-says so, before any word step, so a bottom tree's deepest leaf is a word like
-any other.  The corpus tokeniser's stop token is not a symbol of the file at
-all: its row of the adjacency matrix is the **start state**, which is what makes
-the first token's distribution available, and its column does not exist because
-nothing is coded after the end.  The adjacency matrix the build works from is
-therefore `V0 × (V0 − 1)` for `V0 = V + 1` corpus symbols, which is `V × (V + 1)`
-in the file's numbering (`V` columns, and a row for each of the file's `V`
-symbols plus the stop).  The start state needs a left cluster, and by
-convention it is **left cluster 0**: the build chooses which cluster that is —
-the one whose top tree codes the first-token distribution cheapest — and numbers
-it 0, permuting the other labels — and the leaves inside their trees — to match
-(§5).
+The file contains exactly what that algorithm needs, and nothing else:
 
-The file stores **one map**: each word's right cluster (`⌈log₂ kq⌉` bits).
-There's no need to store the word's left cluster, which is simply the right
-cluster divided by `q`.
+| what | how much |
+|---|---|
+| a **top tree** per left cluster, the first leaf reserved for the all-zeros case | `k` trees of `k·q + 1` leaves |
+| a **bottom tree** per right cluster | `k·q` trees |
+| a **rule** per word: the first `len(alphabet)` ids are single characters, every other word is a pair of earlier words | `V − len(alphabet)` rules |
+| the **alphabet** the model can code | `len(alphabet)` characters |
+| the parameters `V`, `k`, `q` and the format's name | a header |
 
-Symbol ids are dense from zero: the characters are ids `0 … len(alphabet) − 1`
-and the words follow, so the last word is `V − 1` and
-`V = len(alphabet) + len(rules)`.  There is no reserved id.
+The trees are stored as the depth of each leaf in label order, and a membership
+table says which words belong to which bottom tree.  That is all a decoder
+needs: the codewords are canonical from the depths, so no code table is
+stored.  The storage is §3, and its cost in bytes is
+[`MODEL_BUDGET.md`](MODEL_BUDGET.md).
 
 A model is a **code, not a statistic**: no counts, no unigram, no corpus
 fingerprint.  Everything the decoder needs is either in the file or derivable
