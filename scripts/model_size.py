@@ -430,33 +430,13 @@ def huffman_trunc(weights, survivors, bias=False):
     `quarter_accounting.huffman` returns one group when `n <= stop_at`; the
     truncation at `n` survivors must return `n` singletons instead.
 
-    `bias` adds the depth-flattening offset of `MODEL_FORMAT.md` §3 to every
-    leaf *before* the merge, so that the depths of every tree span at most 15
-    levels and the field can be 4 bits.  Zero-weight leaves are left alone: they
-    are the terminator, and they must stay deepest.
-
-    The design's closed form
-
-        b = max(0, (P_max - 32768 P_min) / 32767)
-
-    bounds the gap in *ideal* (Shannon) depths, not in Huffman depths: a Huffman
-    tree's longest codeword obeys the Fibonacci bound
-    `L_max <= log_phi(T / q_min)`, which is 1.44 times the Shannon depth at the
-    same weight.  So the closed form can ask for no bias at all on a
-    distribution whose Huffman tree spans 18 levels.  Worse, it is tied to a
-    15-level target, so it says nothing about a narrower field.
-
-    There is a sufficient condition — `q_min >= phi^-15` — but it is far
-    stronger than necessary (it holds the *longest* codeword to 15, not the
-    *span*), and applying it costs real bits: at 8192/32 it flattens the trees
-    to a span of 11 and 0.22 bits per identifier.
-
-    So the bias is not computed, it is *found*, because the Huffman shape is a
-    property of the whole distribution and no single ratio describes it.  The
-    search is a doubling from the closed form to bracket a working bias, then a
-    bisection on that bracket: the smallest bias whose tree spans 15 or less,
-    found to 2^-16 relative.  That is the least flattening the field allows,
-    and it costs the fewest bits for the trees it can still build.
+    `bias` adds a depth-flattening offset to every leaf *before* the merge, so
+    that each tree's depths span at most 15 levels and the field can be 4 bits
+    (`MODEL_FORMAT.md` §3.1).  The span is a property of the whole distribution,
+    not of its extremes, so the offset is not computed: it is bracketed by
+    doubling, then bisected for the least value that holds every tree to 15.
+    Zero-weight leaves are left alone: they are the terminator, and they must
+    stay deepest.
     """
     n = len(weights)
     if survivors >= n:
@@ -479,9 +459,8 @@ def huffman_trunc(weights, survivors, bias=False):
     if span <= 15:                      # no flattening needed
         return lens, cost, groups
 
-    # Bracket a working bias by doubling.  The closed form is a guess at the
-    # scale, not a solution; `phi^-15` is a sufficient upper bound, so the
-    # doubling cannot run away.
+    # Bracket a working bias by doubling from a scale guess.  `phi^-15` is a
+    # sufficient upper bound, so the doubling cannot run away.
     b = max((pmax - 32768.0 * pmin) / 32767.0, T * 2.0 ** -20)
     while span > 15:
         b *= 2.0
