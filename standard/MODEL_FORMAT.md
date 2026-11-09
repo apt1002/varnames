@@ -42,7 +42,7 @@ The file contains exactly what that algorithm needs, and nothing else:
 | a **bottom tree** per right cluster | `k·q` trees |
 | a **rule** per word: the first `len(alphabet)` ids are single characters, every other word is a pair of earlier words | `V − len(alphabet)` rules |
 | the **alphabet** the model can code | `len(alphabet)` characters, UTF-8 |
-| the parameters `V`, `k`, `q` and the format's name | a header |
+| the parameters `V`, `k`, `q` and the format's name | keys in the YAML (save `V`) and a header in the binary |
 
 A model is a **code, not a statistic**: no counts, no unigram, no corpus
 fingerprint.  Everything the decoder needs is either in the file or derivable
@@ -50,7 +50,7 @@ from it.
 
 ## 2. The schema
 
-A typical model, in YAML form, look like this:
+A small model, in YAML form, looks like this:
 
 ```yaml
 format: varnames-model                 # literal, identifies the YAML
@@ -92,12 +92,12 @@ model.
   `0 … len(alphabet) − 1`.  The default model uses the 63 ASCII characters that
   commonly occur in identifiers. The field is included so that a non-default
   model can use different characters.
-* `left_clusters` — `k`, the number of left clusters. They are numbered `0 … k`.
-  Left cluster `0` is the starting cluster.
+* `left_clusters` — `k`, the number of left clusters.  They are numbered
+  `0 … k − 1`; left cluster `0` is the starting cluster.
 * `right_clusters_per_left` — `q`, the number of right clusters per left
-  cluster.  Right clusters are numbered `0 … k·q`. The default model has `q = 1`
-  such that the left and right clusters correspond. A non-default model can have
-  `q > 1`.
+  cluster.  Right clusters are numbered `0 … k·q − 1`.  The default model has
+  `q = 1`, so the left and right clusters correspond; a non-default model can
+  have `q > 1`.
 * `rules` — the word list as pairs of child ids.  Rule `i` defines word id
   `len(alphabet) + i`. Its children are strictly smaller ids, so the list is
   a topological order of the merge tree.  Rule `i` may not name its own id, and
@@ -107,12 +107,13 @@ model.
   right cluster. The word's left cluster is that label divided by `q`.
 * `bottom_trees` — a Huffman tree (see below) for each right cluster. Each tree
   has a leaf for each word in the right cluster (according to `memberships`):
-  `V` leaves in total across all the trees. The leaves are listed in word order.
+  `V` leaves in total across all the trees. The leaves are listed in ascending
+  word-id order.
 * `top_trees` — a Huffman tree (see below) for each left cluster. Each tree has
   a leaf for `STOP` and for each right cluster: `1 + k·q` leaves per tree. The
   leaves are listed with `STOP` first, then in right cluster order.
 
-`V` is not stored in the YAML file; is is computed as
+`V` is not stored in the YAML file; it is computed as
 `len(alphabet) + len(rules)`. It *is* stored in the binary form of the file, as
 is `len(alphabet)`.
 
@@ -125,8 +126,9 @@ leaf then the leaf has depth 0 and is assigned the empty codeword.
 
 ### Invariants a reader must check
 
-1. `len(memberships) == V` and (binary only) `V == len(alphabet) + len(rules)`.
-2. `len(bottom_trees) == k·q`, every symbol id `0 … V−1` appears in exactly one
+1. `len(memberships) == V`, and `V == len(alphabet) + len(rules)` — in the YAML
+   that is the definition of `V`; the binary stores `V` and must agree.
+2. `len(bottom_trees) == k·q`, every word id `0 … V−1` appears in exactly one
    of their leaves, in ascending order, and the total leaf count is `V`.
 3. Every tree is **complete**: `Σ 2^{−d} == 1` exactly.
 4. In each tree, `max(depth) - min(depth) <= 15`.
@@ -153,7 +155,7 @@ default model, which has `V = 8,191, k = 32, q = 1`.
 |---|---|---:|
 | magic | `NVM1` | 4 |
 | `V`, `k`, `q`, `len(alphabet)` | varints | 5 |
-| rules length | a varint: the length of `rules` rounded up to a whole number of bytes | 3 |
+| rules length | a varint: the byte length of the bit-packed table | 3 |
 | `rules` | 2 × (V − 63) child indices, coded by §4 | 20,926 |
 | `alphabet` | `len(alphabet)` characters in UTF-8 | 63 |
 | `memberships` | `⌈log₂ kq⌉` = 5 bits each, packed | 5,120 |
@@ -177,18 +179,18 @@ exactly `len(alphabet)` UTF-8 characters.
 
 `bottom_trees` is the concatenation of the lists in the YAML form. The depths
 are listed in right cluster order, and within each right cluster they are in
-word order. Note that this is different from listing all `V` depths in word
-order (wrong).
+ascending word-id order. Note that this is different from listing all `V` depths
+in word order (wrong).
 
 `top_trees` is similarly the concatenation of the lists in the YAML form. The
 depths are listed in left cluster order, and within each left cluster the `STOP`
 leaf is first then the others are in right cluster order. Every tree has the
-same `1 + k q` labels.
+same `1 + k·q` leaves.
 
 Every depth in `bottom_trees` and `top_trees` is exactly four bits. The field
-does not store the raw depth; instead it stores `d − d_min` where `d_min` is the
-smallest depth in the tree. for its own tree, not the raw depth. `d_min` is
-recovered it from the Kraft equality, per tree. A complete tree has
+does not store the raw depth; instead it stores `d − d_min` for its own tree,
+where `d_min` is the smallest depth in that tree. `d_min` is recovered from the
+Kraft equality, per tree. A complete tree has
 `Σ 2^(−d) = 1`, so with `d = δ + d_min` the decoder computes
 `2^d_min = Σ 2^(−δ)` and takes `d_min = log₂` of it, which must be a whole
 number.  A depth table whose δ's give a non-integer `d_min` is corrupt, so the
@@ -202,13 +204,13 @@ useful range is widest and whose common values are smallest.
 
 Bits are packed **least-significant first within a byte**: bit *i* of the stream
 is bit *i* mod 8 of byte *i* // 8, and bit 0 of the code is the first bit an
-encoder writes, so the padding of `ENCODING.md` §2 is the run of zeros *above*
+encoder writes, so the padding of §1 is the run of zeros *above*
 the code.  Integers are little-endian.
 
 The default model file is **30.7 kB**. It is fair to add 2 kB for library code
 that is not part of the model file. The YAML form of the same model is
-182,472 B — 5.9 times as large. The YAML is the readable form, and the binary is
-what the compact form.
+182,507 B — 5.9 times as large. The YAML is the readable form, and the binary is
+the compact form.
 
 ### 3.1 Why four bits are enough: the weight bias
 
@@ -252,7 +254,7 @@ makes no difference to the fit rate:
 
 Zero-weight leaves are excluded from the bias: they are the terminator, they
 must stay the deepest leaf, and lifting them to the bias would put them level
-with real leaves and could break invariant 7.
+with real leaves and could break invariant 8.
 
 Shortening the depths from five bits to four is a small but significant saving.
 
@@ -273,7 +275,7 @@ ladder**, base 2, `b = 3`:
 
 The ladder exploits the skewed frequency distribution of the child ids.
 A low id is an old, frequent word. The adopted encoding fits the rule table of
-the default model into 20,925 B (10.298 bits per child): a significant saving
+the default model into 20,926 B (10.298 bits per child): a significant saving
 over a fixed-width field.
 
 ## 5. What the file deliberately omits
@@ -281,13 +283,13 @@ over a fixed-width field.
 | omitted | why |
 |---|---|
 | counts, unigram, block totals | a model is a code; statistics belong in the build's own files (§7) |
-| the stop as a symbol | the identifier ends in the top stage; the stop's row is the start state, its column nothing |
+| the stop as an id | the identifier ends in the top stage; the stop's row is the start state, its column nothing |
 | the right cluster → word index | derivable from `memberships` in one pass |
 | the left cluster of a word | its right cluster divided by `q` |
 | the starting left cluster | a convention: 0 |
-| codewords | canonical from the depths (`ENCODING.md` §3) |
-| leaf order within a depth | canonical from the labels |
-| padding and the terminator | fixed by the encoding, not by the model (`ENCODING.md` §2) |
+| codewords | canonical from the depths (§2) |
+| leaf order within a depth | the order the leaves are listed (§2) |
+| padding and the terminator | fixed by the encoding, not by the model (§1) |
 | the depth offset `d_min` | recovered per tree from the Kraft equality (§3) |
 | a version and a checksum | the magic is the version; the invariants are the check (§3) |
 | generation parameters (`κ`, sample, seed) | they do not change the code, and they would make rebuilds non-reproducible |
@@ -300,7 +302,7 @@ right clusters and two top trees of 5 leaves.  The characters `a`…`e` are ids
 `{b, bc}`, `{c, d, e}` and `{de}`; left cluster 0 is the first two and left
 cluster 1 the last two.
 
-The four bottom trees map right clusters to words. rRight cluster 0 is a single
+The four bottom trees map right clusters to words. Right cluster 0 is a single
 word and costs nothing; right cluster 1 gives `b`→`0`, `bc`→`1`; right cluster 2
 gives `c`→`1`, `d`→`00`, `e`→`01`; right cluster 3 is `de` alone and costs
 nothing. Note the direction of the canonical rule: the deeper leaves take the
@@ -327,7 +329,7 @@ runs this model end to end, from the depths to the bytes and back.
 
 ## 7. Distribution, and the map
 
-**The default model.**  The standard ships exactly one model file, build over
+**The default model.**  The standard ships exactly one model file, built over
 the ASCII corpus, and fixing `V`, `k` and `q`. The format itself is general, and
 does not limit these parameters. A library user may build a non-default model
 over any corpus with any `V`, `k` and `q`.
