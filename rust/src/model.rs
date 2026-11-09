@@ -362,6 +362,13 @@ impl Model {
             let b = ladder_get(&mut reader, n);
             rules.push((a, b));
         }
+        // The table is exactly as long as its rules: the padding is not a
+        // place to hide bytes, and the alphabet starts where they end.
+        if (reader.position() + 7) / 8 != rules_len {
+            return Err(Error::Model(
+                "the rule table's length is not the length of its rules",
+            ));
+        }
         pos = end;
 
         let (alphabet, used) = read_alphabet(buf, pos, nchars)?;
@@ -647,6 +654,32 @@ mod tests {
         assert!(matches!(
             Model::from_bytes(&buf),
             Err(Error::Model("two rules name the same pair of children"))
+        ));
+    }
+
+    #[test]
+    fn a_rule_table_with_a_spare_byte_is_refused() {
+        let mut buf = tiny_utf8_model();
+        buf[8] += 1; // the length varint: two bytes -> three
+        buf.insert(11, 0); // one byte of slack in the table
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model(
+                "the rule table's length is not the length of its rules"
+            ))
+        ));
+    }
+
+    #[test]
+    fn a_rule_table_too_short_for_its_rules_is_refused() {
+        let mut buf = tiny_utf8_model();
+        buf[8] -= 1; // the length varint: two bytes -> one
+        buf.remove(10); // and the second byte of the table
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model(
+                "the rule table's length is not the length of its rules"
+            ))
         ));
     }
 

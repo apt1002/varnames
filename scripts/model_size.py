@@ -133,6 +133,7 @@ class BitReader:
         self.pos = 0
         self.acc = 0
         self.n = 0
+        self.total = 0          # bits handed out, for the length checks
 
     def get(self, width):
         while self.n < width:
@@ -143,6 +144,7 @@ class BitReader:
         v = self.acc & ((1 << width) - 1)
         self.acc >>= width
         self.n -= width
+        self.total += width
         return v
 
 
@@ -828,6 +830,8 @@ def unpack_rules(buf, V, nchars):
         assert (a, b) not in seen, f'rule {i} repeats an earlier rule'
         seen.add((a, b))
         rules.append((a, b))
+    assert (br.total + 7) // 8 == len(buf), \
+        'the rule table is not the length of its rules'
     return rules
 
 

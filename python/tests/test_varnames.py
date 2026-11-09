@@ -235,6 +235,20 @@ class TestUtf8Alphabet(unittest.TestCase):
         with self.assertRaisesRegex(ModelError, "repeats an earlier rule"):
             Model.from_bytes(self.fixture([(0, 1), (0, 1)]))
 
+    def test_a_rule_table_with_a_spare_byte_is_refused(self):
+        buf = bytearray(self.fixture())
+        buf[8] += 1                      # the length varint: two bytes -> three
+        buf.insert(11, 0)                # one byte of slack in the table
+        with self.assertRaisesRegex(ModelError, "length"):
+            Model.from_bytes(bytes(buf))
+
+    def test_a_rule_table_too_short_for_its_rules_is_refused(self):
+        buf = bytearray(self.fixture())
+        buf[8] -= 1                      # the length varint: two bytes -> one
+        del buf[10]                      # and the second byte of the table
+        with self.assertRaisesRegex(ModelError, "length"):
+            Model.from_bytes(bytes(buf))
+
     def test_a_zero_filled_rule_stream_is_refused(self):
         """Read past its end, the ladder gives `(0, 0)` for every rule."""
         buf = bytearray(self.fixture())

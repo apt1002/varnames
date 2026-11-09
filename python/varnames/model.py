@@ -184,6 +184,9 @@ class Model:
         for i in range(V - nchars):
             N = nchars + i
             rules.append((ladder_get(reader, N), ladder_get(reader, N)))
+        if (reader.total + 7) // 8 != rules_len:
+            raise ModelError(
+                "the rule table's length is not the length of its rules")
         pos += rules_len
 
         alphabet, used = _read_alphabet(buf, pos, nchars)
