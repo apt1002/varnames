@@ -45,10 +45,12 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, '..', 'python'))
 
 import model_fit_rates as mfr   # noqa: E402
 import model_size as msz        # noqa: E402
 import tree_words as tw         # noqa: E402
+from varnames.case import classify, to_camel    # noqa: E402
 
 
 # --------------------------------------------------------------- measuring
@@ -136,23 +138,9 @@ def row(name, what, res, base=None, fmt='{:,}'):
 # ------------------------------------------------------- the raw-corpus arm
 
 def normalise(s):
-    """The pipeline's normalisation of one identifier, as `to_camel` defines."""
-    return s if classify(s) == 'camel' else to_camel(s)
-
-
-def classify(s):
-    lower = upper = False
-    for ch in s:
-        if 'a' <= ch <= 'z':
-            lower = True
-        elif 'A' <= ch <= 'Z':
-            upper = True
-    return 'camel' if lower and upper else ('upper' if upper else 'lower')
-
-
-def to_camel(s):
-    import camelize_identifiers as ci
-    return ci.to_camel(s)
+    """The pipeline's normalisation of one identifier: `to_camel`, which is the
+    identity on a CamelCase name (`STANDARD.md` §11)."""
+    return to_camel(s)
 
 
 def raw_arm(raw_corpus, normalised_val, outdir, V, sample, jobs):
@@ -171,9 +159,9 @@ def raw_arm(raw_corpus, normalised_val, outdir, V, sample, jobs):
     train_path = os.path.join(outdir, 'train.txt')
     val_path = os.path.join(outdir, 'val.txt')
     n_tr = n_va = 0
-    with open(raw_corpus, 'r', encoding='ascii') as src, \
-            open(train_path, 'w', encoding='ascii') as tr, \
-            open(val_path, 'w', encoding='ascii') as va:
+    with open(raw_corpus, 'r', encoding='utf-8') as src, \
+            open(train_path, 'w', encoding='utf-8') as tr, \
+            open(val_path, 'w', encoding='utf-8') as va:
         for line in src:
             s = line.rstrip('\n')
             if not s:

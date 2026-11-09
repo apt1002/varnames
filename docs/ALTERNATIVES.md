@@ -191,12 +191,13 @@ actually appear in identifiers; Greek adds 91 letters that map to two
 characters and a `Σ` whose lower case depends on context, so `ΟΔΟΣ` and `οδος`
 would still not meet — 91 exceptions to join nothing.  The remaining 1,817
 safely cased letters belong to Georgian, Cherokee, Coptic, Glagolitic, Deseret
-and their like, which appear in no corpus anyone has measured.  Vietnamese is
-the one live candidate, **deferred rather than rejected**: 246 more pairs with
-no exceptions, and half of it would be worse than none, since Latin Extended-A
-carries `Ă Đ Ơ Ư` and the tone-marked forms live in Latin Extended Additional.
-Taking it is a second version of `STANDARD.md` §11, not a correction to this
-one ([`UNICODE.md`](UNICODE.md) §5, §11).
+and their like, which appear in no corpus anyone has measured.  **Vietnamese**
+was the one candidate that would have been cheap — 246 more pairs, no
+exceptions — and it is rejected too: Latin Extended-A carries `Ă Đ Ơ Ư` and the
+tone-marked forms live in Latin Extended Additional, so taking it means taking
+both blocks, and taking one would convert half a name.  That is a second
+version of `STANDARD.md` §11 for a share the surveys do not break out, so the
+line stays where it is ([`UNICODE.md`](UNICODE.md) §5, §11).
 
 ## The file
 
