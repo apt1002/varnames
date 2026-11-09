@@ -1,11 +1,11 @@
 # The model file
 
-Status: **`NVM1` specified; implemented by the size oracle.**  The model is
-published as a portable, uncompressed YAML file; a binary form is derived from
-it, and its size is what the budget measures.  `scripts/model_size.py` writes
-the YAML, packs it, reads it back and decodes held-out identifiers through the
-packed file, so every byte quoted here is a measurement of an artefact the
-decoder read.
+Status: **`NVM1` specified; implemented.**  The model is published as a
+portable, uncompressed YAML file; a binary form is derived from it, and its size
+is what the budget measures.  `scripts/model_size.py` writes the YAML, packs it,
+reads it back and decodes held-out identifiers through the packed file.
+Illustrative byte counts quoted here are measurements of the default model: a
+working artefact.
 
 The YAML is the normative description of a model's *meaning*; the binary form is
 normative for its *bytes*, and is a deterministic function of the YAML, so a
@@ -28,16 +28,11 @@ bit — that padding is the terminator, and it costs nothing.  The algorithm is:
 * **Continue from the left cluster of that word**, which is its right cluster
   divided by `q`.
 
-The two stages are there because a word transition is coded in two parts: the
+The top tree / bottom tree separation is the clustering optimisation: the
 top tree says *which group of words* comes next, the bottom tree says *which
-word* within it.  Every right cluster is a leaf of every top tree, so the top
-stage may pair right clusters that belong to different left clusters; a left
-cluster owns `q` of them, which is why the next left cluster is the right
-cluster divided by `q`.  `q` is the number of right clusters per left cluster.
-It is 1 in the standard — one right cluster to a left cluster, so the two
-stages read the same label — but the format carries it, and
-[`CLUSTER_QUARTERS.md`](../docs/CLUSTER_QUARTERS.md) measures what `q > 1`
-buys.
+word* within it. Every right cluster is a leaf of every top tree. In the default
+model `q = 1`, so the left clusters and right clusters coincide, but the
+standard also allows `q > 1`.
 
 The file contains exactly what that algorithm needs, and nothing else:
 
@@ -49,17 +44,13 @@ The file contains exactly what that algorithm needs, and nothing else:
 | the **alphabet** the model can code | `len(alphabet)` characters, UTF-8 |
 | the parameters `V`, `k`, `q` and the format's name | a header |
 
-The trees are stored as the depth of each leaf in label order, and a membership
-table says which words belong to which bottom tree.  That is all a decoder
-needs: the codewords are canonical from the depths, so no code table is
-stored.  The storage is §3, and its cost in bytes is
-[`MODEL_BUDGET.md`](../docs/MODEL_BUDGET.md).
-
 A model is a **code, not a statistic**: no counts, no unigram, no corpus
 fingerprint.  Everything the decoder needs is either in the file or derivable
 from it.
 
 ## 2. The schema
+
+A typical model, in YAML form, look like this:
 
 ```yaml
 format: varnames-model                 # literal, identifies the YAML
@@ -69,153 +60,139 @@ right_clusters_per_left: 2             # q: right clusters per left cluster
 rules:                                 # word ids follow the alphabet
   - [1, 2]                             # id 5
   - [3, 4]                             # id 6
-memberships: [0, 1, 2, 2, 2, 1, 3]     # V labels: symbol id -> right cluster
+memberships: [0, 1, 2, 2, 2, 1, 3]     # V labels: word id -> right cluster
 bottom_trees:                          # k*q trees, one per right cluster
-  - [0]                                # right cluster 0: symbol 0 alone
-  - [1, 1]                             # right cluster 1: symbols 1, 5
-  - [1, 2, 2]                          # right cluster 2: symbols 2, 3, 4
-  - [0]                                # right cluster 3: symbol 6 alone
+  - [0]                                # right cluster 0: word 0 alone
+  - [1, 1]                             # right cluster 1: words 1, 5
+  - [1, 2, 2]                          # right cluster 2: words 2, 3, 4
+  - [0]                                # right cluster 3: word 6 alone
 top_trees:                             # one tree per left cluster
   - [4, 1, 2, 3, 4]                    # leaf 0 is STOP; then right clusters 0-3
   - [4, 2, 1, 3, 4]                    # after left cluster 1
 ```
 
-Every sequence is a YAML sequence of integers; the file is ASCII with LF
-newlines, two-space indentation, and no anchors, aliases, tags or maps other
-than the top level.  A writer may add comments and blank lines; a reader must
-ignore them.
+The file is ASCII with LF newlines, two-space indentation, and no anchors,
+aliases, tags or maps other than the top level. Every sequence is a YAML
+sequence of integers. Strings must be double quoted with JSON escapes (which
+are a subset of YAML escapes) so that everything is ASCII. A writer may add
+comments and blank lines; a reader must ignore them.
 
-`alphabet` is a **double-quoted scalar written with JSON escapes**: a JSON
-string is a valid YAML double-quoted scalar, so `json.dumps` escapes quotes,
-backslashes and control characters correctly without a YAML writer in the
-loop.  A non-ASCII character is therefore written `\uXXXX` and the file stays
-ASCII; one that is not is refused, not guessed at.  That is a choice, not a
-constraint — YAML would accept literal UTF-8 here — made because this file is
-the normative statement of *meaning* (§1), and a literal character in a
-checked-in file is one that an editor or a filter that renormalises text can
-silently change; `\u00e9` cannot be renormalised.  The binary form is where
-UTF-8 is spelled out.
+Sticking to ASCII is a choice, not a constraint; YAML would accept UTF-8. We
+make this design decision because this file is the normative statement of
+*meaning* (§1), and a non-ASCII character is one that an editor or a filter can
+silently change. The binary form, in contrast, encodes characters UTF-8.
 
-The numbering is the **file's**, and only the file's is normative.  A build
-working on the corpus tokeniser's alphabet will number the characters `0 … 62`,
-the stop `63` and the words above it; dropping the stop shifts the words down
-one.  That shift is the whole of `to_file_id` in `scripts/model_size.py`.
+The numbering of words, left clusters and right clusters is local to the model.
+Note that it differs from the numbering used in the program that builds the
+model.
 
 ### The keys
 
-* `alphabet` — the characters the model can code, as ids
-  `0 … len(alphabet) − 1`.  The shipped model uses the 63 ASCII characters that
-  occur in identifiers; the field is carried explicitly so a reader can check
-  the file against a corpus instead of assuming that set.  A toy model may use
-  fewer, and a model for a corpus that is not ASCII may use any characters:
-  the binary stores the list as UTF-8 (§3).
-* `left_clusters` — `k`, the number of left clusters.  It fixes the number of
-  top trees, the left-hand alphabet, and the length of each `top_trees` entry
-  once `q` is known (`k·q + 1`).
+* `alphabet` — the characters the model can code. These define word ids
+  `0 … len(alphabet) − 1`.  The default model uses the 63 ASCII characters that
+  commonly occur in identifiers. The field is included so that a non-default
+  model can use different characters.
+* `left_clusters` — `k`, the number of left clusters. They are numbered `0 … k`.
+  Left cluster `0` is the starting cluster.
 * `right_clusters_per_left` — `q`, the number of right clusters per left
-  cluster.  It fixes the right-hand alphabet, `k·q`, and so the number of
-  `bottom_trees` entries.  `q = 1` makes the two alphabets one, which is the
-  plain factored model and the shipped choice.  The key is required even though
-  the shipped value is 1, so that a file is never read two ways.
-* `rules` — the word list as pairs of child ids.  Entry *i* defines word id
-  `len(alphabet) + i`, and its children are strictly smaller ids, so the list is
-  a topological order of the merge tree.  Rule *i* may not name its own id, and
-  its two children must differ (no run words, `DICTIONARY_RULES.md`).  The list
-  may be empty: `V = len(alphabet)` is a model that codes characters only.
-* `memberships` — one label per symbol id, `0 ≤ label < k·q`: that symbol's
-  right cluster.  Labels `c·q … c·q + q − 1` are the right clusters of left
-  cluster `c`, so the left cluster is that label divided by `q`.  This is the
-  one assignment the model stores, and with `bottom_trees` it is table (b): the
-  membership map and the unigram vector that the depths encode.
-* `bottom_trees` — `k·q` depth sequences, numbered by right cluster.  A right
-  cluster holds its symbols in ascending id order, one depth each, measured from
-  that tree's root; a right cluster with one symbol has it at depth 0 and costs
-  no bits at all.  The decoder knows which words are in the tree from
-  `memberships`, so no leaf list is stored, and each tree is complete in its own
-  right (a Huffman build stopped at `q` survivors).
-* `top_trees` — `k` depth sequences of `k·q + 1` entries each.  Tree *i* is the
-  code for the next **right cluster** given left cluster *i*; leaf 0 is the
-  **STOP** leaf, which the model gives zero weight, and leaves 1 … `k·q` are the
-  right clusters in ascending label order.
+  cluster.  Right clusters are numbered `0 … k·q`. The default model has `q = 1`
+  such that the left and right clusters correspond. A non-default model can have
+  `q > 1`.
+* `rules` — the word list as pairs of child ids.  Rule `i` defines word id
+  `len(alphabet) + i`. Its children are strictly smaller ids, so the list is
+  a topological order of the merge tree.  Rule `i` may not name its own id, and
+  its two children must differ.  The list may be empty: `V = len(alphabet)`
+  is a model that codes characters only.
+* `memberships` — one label per word, `0 ≤ label < k·q`: that word's
+  right cluster. The word's left cluster is that label divided by `q`.
+* `bottom_trees` — a Huffman tree (see below) for each right cluster. Each tree
+  has a leaf for each word in the right cluster (according to `memberships`):
+  `V` leaves in total across all the trees. The leaves are listed in word order.
+* `top_trees` — a Huffman tree (see below) for each left cluster. Each tree has
+  a leaf for `STOP` and for each right cluster: `1 + k·q` leaves per tree. The
+  leaves are listed with `STOP` first, then in right cluster order.
+
+`V` is not stored in the YAML file; is is computed as
+`len(alphabet) + len(rules)`. It *is* stored in the binary form of the file, as
+is `len(alphabet)`.
+
+The Huffman trees are represented by listing the depths of their leaves. Given
+the list of depths, codewords are assigned to leaves in decreasing depth order.
+When leaves have the same depth, they are assigned codewords in the order they
+are listed. The "all zeros" codeword is therefore assigned to the earliest
+deepest leaf. Depths are measured from the tree's root; if a tree has only one
+leaf then the leaf has depth 0 and is assigned the empty codeword.
 
 ### Invariants a reader must check
 
-1. `len(memberships) == V` and `V = len(alphabet) + len(rules)`.
+1. `len(memberships) == V` and (binary only) `V == len(alphabet) + len(rules)`.
 2. `len(bottom_trees) == k·q`, every symbol id `0 … V−1` appears in exactly one
    of their leaves, in ascending order, and the total leaf count is `V`.
-3. Every tree is **complete**: `Σ 2^(d_max − d) == 2^d_max` exactly, with every
-   depth `≥ 0`.
-4. `len(top_trees) == k`, each with `k·q + 1` entries: the STOP leaf and one per
+3. Every tree is **complete**: `Σ 2^{−d} == 1` exactly.
+4. In each tree, `max(depth) - min(depth) <= 15`.
+5. `len(top_trees) == k`, each with `k·q + 1` leaves: the STOP leaf and one per
    right cluster.
-5. `rules[i] = [a, b]` with `a ≠ b` and `a, b < len(alphabet) + i`.
-6. A left cluster has at most `q` non-empty right clusters.  Fewer is legal — a
+6. `rules[i] = [a, b]` with `a ≠ b` and `a, b < len(alphabet) + i`, and no two
+   rules the same pair.
+7. A left cluster has at most `q` non-empty right clusters.  Fewer is legal — a
    right cluster with one word cannot be split further — and an empty one is an
-   empty depth list and never decodes.  The shipped build is `q = 1`, so every
+   empty depth list and never decodes.  The default model has `q = 1`, so every
    left cluster has exactly one non-empty right cluster.
-7. In every top tree, leaf 0 (STOP) is at the **maximum** depth.  It follows
+8. In every top tree, leaf 0 (STOP) is at the **maximum** depth.  It follows
    from giving that leaf zero weight, and it is what makes the padding decode as
    the terminator (§6).  There is no corresponding rule for the bottom trees:
    they carry no terminator.
 
-The canonical codes then follow from the depths by the rule in
-[`ENCODING.md`](../docs/ENCODING.md) §3, in one form for both stages: **the
-all-zeros codeword belongs to the first leaf at the maximum depth**, the
-remaining codes are handed out in *ascending* depth order from the top of the
-code space (the mirror image of the usual DEFLATE convention), and within a
-depth the leaves ascend by label.  Invariant 7 is what makes the first leaf at
-the maximum depth be the terminator, so neither the encoder nor the decoder
-needs an orientation table.  The identifier **starts in left cluster 0** — a
-convention, so it is not stored; the build picks the left cluster whose top
-tree codes the first-token distribution cheapest and renumbers the labels so
-that one is 0.
-
 ## 3. The binary form
 
 Measured, not estimated: `scripts/model_size.py` packs the model in this order
-and reports the bytes of each section.  The figures are at `V = 8,191, k = 32,
-q = 1`, the operating point, with the packed rule table.
+and reports the bytes of each section. Illustrative byte sizes describe the
+default model, which has `V = 8,191, k = 32, q = 1`.
 
 | section | encoding | bytes |
 |---|---|---:|
 | magic | `NVM1` | 4 |
 | `V`, `k`, `q`, `len(alphabet)` | varints | 5 |
-| rules length | a varint, because the rule stream is not self-delimiting | 3 |
+| rules length | a varint: the length of `rules` rounded up to a whole number of bytes | 3 |
 | `rules` | 2 × (V − 63) child indices, coded by §4 | 20,926 |
-| `alphabet` | `len(alphabet)` characters in UTF-8, ids 0–62; one byte each here | 63 |
+| `alphabet` | `len(alphabet)` characters in UTF-8 | 63 |
 | `memberships` | `⌈log₂ kq⌉` = 5 bits each, packed | 5,120 |
-| `bottom_trees` | `V` depths at 4 bits each, right cluster by right cluster, ascending symbol id inside | 4,096 |
-| `top_trees` | `k(k+1)` = 1,056 depths at 4 bits each | 528 |
+| `bottom_trees` | `V` depths at 4 bits each | 4,096 |
+| `top_trees` | `k(kq+1)` = 1,056 depths at 4 bits each | 528 |
 | **total** | | **30,745** |
 
-**The alphabet is UTF-8**, and the header counts characters, not bytes.  The
-section is not length-prefixed in bytes because UTF-8 delimits itself: the
-decoder reads exactly `len(alphabet)` characters and the section ends where the
-last one ends.  Every character of the shipped alphabet is ASCII, so the count
-and the byte length agree and the 63 bytes are the same bytes a raw-ASCII
-alphabet would have written.  A non-ASCII character costs its UTF-8 length —
-two bytes for accented Latin, Greek and Cyrillic, three for Han, kana and
-Hangul, four for emoji — and that is the whole cost of a wider alphabet here;
-the symbols themselves cost their table entries as usual.  Because a reader
-that predates this rejects a non-ASCII alphabet outright, widening it needed no
-new magic: every file that existed before is unchanged, and a file that uses
-the widening is refused cleanly by an older reader rather than misread.
+There is no version byte separate from `magic`: `NVM1` is the version.  A change
+that would break a reader changes the magic to `NVM2`, and a reader must reject
+a magic it does not know.  There is **no checksum**: the decoder already checks
+so many things that a CRC-32 would add four bytes to catch nothing.
 
-There is **no version byte**: `NVM1` is the version.  A change that would break a
-reader changes the magic to `NVM2`, and a reader must reject a magic it does not
-know.  There is **no checksum**: the decoder already checks the magic, every child id
-against the rule's own limit, the completeness of every tree (the Kraft sum), the
-leaf counts against `memberships`, and that the file ends where the tables say it
-does.  A CRC-32 would add four bytes to catch nothing those checks do not.
+The `rules` table is preceded by its length in bytes. This allows the table to be
+skipped without decoding it. The length in bytes must be exactly the size
+of the table, which must be zero-padded to a whole number of bytes. 
 
-**Every depth is exactly four bits**, and there is **no width byte**.  The field
-stores `d − d_min` for its own tree, not the raw depth: `d_min` is not stored at
-all.  The decoder recovers it from the Kraft equality, per tree.  A complete
-tree has `Σ 2^(−d) = 1`, so with `d = δ + d_min` it computes
+The `alphabet` is not length-prefixed; its length can only be computed by reading
+exactly `len(alphabet)` UTF-8 characters.
+
+`memberships` partitions the words into right clusters.
+
+`bottom_trees` is the concatenation of the lists in the YAML form. The depths
+are listed in right cluster order, and within each right cluster they are in
+word order. Note that this is different from listing all `V` depths in word
+order (wrong).
+
+`top_trees` is similarly the concatenation of the lists in the YAML form. The
+depths are listed in left cluster order, and within each left cluster the `STOP`
+leaf is first then the others are in right cluster order. Every tree has the
+same `1 + k q` labels.
+
+Every depth in `bottom_trees` and `top_trees` is exactly four bits. The field
+does not store the raw depth; instead it stores `d − d_min` where `d_min` is the
+smallest depth in the tree. for its own tree, not the raw depth. `d_min` is
+recovered it from the Kraft equality, per tree. A complete tree has
+`Σ 2^(−d) = 1`, so with `d = δ + d_min` the decoder computes
 `2^d_min = Σ 2^(−δ)` and takes `d_min = log₂` of it, which must be a whole
-number.  A tree with one leaf carries no depth at all — its symbol is coded in
-zero bits, and the decoder knows it is alone from `memberships`.  A depth table
-whose δ's give no integer offset is corrupt, so the equality is also a decoder
-invariant.  §3.1 is why four bits are enough at every point of the grid.
+number.  A depth table whose δ's give a non-integer `d_min` is corrupt, so the
+equality is also a decoder invariant. §3.1 explains why four bits are enough.
 
 A **varint** is a base-128, little-endian integer: each byte carries seven
 payload bits and the top bit says whether another byte follows.  So `V = 8,191`
@@ -228,17 +205,21 @@ is bit *i* mod 8 of byte *i* // 8, and bit 0 of the code is the first bit an
 encoder writes, so the padding of `ENCODING.md` §2 is the run of zeros *above*
 the code.  Integers are little-endian.
 
-The rest of the file is 9,819 B, so the model is **30.7 kB** — against the
-32.8 kB of `MODEL_BUDGET.md` §5.1, which adds 2 kB of library code that is not
-part of the model.  The YAML of §2 is 182,472 B at the same point — 5.9 times
-as large: it is the portable form, and the binary is what the budget measures.
+The default model file is **30.7 kB**. It is fair to add 2 kB for library code
+that is not part of the model file. The YAML form of the same model is
+182,472 B — 5.9 times as large. The YAML is the readable form, and the binary is
+what the compact form.
 
 ### 3.1 Why four bits are enough: the weight bias
 
-Unbiased, a Huffman build puts a rare leaf far deeper than a common one: at
-8192/32 the word trees run from 0 to 23, so a raw depth needs five bits.  The
-range is compressed by adding a **bias** to every leaf weight before the merge,
-which lifts the smallest probabilities and shortens the tail.
+A Huffman build puts a rare leaf far deeper than a common one: at
+8192/32 the word trees run from depth 0 to depth 23, so a raw depth needs five
+bits. But the file format allows only four.
+
+The program that builds the model file compresses the depth range by adding a
+**bias** to every leaf weight before building the Huffman tree. This lifts
+the smallest probabilities and shortens the tail, but is a completely negligible
+addition to the largest probabilities.
 
 No closed form gives the least bias, because the span of a Huffman tree is a
 property of the whole distribution.  A leaf's *ideal* depth is `−log₂ p`, so a
@@ -256,9 +237,9 @@ against the unbiased build.
 #### So the bias is found, not computed
 
 The build brackets a working bias by doubling from a small starting guess, then
-**bisects** the bracket for the least bias whose built tree spans 15 or less,
-to `2^-16` relative.  That is the least flattening the four-bit field allows,
-and measured it is what keeps the field's fit cost at nothing:
+**bisects** the bracket for the least bias whose built tree spans 15 or less.
+That is the least flattening the four-bit field allows. Measurements confirm it
+makes no difference to the fit rate:
 
 | point | bias | bottom max | top max | worst span | bits/id | fit ≤64 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -273,44 +254,27 @@ Zero-weight leaves are excluded from the bias: they are the terminator, they
 must stay the deepest leaf, and lifting them to the bias would put them level
 with real leaves and could break invariant 7.
 
-The field is four bits at every point of the measured grid.  Shortening the
-depths from five bits to four takes the operating-point file from 31,901 B to
-30,745 B — **1,156 B, 3.6 %** — and the fit rate does not move at any point.
+Shortening the depths from five bits to four is a small but significant saving.
 
 ## 4. The rule table and how it is coded
 
 The rules are the largest object in the file: 20,926 of 30,745 B, two thirds of
 the model.  Rule *i* is a pair `(u, v)` of child ids, both below
-`N = len(alphabet) + i`, and the decoder knows `N` for each rule.  The file
-stores each child with a **static geometric ladder**, base 2, `b = 3`:
+`N = len(alphabet) + i`, and the decoder knows `N` for each rule.
+
+The file stores `u` and `v` separately, each using a **static geometric
+ladder**, base 2, `b = 3`:
 
     B    = 2^b = 8 intervals
     e_i  = N (2^i − 1) // (2^B − 1)           for i = 0 … B
     x    = the child id, in [0, N)
     i    = the interval with e_i <= x < e_{i+1}, written in b bits
-    r    = x − e_i, written in [0, e_{i+1} − e_i) by the variable-width code
+    r    = x − e_i, written in [0, e_{i+1} − e_i) by a variable-width code
 
-Nothing is stored for the code: the decoder derives the eight edges from `N`
-and `b` with integer arithmetic, and at base 2 the index is exact in shifts.
-The two children are coded **separately** — Pair — rather than combined into one
-number.  That is the finding of the grid: the ladder exploits the frequency rank
-of each child, because a low id is an old, frequent word, so a rule
-`(common, rare)` gets a short code for the common child.  Any pairing sends both
-children through one number, and the common child loses its short code.  The
-adopted encoding is 20,925 B for the shipped list (10.298 bits per child); the
-fixed field costs 24,492 B, the variable field 22,948 B, and the best
-pair-combining scheme 21,162 B (Triangle) or 21,458 B (Square).
-
-The grid that chose it — three pairings crossed with eight number codes, `b`
-from 2 to 5, three bases, and the narrow and wide readings of the index formula
-— is [`RULE_ENCODING.md`](../docs/RULE_ENCODING.md).  Two of its conclusions
-are worth repeating here because they are about *this* code.  First, the ladder
-is **static**: the only thing computed at load is eight integer divisions.
-Second, it is within 5 % of the pooled entropy of the child-index stream (9.80
-bits/child, 19,916 B), and a code that reached that limit would have to store
-the empirical distribution, which costs more than the kilobyte it saves.  The
-arithmetic coder the format used to carry measured 21,109 B; the ladder is 184
-B better and needs no arithmetic coder at all.
+The ladder exploits the skewed frequency distribution of the child ids.
+A low id is an old, frequent word. The adopted encoding fits the rule table of
+the default model into 20,925 B (10.298 bits per child): a significant saving
+over a fixed-width field.
 
 ## 5. What the file deliberately omits
 
@@ -336,11 +300,11 @@ right clusters and two top trees of 5 leaves.  The characters `a`…`e` are ids
 `{b, bc}`, `{c, d, e}` and `{de}`; left cluster 0 is the first two and left
 cluster 1 the last two.
 
-The four bottom trees give the word step: right cluster 0 is a single symbol and
-costs nothing; right cluster 1 gives `b`→`0`, `bc`→`1`; right cluster 2 gives
-`c`→`1`, `d`→`00`, `e`→`01`; right cluster 3 is `de` alone and costs nothing.
-Note the direction of the canonical rule: the deeper leaves take the low codes,
-which is why `d` and `e` start with `0`.
+The four bottom trees map right clusters to words. rRight cluster 0 is a single
+word and costs nothing; right cluster 1 gives `b`→`0`, `bc`→`1`; right cluster 2
+gives `c`→`1`, `d`→`00`, `e`→`01`; right cluster 3 is `de` alone and costs
+nothing. Note the direction of the canonical rule: the deeper leaves take the
+low codes, which is why `d` and `e` start with `0`.
 
 The top trees hold 5 depths each, leaf 0 being the zero-weight STOP and leaves
 1–4 right clusters 0–3.  After left cluster 0 (`[4, 1, 2, 3, 4]`): STOP→`0000`,
@@ -348,7 +312,7 @@ right cluster 0→`1`, 1→`01`, 2→`001`, 3→`0001`.  After left cluster 1
 (`[4, 2, 1, 3, 4]`): STOP→`0000`, right cluster 0→`01`, 1→`1`, 2→`001`,
 3→`0001`.
 
-An identifier is coded as (right cluster | left cluster) then (symbol | right
+An identifier is coded as (right cluster | left cluster) then (word | right
 cluster), and its first step **starts in left cluster 0**.  For `bc`, which is
 ids 1 and 2: `b` is in right cluster 1, so the cluster step is right cluster 1
 after left cluster 0, `01`, and the word step inside it is `0`; then `c` is in
@@ -357,18 +321,16 @@ it `1`; finally the STOP leaf — `c`'s label is 2, so left cluster 1 — `0000`
 which is never written.  Eleven bits of codeword, seven stored: the last four
 are zeros and join the padding.
 
-The word step is free exactly where a right cluster was stopped at one symbol,
-which is why right clusters 0 and 3 store no depths beyond a single `0`.
-`python3 scripts/model_size.py --self-test` runs this model end to end, from the
-depths to the bytes and back.
+The bottom tree is free for a cluster with only one word. Right clusters 0 and 3
+store no depths beyond a single `0`. `python3 scripts/model_size.py --self-test`
+runs this model end to end, from the depths to the bytes and back.
 
 ## 7. Distribution, and the map
 
-**One standard model.**  The standard ships exactly one model file, fixing `V`,
-`k` and `q`, and the file carries no `name:` or family: a second standard model
-would be an `NVM2` question.  The format itself is general — a library user may
-write a file at any `V`, `k` and `q` — because it describes a code rather than
-the standard's choice of one.
+**The default model.**  The standard ships exactly one model file, build over
+the ASCII corpus, and fixing `V`, `k` and `q`. The format itself is general, and
+does not limit these parameters. A library user may build a non-default model
+over any corpus with any `V`, `k` and `q`.
 
 **The counts live beside the file.**  A published model may sit in a directory
 that also holds the counts it was built from (word frequencies, the
@@ -378,11 +340,8 @@ non-normative: a reader must not require them, and the model file must mean the
 same thing without them.
 
 **The grouping lives in the map.**  A tree's depths say nothing about which
-symbols share a tree, so a model with more than one right cluster needs one
-label per symbol.  Naming a right cluster by a *position* in the tree does not
-work: a position marks a boundary in the tree's leaf order, so it names a
-contiguous block of leaves, and the right clusters are whatever the build was
-left with when it stopped merging — the survivors, which are not a run of
-leaves.  So the label is the price of an arbitrary grouping.  What that price
-is worth, and why one map serves both stages, is measured in
-[`SHARED_CLUSTERS.md`](../docs/SHARED_CLUSTERS.md).
+words share a bottom tree, so a model with more than one right cluster needs one
+label per word (field `memberships`). This cost appears to be unavoidable.
+The word list's order is fixed by the `rules` table, and is unrelated to the
+words' grouping into clusters. There is no opportunity to renumber the words
+to make the clusters contiguous intervals.
