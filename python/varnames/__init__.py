@@ -14,8 +14,12 @@ handle — the 64- and 128-bit sets are simply ``value < 2**64`` and
 
 Both numbers matter: ``value`` is what you store, ``bits`` is where its highest
 bit lands, which is what the 64-bit budget counts (``ENCODING.md`` §2).
+
+The model is trained on CamelCase; :mod:`varnames.case` converts the other two
+conventions to it and back, exactly (``STANDARD.md`` §11).
 """
 
+from .case import cased, classify, from_camel, to_camel
 from .codec import Codec, DecodeError, EncodeError
 from .model import Model, ModelError
 from .standard import STANDARD_SHA256, StandardCodec, standard
@@ -28,6 +32,10 @@ __all__ = [
     "ModelError",
     "STANDARD_SHA256",
     "StandardCodec",
+    "cased",
+    "classify",
+    "from_camel",
+    "to_camel",
     "standard",
 ]
 __version__ = "0.1.0"

@@ -195,6 +195,12 @@ question of whether it is possible.  The cost is not uniform across scripts:
   three characters and the alphabet is the vocabulary; the merge rule
   degenerates and the adjacency matrix becomes the model.
 
+Case conversion is a separate question from the alphabet, and it does not
+wait for one: `STANDARD.md` §11 defines it over accented Latin and Cyrillic
+already, on the caller's corpus and before encoding, so a build from a
+non-ASCII corpus can be normalised today.  The alphabet is what the *code* can
+spell; the case pairs are what the *builder* can rewrite.
+
 Three names in three scripts are enough to see the alphabet section grow:
 
 ```console
@@ -233,3 +239,42 @@ by script (one count per identifier per script it uses):
 The script skips `test`, `tests` and `__pycache__` directories, because a test
 suite may spell one identifier per script on purpose. Any Python tree works;
 point it at a corpus you care about to get that corpus's number.
+
+## 11. Two spellings of one name
+
+`café` is four characters when the `é` is U+00E9 and five when it is `e`
+followed by U+0301.  Unicode calls the two spellings canonically equivalent,
+and NFC is the transform that composes them.  Whether the compiler agrees is a
+property of the host language, and the hosts disagree:
+
+| host | `café` vs `cafe` + U+0301 | why |
+|---|---|---|
+| Python 3 | **one name** | PEP 3131 normalises identifiers to NFKC |
+| Rust | **one name** | `rustc` normalises identifiers to NFC |
+| GCC (C) | **two names** | no normalisation; warns by default, `'cafe\U00000301' is not in NFC [-Wnormalized=]` |
+| Perl | **two names** | no normalisation |
+| Java | **two identifiers** | JLS §3.8: "Unicode composite characters are different from their canonical equivalent decomposed characters" |
+| C# | **not a legal identifier** | ECMA-334 requires source identifiers to be in NFC |
+| ECMAScript | **two names** | identity is the code-unit sequence; the language normalises nothing |
+
+Python, Rust, GCC and Perl were tested on two spellings of one assignment.
+The Java, C# and ECMAScript entries are from their specifications: the JLS
+states the rule outright, C# makes the decomposed spelling illegal rather than
+a second name, and ECMAScript defines identity as the code-unit sequence.
+
+Two consequences, and they point the same way.
+
+* **NFC is many-to-one, so normalising here would break the bijection.**  The
+  claim of `STANDARD.md` §1 is that an identifier has exactly one integer;
+  composing the input first would give two spellings one integer and lose the
+  distinction silently.  The code is exact or it is nothing, so normalisation
+  is the caller's, done before encoding.
+* **There is no single host behaviour to adopt.**  Even if the transform were
+  invertible, adopting one host's answer would mean choosing between Python's,
+  Java's and C#'s, and none of them is *the* answer.
+
+That is why `STANDARD.md` §10 puts identity and normalisation out of scope and
+its §11 specifies only case conversion, which is 1:1 on its cased set and therefore
+invertible.  A program that needs `café` and `cafe` + U+0301 to be one name
+normalises to NFC (or NFD) before it encodes; the code then sees one string, as
+it should.

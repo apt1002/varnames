@@ -190,6 +190,11 @@ and the rule list.
   `standard/model.yaml`; the same bytes are compiled into both implementations
   (`python/varnames/data/model.nvm1`, `rust/data/model.nvm1`), and each checks
   the digest above before it uses them.
+* The **case pairs** of §11 are published as `standard/case-pairs.txt`: 266
+  pairs, `upper lower`, one per line, 1,937 bytes, SHA-256
+  `fe4f29facc43e72b8bd263a31712013d58b3a0b29acce595b05a5cf0134f972c`.  Like the model it is copied
+  into `python/varnames/data/` and `rust/data/`, and a test in each
+  implementation asserts that its copy is the published file.
 * The published tables are `CC0-1.0`, the code and specification
   `MIT OR Apache-2.0`.
 
@@ -202,15 +207,81 @@ different files will not agree; the digest is how they find out.
 * A hash fallback for identifiers outside the alphabet or outside the 128-bit
   set.  The sets are defined by exclusion; a fallback belongs to a transport,
   not to this code.
-* Case normalisation, Unicode identifiers, and any rule about what an identifier
-  is: the code's domain is strings over a stated alphabet.
+* Case normalisation of what is encoded.  The code's domain is strings over a
+  stated alphabet, and it normalises nothing: an identifier written in another
+  convention is coded, just less well.  §11 specifies an optional conversion
+  for callers who want the corpus's convention; encoding and decoding never
+  depend on it.
+* Unicode identifiers, and any rule about what an identifier *is*.  Identity,
+  normalisation (NFC, NFD) and confusables belong to the host language, and
+  hosts decide them differently: Python and Rust merge the two spellings of
+  `café`, GCC and Perl keep them apart, Java's specification says they are
+  different identifiers and C#'s requires source identifiers to be NFC already
+  ([`UNICODE.md`](UNICODE.md) §11).  There is no single answer to adopt, so a
+  caller that cares normalises before encoding.
 * Table-building.  How a word list, an assignment and a set of depths are
   produced from a corpus is engineering, not interoperability.
 * Compression of the model file itself.  It is 30,745 bytes, published once,
   and every scheme to shrink it has so far cost more in decoder complexity than
   it saved.
 
-## 11. Test vectors
+## 11. Case conversion
+
+An implementation **may** convert between the three conventions `foo_bar`,
+`FOO_BAR` and `fooBar`; one that does not offer the conversion conforms.  The
+model is trained on one convention — the standard model on CamelCase — so the
+conversion is what lets a caller meet the model with names written another way.
+Nothing in encoding or decoding depends on it, and no class label is carried in
+a code.
+
+A character is **cased** when its upper-case and lower-case forms are each a
+single character, differ from it, and are inverses of each other; every other
+character is **inert**, copied unchanged and never mapped.  The cased set is the
+letters in `U+0041–U+005A`, `U+0061–U+007A`, `U+00C0–U+017F` and
+`U+0400–U+052F`.  In those ranges exactly six letters are inert: `ß`, `İ`, `ı`,
+`ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper case at all.  The 266 pairs
+are published in `standard/case-pairs.txt` (§9), which is normative for the
+mapping.  The rule above is what the table must satisfy; an implementation
+reads the pairs and never asks the host for a case mapping, so a Unicode
+upgrade cannot change what it does.
+
+A cased character is **upper** when it equals its own upper-case form, and
+**lower** otherwise; inert characters vote for neither.  An identifier is
+`lower` when it has cased characters and no upper one, `upper` when it has
+upper ones and no lower one, and `camel` when it has both.  To convert a `lower`
+or `upper` identifier:
+
+* every cased character becomes lower case, **except** the first cased
+  character after a run of underscores, which becomes upper case — including
+  when the run is at the start, so the leading character is not capitalised;
+* a run of underscores that precedes a cased character gives up exactly one
+  underscore, the word separator, and keeps the rest: `a_b` → `aB`,
+  `a__b` → `a_B`; a run not followed by a cased character — before a digit,
+  before an inert character, or at the end — is kept as it is.
+
+A `camel` identifier is returned unchanged.  The inverse takes the class as an
+argument, because the class is the only thing the normal form drops:
+`from_camel(to_camel(x), class(x)) = x` for every identifier.  Every mapping is
+one character to one character, so conversion shortens an identifier by exactly
+the separators it swallows and by nothing else.
+
+Two choices are worth stating, because they are what stops the set from
+growing.
+
+**Scripts without case are inert, and that is not a gap.**  The transform's only
+channel for a word boundary is a capital letter; Han, kana, Hangul, Arabic,
+Hebrew, Devanagari and Thai have none, so an identifier written in them is
+unchanged and keeps its underscores.  There is no table that would fix this
+without inventing a convention that the writing system does not have.
+
+**Greek is the nearest miss and stays inert.**  91 of its 236 cased letters
+(`ΐ`, `ΰ`, the iota-subscript forms) map to two characters, and the letter it
+cannot do without, `Σ`, lower-cases to `σ` whatever follows it — so `ΟΔΟΣ` and
+`οδος` still do not meet, and the conversion would buy 91 exceptions to join
+nothing.  Any further script is a further version of this standard, not a
+further line in it.
+
+## 12. Test vectors
 
 `rust/tests/golden.txt` holds 250 identifiers with their exact integer and bit
 length.  Both implementations in this repository read that file, so it pins
@@ -228,3 +299,7 @@ them to each other; a third implementation can do the same.  The first lines:
 
 A conforming implementation reproduces all 250, and decodes each integer back
 to its identifier.
+
+The 266 case pairs of §11 are pinned the same way, by their own round trip:
+each implementation converts and inverts every pair in both classes
+(`TestCaseConversion` in the Python tests, `case::tests` in Rust).

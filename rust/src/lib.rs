@@ -15,7 +15,7 @@
 //! assert_eq!(codec.decode(code.value).unwrap(), "getUserName");
 //! ```
 //!
-//! The tables ship inside the crate ([`standard`]); a project that prefers its
+//! The tables ship inside the crate ([`mod@standard`]); a project that prefers its
 //! own can load any `NVM1` file with [`Model::from_bytes`] and hand it to
 //! [`Codec::new`].
 
@@ -24,6 +24,7 @@
 use std::fmt;
 
 pub mod bitio;
+pub mod case;
 pub mod codec;
 pub mod ladder;
 pub mod model;
@@ -31,6 +32,7 @@ pub mod sha256;
 pub mod standard;
 
 pub use bitio::Bits;
+pub use case::{classify, from_camel, to_camel, Class};
 pub use codec::{Code, Codec};
 pub use model::{Model, Tree};
 pub use standard::standard;

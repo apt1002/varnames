@@ -26,10 +26,34 @@ first time they are loaded.
 | `codec.tokenise(name)` | the model's symbols, before coding |
 | `codec.model` | the loaded `Model` |
 | `varnames.Codec(varnames.Model.from_path(path))` | any `NVM1` model file instead of the standard one |
+| `varnames.case.classify(name)` | `'lower'`, `'upper'` or `'camel'` |
+| `varnames.case.to_camel(name)` | rewrite the two snake conventions in CamelCase |
+| `varnames.case.from_camel(name, cls)` | the inverse, given the class |
 
 `encode` returns an integer of any size; a 64-bit or 128-bit set is simply the
 identifiers whose `bits` fit.  Round trips are exact: `decode(encode(n))` is
 `n`, and the terminator is never stored.
+
+## Case conversion
+
+The model is trained on CamelCase, so `FOO_BAR` and `foo_bar` code less well
+than `fooBar`.  `varnames.case` rewrites the other two conventions and back:
+
+```python
+from varnames import case
+
+case.classify("FOO_BAR")              # 'upper'
+case.to_camel("FOO_BAR")              # 'fooBar'
+case.from_camel("fooBar", "upper")    # 'FOO_BAR'
+```
+
+It is exact — every cased character maps to one character, so the length
+changes only by the separators it swallows, and `from_camel(to_camel(x),
+classify(x)) == x`.  The cased characters are the ASCII letters and the
+1:1-paired letters of `U+00C0–U+017F` and `U+0400–U+052F`
+(`varnames/data/case-pairs.txt`, 266 pairs); everything else, Greek and every
+script without case included, is inert and passed through.  The definition is
+`STANDARD.md` §11.
 
 ## Command line
 

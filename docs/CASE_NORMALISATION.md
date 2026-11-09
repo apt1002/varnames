@@ -7,15 +7,16 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 
 ## Case normalisation
 
-1. **classify** — split the corpus into `lower_case` (has lower-case letters, no
+1. **classify** — split the corpus into `lower_case` (has cased characters, none
    upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both).
-2. **camelize** — rewrite the non-CamelCase lists in CamelCase: the first
-   letter after a run of underscores is upper-cased and all other letters,
-   including the leading letter of the identifier, are lower-cased, so `a`, `_a`
-   and `__a` stay distinct (`a`, `A`, `_A`); a run of underscores before a
-   letter gives up exactly one underscore (its word separator) and keeps the
-   rest, so `a_b` → `aB` but `a__b` → `a_B` (underscores before a digit, or at
-   the end, are kept as-is).
+2. **camelize** — rewrite the non-CamelCase lists in CamelCase: the first cased
+   character after a run of underscores is upper-cased and all other cased
+   characters, including the leading letter of the identifier, are lower-cased,
+   so `a`, `_a` and `__a` stay distinct (`a`, `A`, `_A`); a run of underscores
+   before a cased character gives up exactly one underscore (its word
+   separator) and keeps the rest, so `a_b` → `aB` but `a__b` → `a_B`
+   (underscores before a digit, before an inert character, or at the end, are
+   kept as-is).
 3. **merge** — concatenate the CamelCase list with the two converted lists and
    de-duplicate (`LC_ALL=C sort -u`).
 
@@ -25,6 +26,23 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 **451,766** UPPER_CASE and **2,013,654** CamelCase, and the merged, normalised
 corpus has **4,226,707** identifiers — 215,267 collapsed (4.85%) where two
 classes normalise to the same string.
+
+**Which characters are cased.**  `STANDARD.md` §11 defines the set: the ASCII
+letters, and the letters of `U+00C0–U+017F` and `U+0400–U+052F` that have a 1:1
+upper/lower pair — 266 pairs, published as `standard/case-pairs.txt`.  Every
+other character is **inert**: copied through unchanged and never mapped, so
+Greek, Han, kana and the rest pass through, and a script without case keeps its
+underscores because a capital letter is the transform's only word-boundary
+signal.  `python/varnames/case.py` is the one implementation; both scripts
+import it, so the builder and the library cannot drift.
+
+The shipped corpus is ASCII — 0 of 4,441,974 identifiers contain a non-ASCII
+character — so the extended set changes none of the artefacts: the two
+`camel_from_*` files are byte-identical either way.  What it changes is a corpus
+that has accented capitals, where the old ASCII-only classifier left the
+leading letter alone: `ÄRGER` used to come out `Ärger` and never meet `ärger`,
+which defeats the merge this pipeline exists to perform.  It now comes out
+`ärger`.
 
 The pipeline writes the case-normalisation artefacts (`lower_case.txt`,
 `upper_case.txt`, `camel_case.txt`, `camel_from_lower.txt`,

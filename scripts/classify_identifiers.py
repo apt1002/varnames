@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Classify a corpus of identifiers into lower_case / UPPER_CASE / CamelCase.
 
-An identifier is *CamelCase* when it contains at least one lower-case letter
-AND at least one upper-case letter (digits and underscores are ignored).
-Otherwise it is *UPPER_CASE* when it contains an upper-case letter, and
-*lower_case* when it contains a lower-case letter (or no letters at all).
+An identifier is *CamelCase* when it contains at least one lower-case cased
+character AND at least one upper-case one (digits, underscores and inert
+characters are ignored).  Otherwise it is *UPPER_CASE* when it contains an
+upper-case one, and *lower_case* when it contains a lower-case one (or no cased
+character at all).  The cased set is the one `STANDARD.md` §11 defines; the
+implementation is `python/varnames/case.py`, shared with the library.
 
 Input : a text file with one identifier per line.
 Output: three text files, one identifier per line:
@@ -18,19 +20,9 @@ Usage: classify_identifiers.py [CORPUS] [OUTDIR]
 import os
 import sys
 
-
-def classify(s):
-    lower = upper = False
-    for ch in s:
-        if 'a' <= ch <= 'z':
-            lower = True
-        elif 'A' <= ch <= 'Z':
-            upper = True
-    if lower and upper:
-        return 'camel'
-    if upper:
-        return 'upper'
-    return 'lower'
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', 'python'))
+from varnames.case import classify    # noqa: E402  (the package is the source)
 
 
 def main():
@@ -39,14 +31,14 @@ def main():
     os.makedirs(outdir, exist_ok=True)
 
     outs = {
-        'lower': open(os.path.join(outdir, 'lower_case.txt'), 'w'),
-        'upper': open(os.path.join(outdir, 'upper_case.txt'), 'w'),
-        'camel': open(os.path.join(outdir, 'camel_case.txt'), 'w'),
+        'lower': open(os.path.join(outdir, 'lower_case.txt'), 'w', encoding='utf-8'),
+        'upper': open(os.path.join(outdir, 'upper_case.txt'), 'w', encoding='utf-8'),
+        'camel': open(os.path.join(outdir, 'camel_case.txt'), 'w', encoding='utf-8'),
     }
     counts = {'lower': 0, 'upper': 0, 'camel': 0}
     total = 0
     try:
-        with open(corpus) as f:
+        with open(corpus, encoding='utf-8') as f:
             for line in f:
                 s = line.rstrip('\n')
                 if not s:

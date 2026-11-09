@@ -185,6 +185,19 @@ kilobytes and needs no floating-point arithmetic in the decoder to reproduce
 deployment, but it is not part of the bijection and it is not specified here
 ([`STANDARD.md`](STANDARD.md) §10).
 
+**Case conversion for further scripts.**  Latin-1, Latin Extended-A and
+Cyrillic give 240 pairs and six inert letters for the two scripts whose words
+actually appear in identifiers; Greek adds 91 letters that map to two
+characters and a `Σ` whose lower case depends on context, so `ΟΔΟΣ` and `οδος`
+would still not meet — 91 exceptions to join nothing.  The remaining 1,817
+safely cased letters belong to Georgian, Cherokee, Coptic, Glagolitic, Deseret
+and their like, which appear in no corpus anyone has measured.  Vietnamese is
+the one live candidate, **deferred rather than rejected**: 246 more pairs with
+no exceptions, and half of it would be worse than none, since Latin Extended-A
+carries `Ă Đ Ơ Ư` and the tone-marked forms live in Latin Extended Additional.
+Taking it is a second version of `STANDARD.md` §11, not a correction to this
+one ([`UNICODE.md`](UNICODE.md) §5, §11).
+
 ## The file
 
 **YAML alone.** The YAML form is readable and diffable, and it is shipped

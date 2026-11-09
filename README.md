@@ -33,8 +33,12 @@ The library works with CamelCase identifiers, containing only letters, digits,
 and underscores. We ship functions to convert identifiers between different
 capitalisation conventions, and using those we can also encode lower_case and
 UPPER_CASE identifiers efficiently too (the rules, and the measured benefit, are
-in [`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md)). This covers the
-majority of programming use cases. The original capitalisation convention is not
+in [`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md)). The conversion
+is exact — every cased character maps to one character, and the inverse takes
+the case class, so nothing is lost — and it covers ASCII, accented Latin and
+Cyrillic (`STANDARD.md` §11, and the compiler evidence in
+[`docs/UNICODE.md`](docs/UNICODE.md) §11). This covers the majority of
+programming use cases. The original capitalisation convention is not
 encoded; it is the caller's responsibility. The encoding is otherwise lossless.
 
 We target two fixed budgets: 64-bit integers and 128-bit integers.
@@ -359,19 +363,22 @@ varnames/
 ├── python/                              # reference implementation, runnable and readable
 │   ├── pyproject.toml                   # packaging; `varnames` console script
 │   ├── README.md                        # the API, the CLI, the sets
-│   ├── varnames/                        # bitio, ladder, model, codec, standard, cli
-│   │   └── data/model.nvm1              # the standard tables, 30,745 B, digest-checked
+│   ├── varnames/                        # bitio, ladder, model, codec, standard, case, cli
+│   │   ├── data/model.nvm1              # the standard tables, 30,745 B, digest-checked
+│   │   └── data/case-pairs.txt          # the 266 cased pairs of STANDARD.md §11
 │   └── tests/                           # unit tests + the held-out rate test
 ├── rust/                                # engineering implementation, no dependencies
 │   ├── Cargo.toml                       # no dependencies, no build script
 │   ├── README.md
-│   ├── src/                             # bitio, ladder, model, codec, standard, sha256
+│   ├── src/                             # bitio, ladder, model, codec, standard, case, sha256
 │   │   └── bin/varnames.rs              # the CLI
 │   ├── data/model.nvm1                  # the same tables, compiled in
+│   ├── data/case-pairs.txt              # the same pairs, compiled in
 │   └── tests/golden.txt                 # 250 identifiers + codes, read by both ports
 ├── standard/
 │   ├── model.nvm1                       # the published model file
-│   └── model.yaml                       # its human-readable form (MODEL_FORMAT.md §2)
+│   ├── model.yaml                       # its human-readable form (MODEL_FORMAT.md §2)
+│   └── case-pairs.txt                   # the cased characters of STANDARD.md §11
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```

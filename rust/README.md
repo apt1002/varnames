@@ -22,9 +22,29 @@ assert_eq!(codec.decode(code.value)?, "getUserName");
 | `model` | the `NVM1` reader: strict invariant checks, canonical codewords, derived trees |
 | `codec` | the tokeniser, the encoding loop, decoding |
 | `standard` | the embedded standard tables and their SHA-256 |
+| `case` | `classify`, `to_camel`, `from_camel` over the 266 cased pairs (`STANDARD.md` §11) |
 | `sha256` | forty lines of SHA-256, so identifying the tables needs no dependency |
 
 The crate has no dependencies and no build script.
+
+## Case conversion
+
+The model is trained on CamelCase, so `FOO_BAR` and `foo_bar` code less well
+than `fooBar`.  [`case`] rewrites the other two conventions and back:
+
+```rust
+use varnames::case::{classify, from_camel, to_camel};
+
+assert_eq!(to_camel("FOO_BAR"), "fooBar");
+assert_eq!(from_camel("fooBar", classify("FOO_BAR")), "FOO_BAR");
+```
+
+It is exact: every cased character maps to one character, so the length changes
+only by the separators it swallows, and `from_camel(&to_camel(x), classify(&x))
+== x`.  The cased characters are the ASCII letters and the 1:1-paired letters
+of `U+00C0–U+017F` and `U+0400–U+052F` (`data/case-pairs.txt`, 266 pairs,
+compiled in); everything else, Greek and every script without case included, is
+inert and passed through.
 
 ## Using your own tables
 

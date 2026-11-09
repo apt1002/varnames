@@ -11,6 +11,7 @@ import unittest
 
 from varnames import Codec, DecodeError, EncodeError, Model, ModelError
 from varnames.bitio import BitReader, BitWriter, bits_length, bits_to_int
+from varnames.case import cased, classify, from_camel, to_camel
 from varnames.codec import _merge_pairs
 from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
@@ -24,6 +25,9 @@ ROOT = os.path.dirname(PACKAGE)
 MODEL = os.path.join(PACKAGE, "varnames", "data", "model.nvm1")
 VALIDATION = os.path.join(ROOT, "work", "camel", "merged_validation.txt")
 GOLDEN = os.path.join(ROOT, "rust", "tests", "golden.txt")
+CASE_PAIRS = os.path.join(ROOT, "standard", "case-pairs.txt")
+CASE_COPIES = [os.path.join(PACKAGE, "varnames", "data", "case-pairs.txt"),
+               os.path.join(ROOT, "rust", "data", "case-pairs.txt")]
 
 
 class TestBitIO(unittest.TestCase):
@@ -319,6 +323,96 @@ class TestStandard(unittest.TestCase):
                                delta=0.05)
         self.assertAlmostEqual(100 * sum(b <= 128 for b in bits) / n, 99.0,
                                delta=0.05)
+
+
+class TestCaseConversion(unittest.TestCase):
+    """`STANDARD.md` §11: the cased set, the transform, and its inverse."""
+
+    @staticmethod
+    def pairs():
+        out = []
+        with open(CASE_PAIRS, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    up, lo = line.split()
+                    out.append((up, lo))
+        return out
+
+    def test_table_is_the_published_one(self):
+        pairs = self.pairs()
+        self.assertEqual(len(pairs), 266)
+        for path in CASE_COPIES:
+            with open(path, "rb") as f:
+                with open(CASE_PAIRS, "rb") as g:
+                    self.assertEqual(f.read(), g.read(), path)
+
+    def test_every_pair_is_a_one_to_one_inverse(self):
+        for up, lo in self.pairs():
+            self.assertEqual(len(up), 1)
+            self.assertEqual(len(lo), 1)
+            self.assertNotEqual(up, lo)
+            self.assertTrue(cased(up) and cased(lo))
+            self.assertEqual(to_camel("x_" + lo + "y"), "x" + up + "y")
+
+    def test_the_cased_set_is_the_ranges_minus_six_letters(self):
+        want = set()
+        for a, b in ((0x41, 0x5A), (0x61, 0x7A), (0xC0, 0x17F), (0x400, 0x52F)):
+            for cp in range(a, b + 1):
+                ch = chr(cp)
+                if ch.isalpha() and cased(ch):
+                    want.add(ch)
+        outside = {"ß", "İ", "ı", "ŉ", "ſ", "ĸ", "Σ", "σ", "ς", "ǅ", "あ", "א"}
+        for ch in outside:
+            self.assertFalse(cased(ch), ch)
+            self.assertNotIn(ch, want)
+        have = {ch for up, lo in self.pairs() for ch in (up, lo)}
+        self.assertEqual(have, want - outside)
+
+    def test_ascii_is_the_behaviour_that_shipped(self):
+        for name, want in [("a_b", "aB"), ("a__b", "a_B"), ("a_3", "a_3"),
+                           ("a_", "a_"), ("FOO_BAR", "fooBar"),
+                           ("_ABC", "Abc"), ("__a", "_A"), ("A_B", "aB"),
+                           ("get_user_name", "getUserName"),
+                           ("fooBar", "fooBar")]:
+            self.assertEqual(to_camel(name), want, name)
+        self.assertEqual(classify("fooBar"), "camel")
+        self.assertEqual(classify("FOO"), "upper")
+        self.assertEqual(classify("foo"), "lower")
+        self.assertEqual(classify("123_"), "lower")
+
+    def test_the_leading_accented_capital_is_now_lowered(self):
+        # inert characters used to leave the leading letter alone, so an
+        # upper-case class did not reach CamelCase and did not merge
+        self.assertEqual(to_camel("ÄRGER"), "ärger")
+        self.assertEqual(to_camel("_ÄRGER"), "Ärger")
+        self.assertEqual(to_camel("ПРИВЕТ_МИР"), "приветМир")
+        self.assertEqual(to_camel("données_brutes"), "donnéesBrutes")
+
+    def test_inert_characters_do_not_vote_and_are_not_moved(self):
+        for name in ["straße", "Ελληνικά", "a_日本", "кириллица", "ǅabc"]:
+            self.assertEqual(to_camel(name), name)
+            self.assertEqual(from_camel(name, classify(name)), name)
+
+    def test_the_round_trip_is_exact(self):
+        for up, lo in self.pairs():
+            for name, cls in [("x_" + lo + "y", "lower"),
+                              ("x" + lo + "y", "lower"),
+                              ("X_" + up + "Y", "upper"),
+                              ("X" + up + "Y", "upper")]:
+                camel = to_camel(name)
+                self.assertEqual(len(camel), len(name) - name.count("_"), name)
+                self.assertEqual(from_camel(camel, cls), name)
+
+    def test_to_camel_is_idempotent(self):
+        for name in ["a_b", "A_B", "fooBar", "_ABC", "ÄRGER", "straße",
+                     "a_日本", "a__b", "a__3"]:
+            once = to_camel(name)
+            self.assertEqual(to_camel(once), once, name)
+
+    def test_an_unknown_class_is_refused(self):
+        with self.assertRaises(ValueError):
+            from_camel("aB", "mixed")
 
 
 if __name__ == "__main__":

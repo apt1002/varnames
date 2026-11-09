@@ -124,8 +124,11 @@ the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
   Latin, Cyrillic, Greek, Han or anything else; the alphabet is stored as UTF-8
   and those names get ids and codewords like any others. The standard corpus
   has none — the extractor blanks any run that touches a non-ASCII byte — so
-  the shipped model's alphabet is the 63 ASCII characters. How rare those names
-  are, and what a wider alphabet costs, is [`UNICODE.md`](UNICODE.md).
+  the shipped model's alphabet is the 63 ASCII characters. Case normalisation
+  covers accented Latin and Cyrillic as well as ASCII, and treats every other
+  character as inert (`STANDARD.md` §11), so a non-ASCII corpus is normalised
+  consistently rather than half-way. How rare those names are, and what a wider
+  alphabet costs, is [`UNICODE.md`](UNICODE.md).
 
 ## Using the result
 
