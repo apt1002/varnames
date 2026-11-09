@@ -4,7 +4,9 @@
 Reads <indir>/lower_case.txt and <indir>/upper_case.txt (produced by
 classify_identifiers.py) and rewrites each identifier with the rule:
 
-  * the first cased character after a run of underscores becomes upper-case;
+  * a cased character immediately preceded by an underscore becomes
+    upper-case (`_a` -> `_A`), so a digit between them stops it (`__3a`
+    stays `__3a`);
   * all other cased characters, including the leading one, become lower-case;
   * a run of underscores immediately followed by a cased character loses
     exactly one underscore (the separator that marks the word start); any

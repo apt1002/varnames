@@ -9,12 +9,12 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 
 1. **classify** — split the corpus into `lower_case` (has cased characters, none
    upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both).
-2. **camelize** — rewrite the non-CamelCase lists in CamelCase: the first cased
-   character after a run of underscores is upper-cased and all other cased
-   characters, including the leading letter of the identifier, are lower-cased,
-   so `a`, `_a` and `__a` stay distinct (`a`, `A`, `_A`); a run of underscores
-   before a cased character gives up exactly one underscore (its word
-   separator) and keeps the rest, so `a_b` → `aB` but `a__b` → `a_B`
+2. **camelize** — rewrite the non-CamelCase lists in CamelCase: a cased
+   character immediately preceded by an underscore is upper-cased and all other
+   cased characters, including the leading letter of the identifier, are
+   lower-cased, so `a`, `_a` and `__a` stay distinct (`a`, `A`, `_A`); a run of
+   underscores before a cased character gives up exactly one underscore (its
+   word separator) and keeps the rest, so `a_b` → `aB` but `a__b` → `a_B`
    (underscores before a digit, before an inert character, or at the end, are
    kept as-is).
 3. **merge** — concatenate the CamelCase list with the two converted lists and

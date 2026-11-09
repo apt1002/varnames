@@ -373,6 +373,8 @@ class TestCaseConversion(unittest.TestCase):
         for name, want in [("a_b", "aB"), ("a__b", "a_B"), ("a_3", "a_3"),
                            ("a_", "a_"), ("FOO_BAR", "fooBar"),
                            ("_ABC", "Abc"), ("__a", "_A"), ("A_B", "aB"),
+                           ("__3a", "__3a"), ("_3a", "_3a"),
+                           ("a__3b", "a__3b"),
                            ("get_user_name", "getUserName"),
                            ("fooBar", "fooBar")]:
             self.assertEqual(to_camel(name), want, name)

@@ -110,12 +110,14 @@ pub fn classify(s: &str) -> Class {
 
 /// Rewrite a `Lower` or `Upper` identifier in CamelCase; `Camel` is unchanged.
 ///
-/// The first cased character after a run of underscores is upper-cased and
-/// every other cased character, the leading one included, is lower-cased.  A
-/// run of underscores followed by a cased character gives up exactly one
-/// underscore, its word separator, and keeps the rest, so `a_b` becomes `aB`
-/// and `a__b` becomes `a_B`; an underscore not followed by a cased character
-/// (before a digit, before an inert character, or at the end) is kept as it is.
+/// A cased character immediately preceded by an underscore is upper-cased and
+/// every other cased character, the leading one included, is lower-cased: `a`
+/// stays `a`, `_a` becomes `_A`, and `__3a` is unchanged because the digit is
+/// what precedes the `a`.  A run of underscores followed by a cased character
+/// gives up exactly one underscore, its word separator, and keeps the rest, so
+/// `a_b` becomes `aB` and `a__b` becomes `a_B`; an underscore not followed by
+/// a cased character (before a digit, before an inert character, or at the
+/// end) is kept as it is.
 pub fn to_camel(s: &str) -> String {
     if classify(s) == Class::Camel {
         return s.to_string();
@@ -256,6 +258,9 @@ mod tests {
             ("A_B", "aB"),
             ("_ABC", "Abc"),
             ("__a", "_A"),
+            ("__3a", "__3a"),
+            ("_3a", "_3a"),
+            ("a__3b", "a__3b"),
             ("get_user_name", "getUserName"),
             ("fooBar", "fooBar"),
         ] {

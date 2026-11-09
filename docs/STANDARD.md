@@ -251,9 +251,10 @@ A cased character is **upper** when it equals its own upper-case form, and
 upper ones and no lower one, and `camel` when it has both.  To convert a `lower`
 or `upper` identifier:
 
-* every cased character becomes lower case, **except** the first cased
-  character after a run of underscores, which becomes upper case — including
-  when the run is at the start, so the leading character is not capitalised;
+* every cased character becomes lower case, **except** one immediately
+  preceded by an underscore, which becomes upper case: `a` stays `a`, `_a`
+  becomes `_A`, and `__3a` is unchanged, because the digit is what precedes
+  the `a`;
 * a run of underscores that precedes a cased character gives up exactly one
   underscore, the word separator, and keeps the rest: `a_b` → `aB`,
   `a__b` → `a_B`; a run not followed by a cased character — before a digit,
