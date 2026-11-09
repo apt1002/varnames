@@ -71,7 +71,7 @@ The experimental strategy is as follows:
 - **Build a corpus** — harvest identifiers from ten ecosystems and union them;
   see [`docs/CORPUS.md`](docs/CORPUS.md). The shipped corpus is ASCII-only;
   what that leaves out is measured in [`docs/UNICODE.md`](docs/UNICODE.md).
-  Your own corpus may use any unicode characters.
+  Your own corpus may use any Unicode characters.
 - **Case-normalise it** — split into lower_case / UPPER_CASE / CamelCase,
   convert the first two to CamelCase, merge and de-duplicate. On the current
   union that is 4,441,974 identifiers in, 4,226,707 out; normalisation makes
@@ -329,7 +329,6 @@ varnames/
 │   ├── model_budget.py                  # model size in bytes (word list + tables)
 │   ├── model_size.py                    # the size oracle: pack, decode, price the model
 │   ├── rule_encoding.py                 # the rule-pair encoding grid (docs/RULE_ENCODING.md)
-│   ├── depth_bias.py                    # why the depth bias is searched, not computed
 │   ├── frontier_plot.py                 # draw docs/frontier.svg from the frontier table
 │   ├── wordlist_order.py                # creation order vs unigram order in a built list
 │   ├── model_fit_rates.py               # held-out fit rates; cost of quantising the tables
