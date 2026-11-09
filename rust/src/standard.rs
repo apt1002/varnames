@@ -14,8 +14,8 @@ use crate::codec::Codec;
 use crate::model::Model;
 use crate::{sha256, Error};
 
-/// The standard model of `docs/STANDARD.md`, built at `V = 8191`, `k = 32`,
-/// `q = 1` (`docs/MODEL_FORMAT.md` §3).
+/// The standard model of `standard/STANDARD.md`, built at `V = 8191`, `k = 32`,
+/// `q = 1` (`standard/MODEL_FORMAT.md` §3).
 pub static MODEL_BYTES: &[u8] = include_bytes!("../data/model.nvm1");
 
 /// SHA-256 of [`MODEL_BYTES`].

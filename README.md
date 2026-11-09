@@ -58,10 +58,10 @@ in this repo are the tools we used to study the statistics and to come up with a
 simple, compact model that can form the basis of the standard.
 
 The model itself is a portable `.nvm1` file, whose format is specified in
-[`docs/MODEL_FORMAT.md`](docs/MODEL_FORMAT.md). The proposed standard
-[`docs/STANDARD.md`](docs/STANDARD.md) includes a `.nvm1` file trained on ASCII
-identifiers. A corpus of your own can be turned into a `.nvm1` file with
-`scripts/build_tables.py`; see [`docs/BUILDING.md`](docs/BUILDING.md).
+[`standard/MODEL_FORMAT.md`](standard/MODEL_FORMAT.md). The proposed standard
+[`standard/STANDARD.md`](standard/STANDARD.md) includes a `.nvm1` file trained
+on ASCII identifiers. A corpus of your own can be turned into a `.nvm1` file
+with `scripts/build_tables.py`; see [`docs/BUILDING.md`](docs/BUILDING.md).
 This would be useful for Lisp, Forth or Javascript, for example, all of which
 have unusually liberal definitions of an identifier. We ship two
 standard-compliant implementations that consume `.nvm1` files: a reference one
@@ -273,13 +273,11 @@ varnames/
 │   ├── CODING_OVERHEAD.md               # words per identifier + Huffman vs arithmetic
 │   ├── RUN_LENGTHS.md                   # typical run lengths (maximal repeated-character runs)
 │   ├── MODEL_BUDGET.md                  # model size in bytes, word list included
-│   ├── MODEL_FORMAT.md                  # the portable YAML model + its binary form
 │   ├── RULE_ENCODING.md                 # encoding the rule list: the pair/code grid
 │   ├── frontier.svg                     # the size-versus-fit scatter plot
 │   ├── factor-cloud.png                 # the words as two clouds, coloured by cluster
 │   ├── BUDGET64_STUDY.md                # the 64-/128-bit identifier sets
 │   ├── ENCODING.md                      # the encoding: stop token, published tables
-│   ├── STANDARD.md                      # the proposed standard: code, sets, tables
 │   ├── BUILDING.md                      # build your own tables: one command, and its cost
 │   ├── CLUSTER_QUARTERS.md              # the quarter code: q right clusters per left
 │   ├── CODESIGN.md                      # codesign the assignment and the code (a sketch)
@@ -374,11 +372,14 @@ varnames/
 │   │   └── bin/varnames.rs              # the CLI
 │   ├── data/model.nvm1                  # the same tables, compiled in
 │   ├── data/case-pairs.txt              # the same pairs, compiled in
-│   └── tests/golden.txt                 # 250 identifiers + codes, read by both ports
-├── standard/
+│   └── tests/                           # unit tests + the golden-file conformance test
+├── standard/                            # the standard: two documents, four tables
+│   ├── STANDARD.md                      # the specification: code, sets, tables, §11 case
+│   ├── MODEL_FORMAT.md                  # the portable YAML model + its binary form
 │   ├── model.nvm1                       # the published model file
 │   ├── model.yaml                       # its human-readable form (MODEL_FORMAT.md §2)
-│   └── case-pairs.txt                   # the cased characters of STANDARD.md §11
+│   ├── case-pairs.txt                   # the cased characters of STANDARD.md §11
+│   └── golden.txt                       # 250 conformance vectors, read by both ports
 └── data/
     └── rubygems_versions.txt            # RubyGems compact index (regenerable)
 ```

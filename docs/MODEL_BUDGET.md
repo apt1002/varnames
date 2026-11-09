@@ -125,16 +125,17 @@ order" below), so the depth table carries whatever depth distribution the words
 happen to have.
 
 **Measured** (`scripts/model_size.py`): unbiased, the depth distribution is
-broad rather than peaked — at 8192/16 the word depths run from 0 (singletons) to
-23 — so a raw depth needs five bits.  The format does not store raw depths: it
-stores `d − d_min` per tree in a fixed four-bit field and recovers `d_min` from
-the Kraft equality ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3).  Four bits cover a
-span of 15, so the build biases the weights before the merge — *searched*, by
-doubling to bracket and then bisecting for the least value that holds every
-tree to that span (`MODEL_FORMAT.md` §3.1).  Measured, every tree on the grid
-fits the field: the operating point lands exactly on a span of 15, and 4096/16
-needs no bias at all.  The narrowing takes 1,156 B off the operating-point file
-while moving the fit rate by nothing and the mean bits by 0.001.
+broad rather than peaked — at 8192/16 the word depths run from 0 (singletons)
+to 23 — so a raw depth needs five bits.  The format does not store raw depths:
+it stores `d − d_min` per tree in a fixed four-bit field and recovers `d_min`
+from the Kraft equality ([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3).
+Four bits cover a span of 15, so the build biases the weights before the merge
+— *searched*, by doubling to bracket and then bisecting for the least value
+that holds every tree to that span (`MODEL_FORMAT.md` §3.1).  Measured, every
+tree on the grid fits the field: the operating point lands exactly on a span of
+15, and 4096/16 needs no bias at all.  The narrowing takes 1,156 B off the
+operating-point file while moving the fit rate by nothing and the mean bits by
+0.001.
 
 ## 4. Coding the child indices
 
@@ -191,10 +192,10 @@ which costs more than the kilobyte it saves.
 ### 5.1 The three tables, byte by byte
 
 **Measured**, not estimated: `scripts/model_size.py` writes the model, packs it
-in the layout of [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3 and reports each
-section, so every number below is a byte count from a file the decoder read
-back.  The columns are the shipped code, `q = 1`, so the map is `⌈log₂ k⌉` bits
-wide; the right-hand column is the operating point.
+in the layout of [`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3 and
+reports each section, so every number below is a byte count from a file the
+decoder read back.  The columns are the shipped code, `q = 1`, so the map is
+`⌈log₂ k⌉` bits wide; the right-hand column is the operating point.
 
 | object | who stores it | how | 4096/16 | 8192/16 | 8192/32 | derivable at load? |
 |---|---|---|---:|---:|---:|---|
@@ -451,11 +452,11 @@ model is no longer priced by formula anywhere in this note.
 
 1. `scripts/model_size.py` — the size **oracle**.  Build at `(V, k)`, write the
    YAML model, pack it to the binary form of
-   [`MODEL_FORMAT.md`](MODEL_FORMAT.md), report actual bytes per section, decode
-   held-out identifiers and assert losslessness, and report the code's real
-   bits/identifier from the decoded artefact.  The packing rule is the codec of
-   [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3, so the oracle and the published file
-   share one implementation.
+   [`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md), report actual bytes per
+   section, decode held-out identifiers and assert losslessness, and report the
+   code's real bits/identifier from the decoded artefact.  The packing rule is
+   the codec of [`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3, so the
+   oracle and the published file share one implementation.
 2. One **inventory table** in this note: object / who stores it / how / bytes at
    4096/16, 8192/16, 8192/32 / derivable at load?  §5.1 is it.
 3. The **depth store**: measure the depth span of every bottom and top tree on

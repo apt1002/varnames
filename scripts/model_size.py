@@ -3,7 +3,7 @@
 
 Every byte the budget quotes should come from this script rather than from a
 formula (`docs/MODEL_BUDGET.md` §7).  One run builds the model that the shipped
-format can express, writes it as the YAML of `docs/MODEL_FORMAT.md`, packs that
+format can express, writes it as the YAML of `standard/MODEL_FORMAT.md`, packs that
 YAML into the binary form of `MODEL_FORMAT.md` §3, reports the actual bytes per
 section, and then rounds held-out identifiers through the codes derived from the
 *packed* file alone.
@@ -1186,7 +1186,7 @@ def flat_report(args):
 # ------------------------------------------------------------- the report
 
 def self_test():
-    """The worked example of MODEL_FORMAT.md §5, end to end."""
+    """The worked example of `MODEL_FORMAT.md` §6, end to end."""
     m = dict(V=7, k=2, q=2, nchars=5, alphabet='abcde',
              rules=[(1, 2), (3, 4)],
              memberships=[0, 1, 2, 2, 2, 1, 3],

@@ -146,20 +146,20 @@ Start in left cluster 0. For each token:
    *bottom* tree;
 3. the symbol's left cluster becomes the current left cluster.
 
-The top tree of each left cluster has `k + 1` leaves: the `k` right clusters and
-a **zero-weight STOP leaf**. Finishing means writing the stop; because the stop
-has zero weight it is the deepest leaf and its codeword is all zeros, so the
-padding writes it for free and its length is never charged. The bottom trees
-have no terminator ([`ENCODING.md`](ENCODING.md) §2,
-[`MODEL_FORMAT.md`](MODEL_FORMAT.md) §1).
+The top tree of each left cluster has `k + 1` leaves: the `k` right clusters
+and a **zero-weight STOP leaf**. Finishing means writing the stop; because the
+stop has zero weight it is the deepest leaf and its codeword is all zeros, so
+the padding writes it for free and its length is never charged. The bottom
+trees have no terminator ([`ENCODING.md`](ENCODING.md) §2,
+[`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §1).
 
-Each tree is a Huffman tree built from the block masses, with a **bias**
-added to the leaf weights. The bias exists to keep every tree's depth span
-inside **four bits**; it is found by search rather than computed, because no
-closed form bounds a Huffman span, and it costs nothing measurable at the grid
-([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3.1). Depths alone determine the
-codewords: the all-zeros codeword is the first leaf at maximum depth and the
-rest follow in order, so the file stores no orientation and no code table.
+Each tree is a Huffman tree built from the block masses, with a **bias** added
+to the leaf weights. The bias exists to keep every tree's depth span inside
+**four bits**; it is found by search rather than computed, because no closed
+form bounds a Huffman span, and it costs nothing measurable at the grid
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3.1). Depths alone determine
+the codewords: the all-zeros codeword is the first leaf at maximum depth and
+the rest follow in order, so the file stores no orientation and no code table.
 
 Finally the code is placed in the low bits of the integer and the high bits are
 left zero. The trailing zeros of the last codeword are not stored either, which
@@ -177,16 +177,16 @@ There is nothing to check and nothing to back-track: the code is prefix-free
 within each tree, and the canonical form makes the map injective. A decoder
 that ignores bits above the last symbol it read is correct, which is why the
 standard puts the "write zeros" rule on the encoder
-([`STANDARD.md`](STANDARD.md) §4).
+([`STANDARD.md`](../standard/STANDARD.md) §4).
 
 ## 10. The file
 
 The model is one binary file with eight sections, all little-endian and
 byte-packed with no padding: magic, header, the length of the rule list, the
 rules, the character alphabet, one membership per word, one depth per bottom
-leaf, and the top-stage depths. At the operating point that is **30,745 bytes**,
-SHA-256 `976670d7…` ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3,
-[`STANDARD.md`](STANDARD.md) §9).
+leaf, and the top-stage depths. At the operating point that is **30,745
+bytes**, SHA-256 `976670d7…` ([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md)
+§3, [`STANDARD.md`](../standard/STANDARD.md) §9).
 
 It stores no probabilities, no floating point and no code table: depths and
 rules are enough for every port to rebuild the same codes. A YAML rendering
@@ -227,7 +227,7 @@ points.
 4. **Canonicalise**: pack the bits low, leave the high bits zero.
 5. **Decode** by the same walk, treating padding zeros as the terminator.
 6. **Check** the model's digest before use, and treat a different digest as a
-   different model ([`STANDARD.md`](STANDARD.md) §9).
+   different model ([`STANDARD.md`](../standard/STANDARD.md) §9).
 
 A build that follows those steps and writes the eight sections is a conforming
 implementation; a corpus of your own can be turned into such a file with one

@@ -36,7 +36,8 @@ cluster owns `q` of them, which is why the next left cluster is the right
 cluster divided by `q`.  `q` is the number of right clusters per left cluster.
 It is 1 in the standard — one right cluster to a left cluster, so the two
 stages read the same label — but the format carries it, and
-[`CLUSTER_QUARTERS.md`](CLUSTER_QUARTERS.md) measures what `q > 1` buys.
+[`CLUSTER_QUARTERS.md`](../docs/CLUSTER_QUARTERS.md) measures what `q > 1`
+buys.
 
 The file contains exactly what that algorithm needs, and nothing else:
 
@@ -52,7 +53,7 @@ The trees are stored as the depth of each leaf in label order, and a membership
 table says which words belong to which bottom tree.  That is all a decoder
 needs: the codewords are canonical from the depths, so no code table is
 stored.  The storage is §3, and its cost in bytes is
-[`MODEL_BUDGET.md`](MODEL_BUDGET.md).
+[`MODEL_BUDGET.md`](../docs/MODEL_BUDGET.md).
 
 A model is a **code, not a statistic**: no counts, no unigram, no corpus
 fingerprint.  Everything the decoder needs is either in the file or derivable
@@ -157,15 +158,16 @@ one.  That shift is the whole of `to_file_id` in `scripts/model_size.py`.
    they carry no terminator.
 
 The canonical codes then follow from the depths by the rule in
-[`ENCODING.md`](ENCODING.md) §3, in one form for both stages: **the all-zeros
-codeword belongs to the first leaf at the maximum depth**, the remaining codes
-are handed out in *ascending* depth order from the top of the code space (the
-mirror image of the usual DEFLATE convention), and within a depth the leaves
-ascend by label.  Invariant 7 is what makes the first leaf at the maximum depth
-be the terminator, so neither the encoder nor the decoder needs an orientation
-table.  The identifier **starts in left cluster 0** — a convention, so it is not
-stored; the build picks the left cluster whose top tree codes the first-token
-distribution cheapest and renumbers the labels so that one is 0.
+[`ENCODING.md`](../docs/ENCODING.md) §3, in one form for both stages: **the
+all-zeros codeword belongs to the first leaf at the maximum depth**, the
+remaining codes are handed out in *ascending* depth order from the top of the
+code space (the mirror image of the usual DEFLATE convention), and within a
+depth the leaves ascend by label.  Invariant 7 is what makes the first leaf at
+the maximum depth be the terminator, so neither the encoder nor the decoder
+needs an orientation table.  The identifier **starts in left cluster 0** — a
+convention, so it is not stored; the build picks the left cluster whose top
+tree codes the first-token distribution cheapest and renumbers the labels so
+that one is 0.
 
 ## 3. The binary form
 
@@ -341,16 +343,16 @@ adopted encoding is 20,925 B for the shipped list (10.298 bits per child); the
 fixed field costs 24,492 B, the variable field 22,948 B, and the best
 pair-combining scheme 21,162 B (Triangle) or 21,458 B (Square).
 
-The grid that chose it — three pairings crossed with eight number codes, `b` from
-2 to 5, three bases, and the narrow and wide readings of the index formula — is
-[`RULE_ENCODING.md`](RULE_ENCODING.md).  Two of its conclusions are worth
-repeating here because they are about *this* code.  First, the ladder is
-**static**: the only thing computed at load is eight integer divisions.  Second,
-it is within 5 % of the pooled entropy of the child-index stream (9.80
+The grid that chose it — three pairings crossed with eight number codes, `b`
+from 2 to 5, three bases, and the narrow and wide readings of the index formula
+— is [`RULE_ENCODING.md`](../docs/RULE_ENCODING.md).  Two of its conclusions
+are worth repeating here because they are about *this* code.  First, the ladder
+is **static**: the only thing computed at load is eight integer divisions.
+Second, it is within 5 % of the pooled entropy of the child-index stream (9.80
 bits/child, 19,916 B), and a code that reached that limit would have to store
 the empirical distribution, which costs more than the kilobyte it saves.  The
-arithmetic coder the format used to carry measured 21,109 B; the ladder is 184 B
-better and needs no arithmetic coder at all.
+arithmetic coder the format used to carry measured 21,109 B; the ladder is 184
+B better and needs no arithmetic coder at all.
 
 ## 5. What the file deliberately omits
 
@@ -423,6 +425,6 @@ label per symbol.  Naming a right cluster by a *position* in the tree does not
 work: a position marks a boundary in the tree's leaf order, so it names a
 contiguous block of leaves, and the right clusters are whatever the build was
 left with when it stopped merging — the survivors, which are not a run of
-leaves.  So the label is the price of an arbitrary grouping.  What that price is
-worth, and why one map serves both stages, is measured in
-[`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md).
+leaves.  So the label is the price of an arbitrary grouping.  What that price
+is worth, and why one map serves both stages, is measured in
+[`SHARED_CLUSTERS.md`](../docs/SHARED_CLUSTERS.md).

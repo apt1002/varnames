@@ -24,6 +24,25 @@ A string containing a character outside the alphabet is outside the domain:
 encoding it is an error, not a longer code.  A hash fallback for such strings
 is *out of scope* (§10).
 
+### The files of this standard
+
+The standard is the directory `standard/` of this repository and nothing else:
+two documents and four published files.  No other file is needed to build a
+conforming implementation, and no other file may override one of these.
+
+| file | what it is | status |
+|---|---|---|
+| `STANDARD.md` | this document | normative |
+| `MODEL_FORMAT.md` | the byte layout, and the readable schema | §§2–4 by reference |
+| `model.nvm1` | the model, `V = 8191`, `k = 32`, `q = 1`, 30,745 B | normative for the bytes (§9) |
+| `model.yaml` | the same model, readable | normative for the meaning (§9) |
+| `case-pairs.txt` | the 266 cased characters of §11 | normative for the mapping |
+| `golden.txt` | 250 conformance vectors: name, code, bits | informative (§12) |
+
+Both implementations ship byte-for-byte copies of the model and of the pairs,
+check the model's digest before using it, and test that their copy of the pairs
+is the published file (§9).
+
 ## 2. The model
 
 A model is a file of five tables.  Their byte layout is normative in
@@ -142,11 +161,11 @@ The sets are read off the encoder rather than tabulated:
 * the **64-bit set** is the identifiers whose canonical code has `L ≤ 64`;
 * the **128-bit set** is the identifiers whose canonical code has `L ≤ 128`.
 
-Membership is a property of the identifier and the model, not of a second table.
-Codes longer than 128 bits exist — the corpus contains them — and they are
-outside both sets, not errors: the code is a bit string of any length, and the
-two sets are the subset that fits a machine word.  The measured fit rates are in
-[`BUDGET64_STUDY.md`](BUDGET64_STUDY.md).
+Membership is a property of the identifier and the model, not of a second
+table. Codes longer than 128 bits exist — the corpus contains them — and they
+are outside both sets, not errors: the code is a bit string of any length, and
+the two sets are the subset that fits a machine word.  The measured fit rates
+are in [`BUDGET64_STUDY.md`](../docs/BUDGET64_STUDY.md).
 
 ## 8. Conformance
 
@@ -192,9 +211,14 @@ and the rule list.
   the digest above before it uses them.
 * The **case pairs** of §11 are published as `standard/case-pairs.txt`: 266
   pairs, `upper lower`, one per line, 1,937 bytes, SHA-256
-  `fe4f29facc43e72b8bd263a31712013d58b3a0b29acce595b05a5cf0134f972c`.  Like the model it is copied
-  into `python/varnames/data/` and `rust/data/`, and a test in each
-  implementation asserts that its copy is the published file.
+  `fe4f29facc43e72b8bd263a31712013d58b3a0b29acce595b05a5cf0134f972c`.  Like
+  the model it is copied into `python/varnames/data/` and `rust/data/`, and a
+  test in each implementation asserts that its copy is the published file.
+* The **conformance vectors** of §12 are published as `standard/golden.txt`:
+  250 identifiers with their exact integer and bit length, 8,935 bytes,
+  SHA-256 `bf2481b8acf2c941b8413ca37b591e83e7ba9820f187d44d62b385faf178ccb9`.
+  They are informative: a vector that disagrees with a conforming model means
+  the model, not the vector.
 * The published tables are `CC0-1.0`, the code and specification
   `MIT OR Apache-2.0`.
 
@@ -217,8 +241,8 @@ different files will not agree; the digest is how they find out.
   hosts decide them differently: Python and Rust merge the two spellings of
   `café`, GCC and Perl keep them apart, Java's specification says they are
   different identifiers and C#'s requires source identifiers to be NFC already
-  ([`UNICODE.md`](UNICODE.md) §11).  There is no single answer to adopt, so a
-  caller that cares normalises before encoding.
+  ([`UNICODE.md`](../docs/UNICODE.md) §11).  There is no single answer to
+  adopt, so a caller that cares normalises before encoding.
 * Table-building.  How a word list, an assignment and a set of depths are
   produced from a corpus is engineering, not interoperability.
 * Compression of the model file itself.  It is 30,745 bytes, published once,
@@ -284,7 +308,7 @@ further line in it.
 
 ## 12. Test vectors
 
-`rust/tests/golden.txt` holds 250 identifiers with their exact integer and bit
+`golden.txt` (§9) holds 250 identifiers with their exact integer and bit
 length.  Both implementations in this repository read that file, so it pins
 them to each other; a third implementation can do the same.  The first lines:
 

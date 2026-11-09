@@ -4,7 +4,7 @@
 use varnames::{standard, Codec, Error, Model};
 
 /// `name value bits`, one per line, produced by the reference implementation.
-const GOLDEN: &str = include_str!("golden.txt");
+const GOLDEN: &str = include_str!("../../standard/golden.txt");
 
 fn rows() -> impl Iterator<Item = (&'static str, Option<u128>, usize)> {
     GOLDEN.lines().filter(|line| !line.trim().is_empty()).map(|line| {

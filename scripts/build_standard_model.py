@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the standard model file that the two implementations ship.
 
-The standard is the one model of `docs/MODEL_FORMAT.md` §7: a pair-merge
+The standard is the one model of `MODEL_FORMAT.md` §7: a pair-merge
 dictionary of `V = 8,191` symbols, `k = 32` clusters, `q = 1`, built from the
 corpus in `work/tw8192ns` at `kappa = 300`, seed 1.  This script writes it, the
 YAML beside it for human reading, and a checksum, so that the shipped bytes can

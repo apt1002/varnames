@@ -148,7 +148,7 @@ Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
       `docs/BUDGET64_STUDY.md`.
 - [x] **E6. Propose a standard.** *Drafted (version 0.1): the code, the two
       sets, conformance, and how the tables are published and identified.*
-      `docs/STANDARD.md`.
+      `standard/STANDARD.md`.
 - [x] **E7. Reference implementation (Python).** *Done — a package, not a
       script: `pip install .`, a `varnames` console script, tests, and the
       held-out rate reproduced exactly (45.218 bits, 85.0 % / 99.0 %).*
@@ -157,8 +157,8 @@ Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
       dependencies; the standard tables are compiled in and digest-checked; the
       CLI mirrors the Python one.*  `rust/`.
 - [x] **E9. Standard vs custom tables.** *Done — `Codec(Model.from_path(p))`
-      and `--model PATH` on both sides; the digest is how a deployment finds out
-      it is not on the standard.*  `docs/STANDARD.md` §9.
+      and `--model PATH` on both sides; the digest is how a deployment finds
+      out it is not on the standard.*  `standard/STANDARD.md` §9.
 - [x] **E10. Publish table-building tools.** *Done — one command from a corpus
       to a `model.nvm1`, priced stage by stage; run over the full corpus it
       reproduces the shipped file byte for byte, digest and all.*
@@ -191,13 +191,13 @@ Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
       `docs/MODEL_BUDGET.md` §5–§7.
 - [x] **H12. Encode and decode the model file.** *Done for the shipped
       layout; the published table-building tool is E10.*
-      `docs/MODEL_FORMAT.md`.
+      `standard/MODEL_FORMAT.md`.
 - [x] **H13. Choose the encoding of the rule list.** *Done — a static
       base-2 geometric ladder, `b = 3`, on two child indices.*
-      `docs/RULE_ENCODING.md`, `docs/MODEL_FORMAT.md` §4.
+      `docs/RULE_ENCODING.md`, `standard/MODEL_FORMAT.md` §4.
 - [x] **H14. A 4-bit depth field by biasing the weights.** *Adopted — a
       searched bias, the offset recovered from Kraft.*
-      `docs/MODEL_FORMAT.md` §3.1.
+      `standard/MODEL_FORMAT.md` §3.1.
 - [x] **H15. Retire the arithmetic *sizes*, keep the arithmetic *argument*.**
       *Done — and the distinction is the point.*  `MODEL_BUDGET.md` prices the
       Huffman file only, and the frontier there is measured.  `CODING_OVERHEAD.md`

@@ -179,11 +179,12 @@ reaches 88.4 % for 420,361 B. Rejected on bytes
 most direct description of the model, and a `k·V` table at `V = 8,192` is 67 MB
 of numbers. Publishing the *code* — depths and canonical codewords — is a few
 kilobytes and needs no floating-point arithmetic in the decoder to reproduce
-([`ENCODING.md`](ENCODING.md) §3, [`MODEL_FORMAT.md`](MODEL_FORMAT.md) §2).
+([`ENCODING.md`](ENCODING.md) §3,
+[`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §2).
 
 **A hash fallback for the identifiers that do not fit.** Sensible in a
 deployment, but it is not part of the bijection and it is not specified here
-([`STANDARD.md`](STANDARD.md) §10).
+([`STANDARD.md`](../standard/STANDARD.md) §10).
 
 **Case conversion for further scripts.**  Latin-1, Latin Extended-A and
 Cyrillic give 240 pairs and six inert letters for the two scripts whose words
@@ -203,8 +204,9 @@ line stays where it is ([`UNICODE.md`](UNICODE.md) §5, §11).
 
 **YAML alone.** The YAML form is readable and diffable, and it is shipped
 alongside the binary as `model.yaml`. As the file itself it is **182,507 B
-against 30,745 B**, and a decoder that parses YAML needs a parser in every port.
-Rejected as the delivery form ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3).
+against 30,745 B**, and a decoder that parses YAML needs a parser in every
+port. Rejected as the delivery form
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3).
 
 **Compressing the YAML with a general-purpose compressor.** The YAML is plain
 text (182,507 B), and a compressor could carry it without anyone writing a
@@ -216,13 +218,14 @@ compressor is **2.9 kB — 9.5 % — larger**, and it still has to be decompress
 and parsed. The reason is the one that runs through this file: the YAML spends
 its bytes on text where the packed form spends bits — decimal digits,
 indentation, repeated labels — and a compressor cannot undo a representation it
-did not choose ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3).
+did not choose ([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3).
 
 **Five-bit depths.** Storing the true Huffman depths costs five bits per leaf;
 four suffice once a bias flattens the trees, and the bias is found by search
-because no closed form bounds a Huffman span. Five bits would take the file from
-**30,745 B to 31,901 B** — 1,156 B, 3.6 % — with no change in fit. The four-bit
-field and its bias are what ship ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3.1).
+because no closed form bounds a Huffman span. Five bits would take the file
+from **30,745 B to 31,901 B** — 1,156 B, 3.6 % — with no change in fit. The
+four-bit field and its bias are what ship
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3.1).
 
 ## What this list is not
 

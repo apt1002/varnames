@@ -85,7 +85,7 @@ python3 -m unittest discover -s tests
 
 The suite includes `test_held_out_rate`, which walks the held-out corpus and
 checks the measured 45.218 bits per identifier, 85.0 % within 64 bits and
-99.0 % within 128 bits.  `tests/golden.txt` in the Rust crate pins the two
+99.0 % within 128 bits.  `standard/golden.txt` pins the two
 implementations to the same codes.
 
 ## Licence

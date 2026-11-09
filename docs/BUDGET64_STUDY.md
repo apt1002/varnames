@@ -4,8 +4,8 @@ Status: **results at the shipped model.**  What fraction of real identifiers
 the two budgets cover, where the boundary lies in *character* length, what kind
 of identifier fails, and what a random integer of the set decodes to — all
 measured by encoding and decoding with the packed standard file
-([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3), not with an arithmetic transition
-standing in for it.
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3), not with an arithmetic
+transition standing in for it.
 
 ## Setup
 

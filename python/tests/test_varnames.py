@@ -24,7 +24,7 @@ PACKAGE = os.path.dirname(HERE)
 ROOT = os.path.dirname(PACKAGE)
 MODEL = os.path.join(PACKAGE, "varnames", "data", "model.nvm1")
 VALIDATION = os.path.join(ROOT, "work", "camel", "merged_validation.txt")
-GOLDEN = os.path.join(ROOT, "rust", "tests", "golden.txt")
+GOLDEN = os.path.join(ROOT, "standard", "golden.txt")
 CASE_PAIRS = os.path.join(ROOT, "standard", "case-pairs.txt")
 CASE_COPIES = [os.path.join(PACKAGE, "varnames", "data", "case-pairs.txt"),
                os.path.join(ROOT, "rust", "data", "case-pairs.txt")]

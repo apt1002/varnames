@@ -16,10 +16,10 @@ extractor blanks any run that touches a non-ASCII byte before tokenising, so
 ([`extract.py`](../scripts/extract.py)). The shipped model therefore carries a
 63-character alphabet, and an identifier written in Cyrillic, Han, kana or
 accented Latin cannot be coded at all — it has to fall through to the hash
-fallback ([`STANDARD.md`](STANDARD.md) §10).
+fallback ([`STANDARD.md`](../standard/STANDARD.md) §10).
 
 Nothing in the **format** forces this.  The alphabet is a list of characters
-stored as UTF-8 ([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3), and
+stored as UTF-8 ([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3), and
 `build_tables.py` takes its alphabet from every character in the corpus, so a
 corpus of your own may contain any of these names: they get ids, rules and
 codewords like ASCII ones.  What a non-ASCII alphabet costs is bytes — two a
@@ -219,8 +219,8 @@ character-only model (`MODEL_FORMAT.md` §2).
 
 The exclusion costs coverage only at the margin: identifiers the model cannot
 code fall through to the hash fallback, so nothing becomes unencodable, at the
-price of a lookup entry ([`STANDARD.md`](STANDARD.md) §10). The compression
-claim is about the other 99.99 %.
+price of a lookup entry ([`STANDARD.md`](../standard/STANDARD.md) §10). The
+compression claim is about the other 99.99 %.
 
 ## 10. Reproducing the scan
 

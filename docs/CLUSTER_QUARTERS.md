@@ -110,11 +110,11 @@ a terminator inside it.  Refining the word tree also refined the terminator's
 cost, and that was the bulk of the gain.
 
 With the terminator on the top stage's zero-weight STOP leaf
-([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §§1–3) both codes get the end of the
-identifier for free, and what remains is the word-stage granularity the quarters
-actually buy: 0.12 bits.  The lesson generalises past this note — an accounting
-that charges a terminator to the word step will over-reward every scheme that
-refines the word step.
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §§1–3) both codes get the end
+of the identifier for free, and what remains is the word-stage granularity the
+quarters actually buy: 0.12 bits.  The lesson generalises past this note — an
+accounting that charges a terminator to the word step will over-reward every
+scheme that refines the word step.
 
 ## The claim that survives: it refines one side only
 

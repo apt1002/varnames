@@ -1,4 +1,4 @@
-"""Reading the ``NVM1`` model file of ``docs/MODEL_FORMAT.md``.
+"""Reading the ``NVM1`` model file of ``standard/MODEL_FORMAT.md``.
 
 A model is a word list (a pair-merge dictionary), one depth table for the word
 trees and one for the cluster trees, plus the membership map.  Everything else

@@ -1,17 +1,18 @@
 # The encoding
 
 Status: **settled and shipped.**  This collects what the encoding has to do,
-the argument for publishing a *code* rather than a *table of probabilities*, and
-the extensions that leave the encoding alone.  The three questions it used to
-leave open are closed: the standard ships one model, fixing `V`, `k` and `q`,
-and the file is specified and measured in
-[`MODEL_FORMAT.md`](MODEL_FORMAT.md) §3 (30,745 bytes at `V = 8,191`,
-`k = 32`, `q = 1`) and proposed in [`STANDARD.md`](STANDARD.md); the
-reserved stop clusters are rejected (`NEWLINE_CLUSTER.md`); and the canonical
-integer is a requirement on the encoder (§1), not something the decoder checks.
-Measurements that bear on it live in `CODING_OVERHEAD.md` (Huffman vs
-arithmetic), `CLUSTER_WORDS.md` (the factorised block model) and
-`MODEL_BUDGET.md` (what a table costs in bytes).
+the argument for publishing a *code* rather than a *table of probabilities*,
+and the extensions that leave the encoding alone.  The three questions it used
+to leave open are closed: the standard ships one model, fixing `V`, `k` and
+`q`, and the file is specified and measured in
+[`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §3 (30,745 bytes at
+`V = 8,191`, `k = 32`, `q = 1`) and proposed in
+[`STANDARD.md`](../standard/STANDARD.md); the reserved stop clusters are
+rejected (`NEWLINE_CLUSTER.md`); and the canonical integer is a requirement on
+the encoder (§1), not something the decoder checks. Measurements that bear on
+it live in `CODING_OVERHEAD.md` (Huffman vs arithmetic), `CLUSTER_WORDS.md`
+(the factorised block model) and `MODEL_BUDGET.md` (what a table costs in
+bytes).
 
 ## 1. What the encoding has to do
 
@@ -45,11 +46,11 @@ Every binary tree has exactly one leaf whose codeword is all zeros — follow th
 `0` branch from the root until a leaf is reached.  A tree's orientation can put
 any leaf there, and the published model cannot store one bit of orientation: it
 stores depths, and the codewords are canonical from them
-([`MODEL_FORMAT.md`](MODEL_FORMAT.md) §2).  So the orientation is fixed by a
-convention instead — **the all-zeros codeword is the first leaf at the maximum
-depth**, the rest being handed out from the far end of the code space — and the
-build puts the leaf it wants there by giving it **zero weight**, which makes it
-the deepest.  Then:
+([`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md) §2).  So the orientation is
+fixed by a convention instead — **the all-zeros codeword is the first leaf at
+the maximum depth**, the rest being handed out from the far end of the code
+space — and the build puts the leaf it wants there by giving it **zero
+weight**, which makes it the deepest.  Then:
 
 1. **Termination is unambiguous.**  No other codeword starts with the stop's
    codeword `0^l` (the code is prefix-free), so `l` zeros can only mean "stop".
@@ -300,10 +301,10 @@ only the label space, the second only which labels exist.
 One model, one file.  The standard is a single `NVM1` file of 30,745 bytes at
 `V = 8,191`, `k = 32`, `q = 1`, built from the `work/tw8192ns` dictionaries at
 `kappa = 300` and seed 1, and it is the default in both implementations
-([`STANDARD.md`](STANDARD.md); the section table is `MODEL_FORMAT.md` §3).
-Nothing about the encoding depends on those numbers: a custom file with another
-`V` or `k` decodes by the same rules, which is what a private table is for
-([`STANDARD.md`](STANDARD.md) §9).
+([`STANDARD.md`](../standard/STANDARD.md); the section table is
+`MODEL_FORMAT.md` §3). Nothing about the encoding depends on those numbers: a
+custom file with another `V` or `k` decodes by the same rules, which is what a
+private table is for ([`STANDARD.md`](../standard/STANDARD.md) §9).
 
 The file is identified by its SHA-256,
 `976670d71a1273a2506bb537183c4854523bec20eb0b2c9708b5934adbef3f79`, and both

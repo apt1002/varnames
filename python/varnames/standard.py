@@ -12,7 +12,7 @@ import threading
 from .codec import Codec
 from .model import Model
 
-#: SHA-256 of ``data/model.nvm1``, the standard model of ``docs/STANDARD.md``.
+#: SHA-256 of ``data/model.nvm1``, the standard model of ``standard/STANDARD.md``.
 STANDARD_SHA256 = (
     "976670d71a1273a2506bb537183c4854523bec20eb0b2c9708b5934adbef3f79")
 

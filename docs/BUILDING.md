@@ -7,12 +7,13 @@ each stage costs, and what is deliberately left out.
 ## Who this is for
 
 You want your own corpus, or your own `V` and `k`, and you do **not** want to
-change the file format. The format is [`MODEL_FORMAT.md`](MODEL_FORMAT.md), the
-code and the sets are [`STANDARD.md`](STANDARD.md), and a model built from
-another corpus is a *custom* model by §9 of it: a different file with a
-different digest, which is exactly how a deployment finds out it is not on the
-standard. (Run on the corpus below it builds the standard itself, which is the
-last section of this note.)
+change the file format. The format is
+[`MODEL_FORMAT.md`](../standard/MODEL_FORMAT.md), the code and the sets are
+[`STANDARD.md`](../standard/STANDARD.md), and a model built from another corpus
+is a *custom* model by §9 of it: a different file with a different digest,
+which is exactly how a deployment finds out it is not on the standard. (Run on
+the corpus below it builds the standard itself, which is the last section of
+this note.)
 
 ## The command
 
@@ -118,7 +119,7 @@ the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
   your own needs nothing from that section.
 * **Changing the format.** The file is the standard; adding a section or a
   symbol is a new version of it, not a build option
-  ([`STANDARD.md`](STANDARD.md) §9).
+  ([`STANDARD.md`](../standard/STANDARD.md) §9).
 * **Non-ASCII identifiers.** The tool reads UTF-8 and takes its alphabet from
   every character in the corpus, so a corpus of your own may contain accented
   Latin, Cyrillic, Greek, Han or anything else; the alphabet is stored as UTF-8

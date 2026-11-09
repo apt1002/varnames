@@ -55,8 +55,8 @@ let bytes = std::fs::read("tables/model.nvm1")?;
 let codec = Codec::new(Model::from_bytes(&bytes)?);
 ```
 
-The model file is the same one the Python package reads; `docs/MODEL_FORMAT.md`
-is the specification.
+The model file is the same one the Python package reads;
+`standard/MODEL_FORMAT.md` is the specification.
 
 ## Testing
 
@@ -64,7 +64,7 @@ is the specification.
 cargo test
 ```
 
-`tests/golden.txt` holds 250 identifiers with their codes, produced by the
+`standard/golden.txt` holds 250 identifiers with their codes, produced by the
 Python reference implementation.  Both implementations read that file, so the
 two cannot drift apart silently.  The crate also checks the digest of its
 embedded tables against `standard::STANDARD_SHA256`.
