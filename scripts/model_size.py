@@ -58,6 +58,7 @@ import codecs
 import json
 import os
 import sys
+import tempfile
 
 import numpy as np
 
@@ -686,8 +687,10 @@ def build_model(directory, k, q, kappa=300.0, seed=1, shared=True,
 
 def model_yaml(m):
     lines = ['format: varnames-model',
-             # json.dumps escapes non-ASCII, so the YAML stays a text file
-             # that any editor can open, whatever is in the alphabet.
+             # A JSON string is a valid YAML double-quoted scalar, and
+             # json.dumps escapes everything above `~`: the published file
+             # stays ASCII, so no editor or renormalising filter can change
+             # which characters the alphabet means.
              f'alphabet: {json.dumps(m["alphabet"])}',
              f'left_clusters: {m["k"]}',
              f'right_clusters_per_left: {m["q"]}',
@@ -698,7 +701,9 @@ def model_yaml(m):
                                                for x in m['memberships']) + ']')
     lines.append('bottom_trees:')
     for J in range(m['k'] * m['q']):
-        ids = np.flatnonzero(m['memberships'] == J)
+        # `memberships` is an ndarray in a built model and a list in the
+        # self-test fixture, so index it rather than compare an array.
+        ids = [i for i, c in enumerate(m['memberships']) if c == J]
         lines.append('  - [' + ', '.join(str(int(m['bottom'][i]))
                                          for i in ids) + ']')
     lines.append('top_trees:')
@@ -716,7 +721,11 @@ def parse_flat_list(s):
 
 
 def read_yaml(path):
-    """An independent reader: reads the YAML back and checks the invariants."""
+    """An independent reader: reads the YAML back and checks the invariants.
+
+    The file is ASCII by policy (`model_yaml` escapes above U+007E), so a
+    `model.yaml` that is not ASCII is refused here rather than guessed at.
+    """
     with open(path, encoding='ascii') as f:
         lines = [l.rstrip('\n') for l in f]
     m = {}
@@ -1217,6 +1226,17 @@ def self_test():
     assert back_wide['alphabet'] == wide['alphabet']
     assert back_wide['nchars'] == 5
     assert sections_wide['alphabet'] == 10
+    # The YAML carries the same alphabet in JSON escapes and reads back:
+    # literal UTF-8 would also be legal YAML, but the published file is ASCII.
+    text = model_yaml(wide)
+    assert text.isascii(), text
+    fd, path = tempfile.mkstemp(suffix='.yaml')
+    try:
+        with os.fdopen(fd, 'w', encoding='ascii') as f:
+            f.write(text)
+        assert read_yaml(path)['alphabet'] == wide['alphabet']
+    finally:
+        os.unlink(path)
     print(f'self-test ok: {len(buf)} B packed, sections '
           + ', '.join(f'{k}={v}' for k, v in sections.items()
                       if not k.endswith('_bits')))

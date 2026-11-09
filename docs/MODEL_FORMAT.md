@@ -82,9 +82,18 @@ top_trees:                             # one tree per left cluster
 Every sequence is a YAML sequence of integers; the file is ASCII with LF
 newlines, two-space indentation, and no anchors, aliases, tags or maps other
 than the top level.  A writer may add comments and blank lines; a reader must
-ignore them.  `alphabet` is a JSON string, so a non-ASCII character is written
-as a `\u` escape and the YAML stays ASCII; the binary form is where UTF-8 is
-spelled out.
+ignore them.
+
+`alphabet` is a **double-quoted scalar written with JSON escapes**: a JSON
+string is a valid YAML double-quoted scalar, so `json.dumps` escapes quotes,
+backslashes and control characters correctly without a YAML writer in the
+loop.  A non-ASCII character is therefore written `\uXXXX` and the file stays
+ASCII; one that is not is refused, not guessed at.  That is a choice, not a
+constraint — YAML would accept literal UTF-8 here — made because this file is
+the normative statement of *meaning* (§1), and a literal character in a
+checked-in file is one that an editor or a filter that renormalises text can
+silently change; `\u00e9` cannot be renormalised.  The binary form is where
+UTF-8 is spelled out.
 
 The numbering is the **file's**, and only the file's is normative.  A build
 working on the corpus tokeniser's alphabet will number the characters `0 … 62`,
