@@ -8,7 +8,7 @@
 //! The reader is strict: every invariant the format states is checked, so a
 //! corrupt or truncated file fails at load rather than at decode.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::bitio::{BitReader, BitWriter};
 use crate::ladder::{ceil_log2, ladder_get, read_varint};
@@ -228,6 +228,23 @@ impl Model {
         if v != nchars + rules.len() as u32 {
             return Err(Error::Model("v is not the alphabet plus the rule list"));
         }
+        // `a != b` rejects a run word; the set rejects a second id for a word
+        // the file already defines, which the encoder's pair map cannot
+        // represent.  Both catch a rule stream read past its end: padding
+        // zeros decode as `(0, 0)`.
+        let mut seen = HashSet::with_capacity(rules.len());
+        for (i, &(a, b)) in rules.iter().enumerate() {
+            let n = nchars + i as u32;
+            if a >= n || b >= n {
+                return Err(Error::Model("a rule names a child that does not exist"));
+            }
+            if a == b {
+                return Err(Error::Model("a rule names the same child twice"));
+            }
+            if !seen.insert((a, b)) {
+                return Err(Error::Model("two rules name the same pair of children"));
+            }
+        }
         if memberships.len() as u32 != v {
             return Err(Error::Model("the membership map does not cover v"));
         }
@@ -343,9 +360,6 @@ impl Model {
             let n = nchars + i;
             let a = ladder_get(&mut reader, n);
             let b = ladder_get(&mut reader, n);
-            if a >= n || b >= n {
-                return Err(Error::Model("a rule names a child that does not exist"));
-            }
             rules.push((a, b));
         }
         pos = end;
@@ -553,8 +567,12 @@ mod tests {
     /// `k = q = 1`, alphabet `aé`.  Two characters, three bytes, so the
     /// header's `nchars` and the section's length have to differ.
     fn tiny_utf8_model() -> Vec<u8> {
+        tiny_utf8_model_with(&[(0u32, 1u32), (0, 2)])
+    }
+
+    fn tiny_utf8_model_with(pairs: &[(u32, u32)]) -> Vec<u8> {
         let mut rules = BitWriter::new();
-        for (i, &(a, b)) in [(0u32, 1u32), (0, 2)].iter().enumerate() {
+        for (i, &(a, b)) in pairs.iter().enumerate() {
             let n = 2 + i as u32;
             ladder_put(&mut rules, a, n);
             ladder_put(&mut rules, b, n);
@@ -612,5 +630,36 @@ mod tests {
         let start = 4 + 4 + 1 + 2; // magic, header, rules length, rules
         buf[start + 1] = 0xff; // the lead byte of é
         assert!(matches!(Model::from_bytes(&buf), Err(Error::Model(_))));
+    }
+
+    #[test]
+    fn a_rule_naming_one_child_twice_is_refused() {
+        let buf = tiny_utf8_model_with(&[(0, 0), (0, 2)]);
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model("a rule names the same child twice"))
+        ));
+    }
+
+    #[test]
+    fn a_repeated_rule_is_refused() {
+        let buf = tiny_utf8_model_with(&[(0, 1), (0, 1)]);
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model("two rules name the same pair of children"))
+        ));
+    }
+
+    #[test]
+    fn a_zero_filled_rule_stream_is_refused() {
+        // Read past its end, the ladder gives `(0, 0)` for every rule.
+        let mut buf = tiny_utf8_model();
+        let start = 4 + 4 + 1; // magic, the four header varints, the length
+        let end = start + 2; // the rule bytes of this fixture
+        buf[start..end].fill(0);
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model("a rule names the same child twice"))
+        ));
     }
 }

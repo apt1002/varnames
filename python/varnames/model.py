@@ -183,11 +183,7 @@ class Model:
         rules = []
         for i in range(V - nchars):
             N = nchars + i
-            a = ladder_get(reader, N)
-            b = ladder_get(reader, N)
-            if a >= N or b >= N:
-                raise ModelError(f"rule {i} names a child that does not exist")
-            rules.append((a, b))
+            rules.append((ladder_get(reader, N), ladder_get(reader, N)))
         pos += rules_len
 
         alphabet, used = _read_alphabet(buf, pos, nchars)
@@ -239,6 +235,20 @@ class Model:
     def _check(self):
         if self.V != self.nchars + len(self.rules):
             raise ModelError("V is not the alphabet plus the rule list")
+        seen = set()
+        for i, (a, b) in enumerate(self.rules):
+            N = self.nchars + i
+            if not (0 <= a < N and 0 <= b < N):
+                raise ModelError(f"rule {i} names a child that does not exist")
+            # `a != b` rejects a run word; `seen` rejects a second id for a
+            # word the file already defines, which the encoder's pair map
+            # cannot represent.  Both catch a rule stream that was read past
+            # its end: padding zeros decode as (0, 0).
+            if a == b:
+                raise ModelError(f"rule {i} names the same child twice")
+            if (a, b) in seen:
+                raise ModelError(f"rule {i} repeats an earlier rule")
+            seen.add((a, b))
         if len(self.memberships) != self.V:
             raise ModelError("the membership map does not cover V")
         if len(self.bottom) != self.V:

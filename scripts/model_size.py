@@ -776,8 +776,11 @@ def read_yaml(path):
         mx = max(tree)
         assert sum(1 << (mx - d) for d in tree) == 1 << mx, \
             f'top tree {L} is not complete'
+    seen = set()
     for i, (a, b) in enumerate(m['rules']):
         assert a != b and 0 <= a < nchars + i and 0 <= b < nchars + i
+        assert (a, b) not in seen, f'rule {i} repeats an earlier rule'
+        seen.add((a, b))
     bottom = np.zeros(V, dtype=np.int64)
     for J, tree in enumerate(m['bottom_trees']):
         ids = [i for i in range(V) if m['memberships'][i] == J]
@@ -807,12 +810,24 @@ def pack_rules(rules, V, nchars):
 
 
 def unpack_rules(buf, V, nchars):
-    """Read the ladder stream back into `V - nchars` index pairs."""
+    """Read the ladder stream back into `V - nchars` index pairs.
+
+    The checks are the readers' (`MODEL_FORMAT.md` §2, invariant 5): a child
+    must exist, a rule may not name one child twice, and no two rules may name
+    the same pair.  A stream read past its end looks like the last two, since
+    padding zeros decode as `(0, 0)`.
+    """
     br = BitReader(buf)
     rules = []
+    seen = set()
     for i in range(V - nchars):
         N = nchars + i
-        rules.append((ladder_get(br, N), ladder_get(br, N)))
+        a, b = ladder_get(br, N), ladder_get(br, N)
+        assert a < N and b < N, f'rule {i} names a child that does not exist'
+        assert a != b, f'rule {i} names the same child twice'
+        assert (a, b) not in seen, f'rule {i} repeats an earlier rule'
+        seen.add((a, b))
+        rules.append((a, b))
     return rules
 
 

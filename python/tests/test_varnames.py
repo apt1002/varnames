@@ -176,9 +176,9 @@ class TestUtf8Alphabet(unittest.TestCase):
     """
 
     @staticmethod
-    def fixture():
+    def fixture(rules=((0, 1), (0, 2))):
         bw = BitWriter()
-        for i, (a, b) in enumerate([(0, 1), (0, 2)]):
+        for i, (a, b) in enumerate(rules):
             N = 2 + i
             ladder_put(bw, a, N)
             ladder_put(bw, b, N)
@@ -225,6 +225,23 @@ class TestUtf8Alphabet(unittest.TestCase):
         buf = bytearray(self.fixture())
         buf[12] = 0xFF                          # the lead byte of é
         with self.assertRaises(ModelError):
+            Model.from_bytes(bytes(buf))
+
+    def test_a_rule_naming_one_child_twice_is_refused(self):
+        with self.assertRaisesRegex(ModelError, "same child twice"):
+            Model.from_bytes(self.fixture([(0, 0), (0, 2)]))
+
+    def test_a_repeated_rule_is_refused(self):
+        with self.assertRaisesRegex(ModelError, "repeats an earlier rule"):
+            Model.from_bytes(self.fixture([(0, 1), (0, 1)]))
+
+    def test_a_zero_filled_rule_stream_is_refused(self):
+        """Read past its end, the ladder gives `(0, 0)` for every rule."""
+        buf = bytearray(self.fixture())
+        start = 4 + 4 + 1        # magic, the four header varints, the length
+        end = buf.index(b"a\xc3\xa9")
+        buf[start:end] = bytes(end - start)
+        with self.assertRaisesRegex(ModelError, "same child twice"):
             Model.from_bytes(bytes(buf))
 
 
