@@ -77,10 +77,12 @@ sequence of integers. Strings must be double quoted with JSON escapes (which
 are a subset of YAML escapes) so that everything is ASCII. A writer may add
 comments and blank lines; a reader must ignore them.
 
-Sticking to ASCII is a choice, not a constraint; YAML would accept UTF-8. We
-make this design decision because this file is the normative statement of
-*meaning* (§1), and a non-ASCII character is one that an editor or a filter can
-silently change. The binary form, in contrast, encodes characters UTF-8.
+ASCII is a choice of this format, not a constraint of YAML, which would accept
+UTF-8. We make it because this file is the normative statement of *meaning*
+(§1), and a non-ASCII character is one that an editor or a filter can silently
+change. A non-ASCII character is therefore written `\uXXXX`, and a reader must
+reject a file whose bytes are not ASCII. The binary form, in contrast, encodes
+characters as UTF-8.
 
 The numbering of words, left clusters and right clusters is local to the model.
 Note that it differs from the numbering used in the program that builds the
@@ -170,10 +172,11 @@ so many things that a CRC-32 would add four bytes to catch nothing.
 
 The `rules` table is preceded by its length in bytes. This allows the table to be
 skipped without decoding it. The length in bytes must be exactly the size
-of the table, which must be zero-padded to a whole number of bytes. 
+of the table, which must be zero-padded to a whole number of bytes.
 
-The `alphabet` is not length-prefixed; its length can only be computed by reading
-exactly `len(alphabet)` UTF-8 characters.
+The `alphabet` is not prefixed by its byte length: the header counts characters,
+so the section ends where its last character does, and only then is its byte
+length known.
 
 `memberships` partitions the words into right clusters.
 
@@ -343,7 +346,7 @@ same thing without them.
 
 **The grouping lives in the map.**  A tree's depths say nothing about which
 words share a bottom tree, so a model with more than one right cluster needs one
-label per word (field `memberships`). This cost appears to be unavoidable.
-The word list's order is fixed by the `rules` table, and is unrelated to the
-words' grouping into clusters. There is no opportunity to renumber the words
-to make the clusters contiguous intervals.
+label per word (field `memberships`). This cost is unavoidable. The word list's
+order is fixed by the `rules` table, which defines the tokenisation order, and
+is unrelated to the words' grouping into clusters. There is no opportunity to
+renumber the words to make the clusters contiguous intervals.
