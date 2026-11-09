@@ -33,12 +33,8 @@ The library works with CamelCase identifiers, containing only letters, digits,
 and underscores. We ship functions to convert identifiers between different
 capitalisation conventions, and using those we can also encode lower_case and
 UPPER_CASE identifiers efficiently too (the rules, and the measured benefit, are
-in [`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md)). The conversion
-is exact — every cased character maps to one character, and the inverse takes
-the case class, so nothing is lost — and it covers ASCII, accented Latin and
-Cyrillic (`STANDARD.md` §11, and the compiler evidence in
-[`docs/UNICODE.md`](docs/UNICODE.md) §11). This covers the majority of
-programming use cases. The original capitalisation convention is not
+in [`docs/CASE_NORMALISATION.md`](docs/CASE_NORMALISATION.md)). This covers the
+majority of programming use cases. The original capitalisation convention is not
 encoded; it is the caller's responsibility. The encoding is otherwise lossless.
 
 We target two fixed budgets: 64-bit integers and 128-bit integers.
@@ -75,8 +71,7 @@ The experimental strategy is as follows:
 - **Build a corpus** — harvest identifiers from ten ecosystems and union them;
   see [`docs/CORPUS.md`](docs/CORPUS.md). The shipped corpus is ASCII-only;
   what that leaves out is measured in [`docs/UNICODE.md`](docs/UNICODE.md).
-  Your own corpus may use any characters: the tool reads UTF-8 and the
-  alphabet is stored as UTF-8.
+  Your own corpus may use any unicode characters.
 - **Case-normalise it** — split into lower_case / UPPER_CASE / CamelCase,
   convert the first two to CamelCase, merge and de-duplicate. On the current
   union that is 4,441,974 identifiers in, 4,226,707 out; normalisation makes
@@ -182,9 +177,8 @@ factorisation of the table
 measured probability that a word `u` is followed by a word `v` is related to the
 dot product of `u` in the left panel with `v` in the right panel. Neither panel
 truly fits in 3D space; the figure plots latent dimensions 2–4 only, divided by
-the square root of the word's unigram probability. This removes the mass trend
-and leaves the angular structure the clustering works on. A point's size is
-`|dim 1|` and its colour is the cluster the model assigns it to.
+the square root of the word's unigram probability. A point's size is `|dim 1|`
+and its colour is the cluster the model assigns it to.
 
 Note that similar words end up close together, and the same colour. The 100 most
 common words are labelled, and they are what makes the regions readable:
