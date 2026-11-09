@@ -238,69 +238,27 @@ as large: it is the portable form, and the binary is what the budget measures.
 Unbiased, a Huffman build puts a rare leaf far deeper than a common one: at
 8192/32 the word trees run from 0 to 23, so a raw depth needs five bits.  The
 range is compressed by adding a **bias** to every leaf weight before the merge,
-which lifts the smallest probabilities and shortens the tail.  The design
-proposed
+which lifts the smallest probabilities and shortens the tail.
 
-    bias  =  max(0, (P_max − 32768 · P_min) / 32767)
+No closed form gives the least bias, because the span of a Huffman tree is a
+property of the whole distribution.  A leaf's *ideal* depth is `−log₂ p`, so a
+bound on `P_max / P_min` does bound the *ideal* span; a Huffman tree is not the
+ideal code.  Its longest codeword obeys the **Fibonacci bound**
+`L_max ≤ log_phi(T / q_min)`, which is 1.44 times the Shannon depth at the same
+weight, and its shortest is floored near `−log₂ q_max`.
 
-on the hypothesis that a weight ratio of at most `2^15` bounds the depth span at
-15.  It does not, and why is the difference between an *ideal* code and a
-*Huffman* code.
-
-**The formula bounds the wrong quantity.** Ideal (Shannon) depth is `−log₂ p`, so
-a ratio `P_max / P_min ≤ 2^15` does bound the *ideal* gap at 15 levels.  A
-Huffman tree is not the ideal code: its longest codeword obeys the **Fibonacci
-bound** `L_max ≤ log_phi(T / q_min)`, which is 1.44 times the Shannon depth at
-the same weight, and its shortest is floored near `−log₂ q_max`.  A
-distribution can satisfy the formula and still span more than 15 — and the grid
-does: at 8192/32 the stated bias leaves the top trees spanning **16** levels,
-while it has already flattened the bottom trees from 18 to **12**, three more
-than the field needs.  One formula, applied tree by tree, over-corrects one
-stage and under-corrects the other, because the two stages have different weight
-ratios, and what it costs in bits is what the search over the grid prices.
-
-**The formula is tied to 15.** It is an inequality about `2^15`, so it says
-nothing about a span of `s` for any other `s`, and cannot be scaled to a
-narrower field.
-
-#### A worked example that does *not* tickle it
-
-The design's own `[1, 2, 4, 8, 16]`, as probabilities over 31.  Its Huffman
-depths are `4, 4, 3, 2, 1`: a span of 3, which a 4-bit field holds with no bias
-at all, and the formula agrees (it asks for zero).  So this example does not
-exhibit the bug at 15 bits.  It does exhibit it at a **one-bit** field: the same
-weights need a span of 1, the formula still asks for zero, and the least bias
-that fits is `4.5` — 15 % of the total mass — costing 0.42 bits per leaf.
-
-#### A worked example that does
-
-Twenty weights in the Fibonacci progression `1, 1, 2, 3, 5, …, 6765` (total
-17,710).  The deepest weight is `q_min = 2^-14.11`, so
-`log_phi(1/q_min) = 20.3`, and the unbiased tree spans **18** levels.  The ratio
-`P_max / P_min = 6765` is far below `2^15`, so the formula asks for zero bias —
-and the tree still spans 18, needing five bits.  The least bias that brings it
-to 15 is `0.067`, a lift of 0.0004 %, and it does so at no measurable bit cost.
-Nothing in the distribution's maximum-to-minimum ratio predicts that number; the
-shape of the whole tail does.  (`scripts/depth_bias.py` prints all of these
-trees.)
-
-#### The sufficient condition, and why it is too expensive
-
-The Fibonacci bound does give a closed-form guarantee: `q_min ≥ phi^-15` forces
-`L_max ≤ 15`, hence a span of at most 15.  On the Fibonacci weights it works
-(span 7) but over-flattens badly, and on the real trees it is expensive: at
-8192/32 it gives a span of 11 and costs **0.22 bits per identifier** against
-the unbiased build.  A bound on the *longest* codeword is not a bound on the
-*span*, and the difference is paid in bits.
+**The sufficient condition is too expensive.** The Fibonacci bound does give a
+closed-form guarantee: `q_min ≥ phi^-15` forces `L_max ≤ 15`, hence a span of
+at most 15.  But a bound on the *longest* codeword is not a bound on the
+*span*: at 8192/32 it gives a span of 11 and costs **0.22 bits per identifier**
+against the unbiased build.
 
 #### So the bias is found, not computed
 
-The Huffman shape is a property of the whole distribution, and no single ratio
-describes it.  The build therefore brackets a working bias by doubling from the
-design's formula, then **bisects** the bracket for the least bias whose built
-tree spans 15 or less, to `2^-16` relative.  That is the least flattening the
-four-bit field allows, and measured it is what keeps the field's fit cost at
-nothing:
+The build brackets a working bias by doubling from a small starting guess, then
+**bisects** the bracket for the least bias whose built tree spans 15 or less,
+to `2^-16` relative.  That is the least flattening the four-bit field allows,
+and measured it is what keeps the field's fit cost at nothing:
 
 | point | bias | bottom max | top max | worst span | bits/id | fit ≤64 |
 |---|---:|---:|---:|---:|---:|---:|
