@@ -98,11 +98,6 @@ impl Table {
         let (u, l) = self.to_upper_lower(ch);
         u != l
     }
-
-    /// True when `ch` is cased and is its own upper-case form.
-    pub fn is_upper(&self, ch: char) -> bool {
-        ch != self.to_upper_lower(ch).1
-    }
 }
 
 /// True when `ch` has a 1:1 case partner, i.e. this module maps it.
@@ -146,35 +141,26 @@ pub fn to_camel(s: &str) -> String {
         return s.to_string();
     }
     let table = Table::get();
-    let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
-    let mut upper_next = false;      // the leading character is *not* capitalised
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '_' {
-            let mut j = i;
-            while j < chars.len() && chars[j] == '_' {
-                j += 1;
-            }
-            if j < chars.len() && table.is_cased(chars[j]) {
-                for _ in 0..(j - i - 1) {
-                    out.push('_');      // keep all but one underscore
-                }
-                upper_next = true;      // next character upper-case
-            } else {
-                for _ in 0..(j - i) {
-                    out.push('_');
-                }
-                upper_next = false;
-            }
-            i = j;
-            continue;
-        }
+    let mut follows_underscore = false;
+    for c in s.chars() {
         let (u, l) = table.to_upper_lower(c);
-        out.push(if upper_next { u } else { l });
-        upper_next = false;
-        i += 1;
+        if u != l {
+            // `c` is cased.
+            out.push(if follows_underscore { u } else { l });
+        } else {
+            // `c` is uncased.
+            if follows_underscore {
+                out.push('_');
+            }
+            if c != '_' {
+                out.push(c);
+            }
+        }
+        follows_underscore = c == '_';
+    }
+    if follows_underscore {
+        out.push('_');
     }
     out
 }
@@ -187,43 +173,20 @@ pub fn to_camel(s: &str) -> String {
 /// identity, which makes `from_camel(&to_camel(x), classify(&x)) == x` hold for
 /// every identifier.
 pub fn from_camel(s: &str, class: Class) -> String {
-    if class == Class::Camel { return s.to_string(); }
-    let table = Table::get();
-    let fix = |c| {
-        let (u, l) = table.to_upper_lower(c);
-        if class == Class::Lower { l } else { u }
+    let is_upper = match class {
+        Class::Upper => true,
+        Class::Lower => false,
+        Class::Camel => { return s.to_string(); },
     };
-    let chars: Vec<char> = s.chars().collect();
+    let table = Table::get();
     let mut out = String::with_capacity(s.len() + 4);
-    let mut i = 0;
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '_' {
-            let mut j = i;
-            while j < chars.len() && chars[j] == '_' {
-                j += 1;
-            }
-            let m = j - i;
-            if j < chars.len() && table.is_upper(chars[j]) {
-                for _ in 0..=m {
-                    out.push('_');      // the run swallowed one separator
-                }
-                out.push(fix(chars[j]));
-                i = j + 1;
-            } else {
-                for _ in 0..m {
-                    out.push('_');
-                }
-                i = j;
-            }
-        } else if table.is_upper(c) {
-            out.push('_');              // capitalised: a run hid here
-            out.push(fix(c));
-            i += 1;
-        } else {
-            out.push(fix(c));
-            i += 1;
+    for c in s.chars() {
+        let (u, l) = table.to_upper_lower(c);
+        if c != l {
+            // Upper-case letter indicates a separator was removed.
+            out.push('_');
         }
+        out.push(if is_upper { u } else { l });
     }
     out
 }
@@ -282,7 +245,8 @@ mod tests {
             assert_eq!(cased, camel);
         } else {
             let table = Table::get();
-            let num_swallowed = camel.matches(|c| table.is_upper(c)).count();
+            let is_upper = |c| c != table.to_upper_lower(c).1;
+            let num_swallowed = camel.matches(is_upper).count();
             assert_eq!(
                 camel.chars().count() + num_swallowed,
                 cased.chars().count(),
