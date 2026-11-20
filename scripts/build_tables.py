@@ -28,7 +28,7 @@ The stages, each of which the other documents describe in full:
 
 `--V` is the size of the file's alphabet-plus-word space; the number of words is
 `V - 1 - (characters in the corpus)`, so `--words` is available instead.  The
-shipped standard model is `V = 8,192`, `k = 32`, `q = 1` (`STANDARD.md`), and
+shipped standard model is `V = 8,191`, `k = 32`, `q = 1` (`STANDARD.md`), and
 `build_standard_model.py` builds that one from an existing dictionary directory.
 
 Nothing here is language-specific except `model_yaml`, and nothing here needs
@@ -36,7 +36,7 @@ to be: a port that can read `model.nvm1` can use the tables whatever built
 them.
 
 Usage:
-    build_tables.py --corpus ids.txt --out build --V 8192 --k 32
+    build_tables.py --corpus ids.txt --out build --V 8191 --k 32
     build_tables.py --corpus ids.txt --out build --words 448 --k 8 --sample 1
 """
 import argparse
