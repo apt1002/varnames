@@ -25,7 +25,6 @@
 //! Greek, and every script without case — is **inert**: copied through
 //! unchanged and never mapped.
 
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// The case class of an identifier, as [`to_camel`] and [`from_camel`] use it.
@@ -43,64 +42,75 @@ pub enum Class {
 const PAIRS: &str = include_str!("../data/case-pairs.txt");
 
 struct Table {
-    /// cased character -> its upper-case form
-    upper: HashMap<char, char>,
-    /// cased character -> its lower-case form
-    lower: HashMap<char, char>,
+    /// cased character -> XOR of its upper- and lower-case forms, or `0`.
+    /// Special case for ('Ÿ', 'ÿ'): omitted from the table.
+    /// Otherwise, the lower-case letter has the larger codepoint.
+    case_xor: [u8; 0x530],
 }
 
-fn table() -> &'static Table {
-    static TABLE: OnceLock<Table> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let mut upper = HashMap::with_capacity(532);
-        let mut lower = HashMap::with_capacity(532);
-        for line in PAIRS.lines() {
-            if line.is_empty() || line.starts_with('#') {
-                continue;
+impl Default for &'static Table {
+    fn default() -> Self {
+        static TABLE: OnceLock<Table> = OnceLock::new();
+        TABLE.get_or_init(|| {
+            let mut case_xor = [0u8; 0x530];
+            for line in PAIRS.lines() {
+                if line.is_empty() || line.starts_with('#') { continue; }
+                let mut fields = line.split_whitespace();
+                let (u, l) = match (fields.next(), fields.next(), fields.next()) {
+                    (Some(u), Some(l), None) => (u, l),
+                    _ => panic!("every line of case-pairs.txt is `upper lower`"),
+                };
+                let (u, l) = (
+                    u.chars().next().expect("one character"),
+                    l.chars().next().expect("one character"),
+                );
+                if u == 'Ÿ' && l == 'ÿ' { continue; }
+                assert!(u < l, "{u} < {l}");
+                let x = (u as u8) ^ (l as u8);
+                case_xor[u as usize] = x;
+                case_xor[l as usize] = x;
             }
-            let mut fields = line.split_whitespace();
-            let (u, l) = match (fields.next(), fields.next(), fields.next()) {
-                (Some(u), Some(l), None) => (u, l),
-                _ => panic!("every line of case-pairs.txt is `upper lower`"),
-            };
-            let (u, l) = (
-                u.chars().next().expect("one character"),
-                l.chars().next().expect("one character"),
-            );
-            upper.insert(u, u);
-            lower.insert(u, l);
-            upper.insert(l, u);
-            lower.insert(l, l);
-        }
-        Table { upper, lower }
-    })
+            Table { case_xor }
+        })
+    }
 }
 
-/// True when `ch` has a 1:1 case partner, i.e. this module maps it.
-pub fn cased(ch: char) -> bool {
-    table().upper.contains_key(&ch)
-}
+impl Table {
+    /// Equivalent to `<&'static Table>::default()`.
+    fn default() -> &'static Self { Default::default() }
 
-/// True when `ch` is cased and is its own upper-case form.
-fn is_upper(ch: char) -> bool {
-    table().upper.get(&ch) == Some(&ch)
+    /// Map `ch` to upper-case and lower-case if cased, otherwise preserve it.
+    pub fn to_upper_lower(&self, ch: char) -> (char, char) {
+        if ch == 'ÿ' || ch == 'Ÿ' { return ('Ÿ', 'ÿ'); }
+        if ch as usize >= self.case_xor.len() { return (ch, ch); }
+        let x = self.case_xor[ch as usize] as u32;
+        let other = char::from_u32((ch as u32) ^ x).expect("Invalid char");
+        if ch < other { (ch, other) } else { (other, ch) }
+    }
+
+    /// True when `ch` has a 1:1 case partner, i.e. this module maps it.
+    pub fn is_cased(&self, ch: char) -> bool {
+        let (u, l) = self.to_upper_lower(ch);
+        u != l
+    }
+
+    /// True when `ch` is cased and is its own upper-case form.
+    pub fn is_upper(&self, ch: char) -> bool {
+        ch != self.to_upper_lower(ch).1
+    }
 }
 
 /// Classify an identifier by its cased characters alone.
 ///
 /// Inert characters do not vote: `ßabc` is `Lower`, `Aß` is `Upper` and `aßA`
-/// is `Camel`.
+/// is `Camel`. If all characters are inert, choose `Lower`.
 pub fn classify(s: &str) -> Class {
-    let table = table();
+    let table = Table::default();
     let (mut lower, mut upper) = (false, false);
     for ch in s.chars() {
-        if let Some(&u) = table.upper.get(&ch) {
-            if u == ch {
-                upper = true;
-            } else {
-                lower = true;
-            }
-        }
+        let (u, l) = table.to_upper_lower(ch);
+        lower |= ch != u;
+        upper |= ch != l;
     }
     match (lower, upper) {
         (true, true) => Class::Camel,
@@ -124,7 +134,7 @@ pub fn to_camel(s: &str) -> String {
     if classify(s) == Class::Camel {
         return s.to_string();
     }
-    let table = table();
+    let table = Table::default();
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len());
     let mut upper_next = false;      // the leading character is *not* capitalised
@@ -136,7 +146,7 @@ pub fn to_camel(s: &str) -> String {
             while j < chars.len() && chars[j] == '_' {
                 j += 1;
             }
-            if j < chars.len() && cased(chars[j]) {
+            if j < chars.len() && table.is_cased(chars[j]) {
                 for _ in 0..(j - i - 1) {
                     out.push('_');      // keep all but one underscore
                 }
@@ -150,11 +160,8 @@ pub fn to_camel(s: &str) -> String {
             i = j;
             continue;
         }
-        match table.upper.get(&c) {
-            Some(&u) if upper_next => out.push(u),
-            Some(_) => out.push(table.lower[&c]),
-            None => out.push(c),
-        }
+        let (u, l) = table.to_upper_lower(c);
+        out.push(if upper_next { u } else { l });
         upper_next = false;
         i += 1;
     }
@@ -169,14 +176,11 @@ pub fn to_camel(s: &str) -> String {
 /// identity, which makes `from_camel(&to_camel(x), classify(&x)) == x` hold for
 /// every identifier.
 pub fn from_camel(s: &str, class: Class) -> String {
-    if class == Class::Camel {
-        return s.to_string();
-    }
-    let table = table();
-    let fix = if class == Class::Lower {
-        &table.lower
-    } else {
-        &table.upper
+    if class == Class::Camel { return s.to_string(); }
+    let table = Table::default();
+    let fix = |c| {
+        let (u, l) = table.to_upper_lower(c);
+        if class == Class::Lower { l } else { u }
     };
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len() + 4);
@@ -189,11 +193,11 @@ pub fn from_camel(s: &str, class: Class) -> String {
                 j += 1;
             }
             let m = j - i;
-            if j < chars.len() && is_upper(chars[j]) {
+            if j < chars.len() && table.is_upper(chars[j]) {
                 for _ in 0..=m {
                     out.push('_');      // the run swallowed one separator
                 }
-                out.push(fix[&chars[j]]);
+                out.push(fix(chars[j]));
                 i = j + 1;
             } else {
                 for _ in 0..m {
@@ -201,12 +205,12 @@ pub fn from_camel(s: &str, class: Class) -> String {
                 }
                 i = j;
             }
-        } else if is_upper(c) {
+        } else if table.is_upper(c) {
             out.push('_');              // capitalised: a run hid here
-            out.push(fix[&c]);
+            out.push(fix(c));
             i += 1;
         } else {
-            out.push(*fix.get(&c).unwrap_or(&c));
+            out.push(fix(c));
             i += 1;
         }
     }
@@ -239,13 +243,18 @@ mod tests {
         assert!(p.contains(&('Ä', 'ä')));
         assert!(p.contains(&('Ÿ', 'ÿ')));
         assert!(p.contains(&('А', 'а')));
+        let table = Table::default();
+        for &(u, l) in &p {
+            assert_eq!(table.to_upper_lower(u), (u, l), "to_upper_lower({u})");
+            assert_eq!(table.to_upper_lower(l), (u, l), "to_upper_lower({l})");
+        }
         // the five letters the range excludes, plus the caseless kra
         for c in ['ß', 'İ', 'ı', 'ŉ', 'ſ', 'ĸ'] {
-            assert!(!cased(c), "{c} is inert");
+            assert!(!table.is_cased(c), "{c} is inert");
         }
         // and nothing outside the three ranges
         for c in ['Σ', 'σ', 'ς', 'ǅ', 'あ', 'א'] {
-            assert!(!cased(c), "{c} is inert");
+            assert!(!table.is_cased(c), "{c} is inert");
         }
     }
 
@@ -256,12 +265,13 @@ mod tests {
     /// - The number of swallowed underscores is as expected.
     fn classify_and_round_trip(cased: &str, class: Class, camel: &str) {
         assert_eq!(classify(cased), class, "classify({cased})");
-        assert_eq!(to_camel(cased), camel, "to_camel({cased}");
+        assert_eq!(to_camel(cased), camel, "to_camel({cased})");
         assert_eq!(from_camel(camel, class), cased, "from_camel({camel}, {class:?})");
         if class == Class::Camel {
             assert_eq!(cased, camel);
         } else {
-            let num_swallowed = camel.matches(is_upper).count();
+            let table = Table::default();
+            let num_swallowed = camel.matches(|c| table.is_upper(c)).count();
             assert_eq!(
                 camel.chars().count() + num_swallowed,
                 cased.chars().count(),
@@ -342,5 +352,15 @@ mod tests {
             classify_and_round_trip(&format!("X_{u}Y"), Class::Upper, &format!("x{u}y"));
             classify_and_round_trip(&format!("X{u}Y"), Class::Upper, &format!("x{l}y"));
         }
+    }
+
+    /// `to_camel` is defined up to the class, so it is not idempotent: `_a`
+    /// normalises to `A`, which is upper, so a second pass gives `a`.
+    #[test]
+    fn to_camel_is_not_idempotent() {
+        assert_eq!(to_camel("_a"), "A");
+        assert_eq!(classify(&to_camel("_a")), Class::Upper);
+        assert_eq!(to_camel("A"), "a");
+        assert_eq!(to_camel("__a"), "_A");
     }
 }
