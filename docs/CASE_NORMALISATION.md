@@ -8,7 +8,9 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 ## Case normalisation
 
 1. **classify** — split the corpus into `lower_case` (has cased characters, none
-   upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both).
+   upper-case), `UPPER_CASE` (upper-case, no lower-case) and `CamelCase` (both,
+   or neither: a name with no cased characters has nothing to convert, so it is
+   already in the normal form).
 2. **camelize** — rewrite the non-CamelCase lists in CamelCase: a cased
    character immediately preceded by an underscore is upper-cased and all other
    cased characters, including the leading letter of the identifier, are
@@ -22,8 +24,8 @@ produced by `scripts/run_camel_pipeline.sh` (or the individual scripts) from
 
 `scripts/classify_identifiers.py` and `scripts/camelize_identifiers.py` do steps
 1–2; `scripts/merge_identifiers.py` does step 3. On the current union
-(4,441,974 identifiers) the three classes are **1,976,554** lower_case,
-**451,766** UPPER_CASE and **2,013,654** CamelCase, and the merged, normalised
+(4,441,974 identifiers) the three classes are **1,976,081** lower_case,
+**451,766** UPPER_CASE and **2,014,127** CamelCase, and the merged, normalised
 corpus has **4,226,707** identifiers — 215,267 collapsed (4.85%) where two
 classes normalise to the same string.
 

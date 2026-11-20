@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Classify a corpus of identifiers into lower_case / UPPER_CASE / CamelCase.
 
-An identifier is *CamelCase* when it contains at least one lower-case cased
-character AND at least one upper-case one (digits, underscores and inert
-characters are ignored).  Otherwise it is *UPPER_CASE* when it contains an
-upper-case one, and *lower_case* when it contains a lower-case one (or no cased
-character at all).  The cased set is the one `STANDARD.md` §11 defines; the
-implementation is `python/varnames/case.py`, shared with the library.
+An identifier is *lower_case* when it contains a lower-case cased character and
+no upper-case one, and *UPPER_CASE* when it contains an upper-case one and no
+lower-case one (digits, underscores and inert characters are ignored).  It is
+*CamelCase* when it contains both — or neither, because a name with no cased
+characters has nothing to convert and is already in the normal form.  The cased
+set is the one `STANDARD.md` §11 defines; the implementation is
+`python/varnames/case.py`, shared with the library.
 
 Input : a text file with one identifier per line.
 Output: three text files, one identifier per line:

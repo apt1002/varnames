@@ -30,11 +30,11 @@ use std::sync::OnceLock;
 /// The case class of an identifier, as [`to_camel`] and [`from_camel`] use it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Class {
-    /// Cased characters, none of them upper-case (or no cased characters).
+    /// Cased characters, none of them upper-case.
     Lower,
     /// Cased characters, all of them upper-case.
     Upper,
-    /// Both an upper-case and a lower-case cased character.
+    /// Already in the normal form: both cases present, or no cased characters.
     Camel,
 }
 
@@ -113,7 +113,8 @@ pub fn cased(ch: char) -> bool {
 /// Classify an identifier by its cased characters alone.
 ///
 /// Inert characters do not vote: `ßabc` is `Lower`, `Aß` is `Upper` and `aßA`
-/// is `Camel`. If all characters are inert, choose `Camel`.
+/// is `Camel`.  A name with no cased characters is `Camel` as well: it is
+/// already in the normal form, so there is nothing to convert.
 pub fn classify(s: &str) -> Class {
     let table = Table::get();
     let (mut lower, mut upper) = (false, false);
@@ -340,7 +341,7 @@ mod tests {
         }
     }
 
-    /// Examples of caseless names, which classify as lower-case.
+    /// Examples of caseless names, which are already in the normal form.
     #[test]
     fn caseless() {
         for caseless in [

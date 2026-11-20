@@ -61,10 +61,11 @@ def is_upper(ch):
 def classify(s):
     """Return ``'lower'``, ``'upper'`` or ``'camel'`` for an identifier.
 
-    A class is decided by the cased characters alone: ``'camel'`` has both an
-    upper and a lower one, ``'upper'`` has upper ones and no lower ones, and
-    everything else — no cased characters at all included — is ``'lower'``.
-    Inert characters do not vote.
+    A class is decided by the cased characters alone: ``'lower'`` has lower
+    ones and no upper ones, ``'upper'`` has upper ones and no lower ones, and
+    ``'camel'`` has both — or neither, because a name with no cased characters
+    is already in the normal form and has nothing to convert.  Inert
+    characters do not vote.
     """
     lower = upper = False
     for ch in s:
@@ -73,11 +74,11 @@ def classify(s):
                 upper = True
             else:
                 lower = True
-    if lower and upper:
-        return 'camel'
-    if upper:
+    if lower and not upper:
+        return 'lower'
+    if upper and not lower:
         return 'upper'
-    return 'lower'
+    return 'camel'
 
 
 def to_camel(s):

@@ -433,7 +433,15 @@ class TestCaseConversion(unittest.TestCase):
         self.assertEqual(classify("fooBar"), "camel")
         self.assertEqual(classify("FOO"), "upper")
         self.assertEqual(classify("foo"), "lower")
-        self.assertEqual(classify("123_"), "lower")
+
+    def test_a_caseless_name_is_camel(self):
+        # there is nothing to convert, so the name is already in the normal
+        # form; the transform is the identity, and the round trip agrees
+        for name in ["", "_", "123_", "_123", "Ελληνικά", "日本"]:
+            self.assertEqual(classify(name), "camel", name)
+            self.assertEqual(to_camel(name), name, name)
+            self.assertEqual(from_camel(name, "camel"), name, name)
+            self.assertEqual(from_camel(to_camel(name), classify(name)), name)
 
     def test_the_leading_accented_capital_is_now_lowered(self):
         # inert characters used to leave the leading letter alone, so an

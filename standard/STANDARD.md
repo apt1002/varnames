@@ -272,8 +272,9 @@ upgrade cannot change what it does.
 A cased character is **upper** when it equals its own upper-case form, and
 **lower** otherwise; inert characters vote for neither.  An identifier is
 `lower` when it has cased characters and no upper one, `upper` when it has
-upper ones and no lower one, and `camel` when it has both.  To convert a `lower`
-or `upper` identifier:
+upper ones and no lower one, and `camel` when it has both — or when it has
+neither: a name with no cased characters has nothing to convert, so it is
+already in the normal form.  To convert a `lower` or `upper` identifier:
 
 * every cased character becomes lower case, **except** one immediately
   preceded by an underscore, which becomes upper case: `a` stays `a`, and `_a`
