@@ -85,7 +85,7 @@ impl Table {
 
     /// `ch` as `(upper-case form, lower-case form)`; an inert character is
     /// returned unchanged as both.
-    pub fn to_upper_lower(&self, ch: char) -> (char, char) {
+    fn to_upper_lower(&self, ch: char) -> (char, char) {
         if ch == 'ÿ' || ch == 'Ÿ' { return ('Ÿ', 'ÿ'); }
         if ch as usize >= self.case_xor.len() { return (ch, ch); }
         let x = self.case_xor[ch as usize] as u32;
@@ -94,7 +94,7 @@ impl Table {
     }
 
     /// True when `ch` has a 1:1 case partner, i.e. this module maps it.
-    pub fn is_cased(&self, ch: char) -> bool {
+    fn is_cased(&self, ch: char) -> bool {
         let (u, l) = self.to_upper_lower(ch);
         u != l
     }
@@ -146,10 +146,12 @@ pub fn to_camel(s: &str) -> String {
     for c in s.chars() {
         let (u, l) = table.to_upper_lower(c);
         if u != l {
-            // `c` is cased.
+            // `c` is cased, so a held-back underscore was a separator: drop it
+            // and capitalise `c`.
             out.push(if follows_underscore { u } else { l });
         } else {
-            // `c` is uncased.
+            // `c` is uncased.  An underscore that has been held back was only
+            // a separator if a cased character followed it, and none did.
             if follows_underscore {
                 out.push('_');
             }
@@ -160,6 +162,8 @@ pub fn to_camel(s: &str) -> String {
         follows_underscore = c == '_';
     }
     if follows_underscore {
+        // A run at the end has no cased character to surrender its separator
+        // to, so every underscore in it is kept.
         out.push('_');
     }
     out
@@ -176,10 +180,11 @@ pub fn from_camel(s: &str, class: Class) -> String {
     let is_upper = match class {
         Class::Upper => true,
         Class::Lower => false,
-        Class::Camel => { return s.to_string(); },
+        Class::Camel => return s.to_string(),
     };
     let table = Table::get();
-    let mut out = String::with_capacity(s.len() + 4);
+    // Every upper-case cased character gains one underscore byte.
+    let mut out = String::with_capacity(2 * s.len());
     for c in s.chars() {
         let (u, l) = table.to_upper_lower(c);
         if c != l {
