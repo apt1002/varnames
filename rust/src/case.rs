@@ -103,7 +103,7 @@ impl Table {
 /// Classify an identifier by its cased characters alone.
 ///
 /// Inert characters do not vote: `ßabc` is `Lower`, `Aß` is `Upper` and `aßA`
-/// is `Camel`. If all characters are inert, choose `Lower`.
+/// is `Camel`. If all characters are inert, choose `Camel`.
 pub fn classify(s: &str) -> Class {
     let table = Table::default();
     let (mut lower, mut upper) = (false, false);
@@ -113,9 +113,9 @@ pub fn classify(s: &str) -> Class {
         upper |= ch != l;
     }
     match (lower, upper) {
-        (true, true) => Class::Camel,
+        (true, false) => Class::Lower,
         (false, true) => Class::Upper,
-        _ => Class::Lower,
+        _ => Class::Camel,
     }
 }
 
@@ -333,13 +333,13 @@ mod tests {
     /// Examples of caseless names, which classify as lower-case.
     #[test]
     fn caseless() {
-        for lower in [
+        for caseless in [
             "_",
             "123_",
             "_123",
             "Ελληνικά",
         ] {
-            classify_and_round_trip(lower, Class::Lower, lower);
+            classify_and_round_trip(caseless, Class::Camel, caseless);
         }
     }
 
