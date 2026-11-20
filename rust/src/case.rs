@@ -249,70 +249,98 @@ mod tests {
         }
     }
 
+    /// Test:
+    /// - `cased` has class `class`.
+    /// - `cased` maps to `camel`.
+    /// - `camel` maps to `cased`.
+    /// - The number of swallowed underscores is as expected.
+    fn classify_and_round_trip(cased: &str, class: Class, camel: &str) {
+        assert_eq!(classify(cased), class, "classify({cased})");
+        assert_eq!(to_camel(cased), camel, "to_camel({cased}");
+        assert_eq!(from_camel(camel, class), cased, "from_camel({camel}, {class:?})");
+        if class == Class::Camel {
+            assert_eq!(cased, camel);
+        } else {
+            let num_swallowed = camel.matches(is_upper).count();
+            assert_eq!(
+                camel.chars().count() + num_swallowed,
+                cased.chars().count(),
+                "{cased}: one swallowed underscore per upper-case letter"
+            );
+        }
+    }
+
+    /// Examples of lower- and upper-case names.
     #[test]
-    fn ascii_behaves_as_before() {
-        for (s, want) in [
-            ("a_b", "aB"),
-            ("a__b", "a_B"),
-            ("a_3", "a_3"),
-            ("a_", "a_"),
-            ("FOO_BAR", "fooBar"),
-            ("A_B", "aB"),
-            ("_ABC", "Abc"),
-            ("__a", "_A"),
-            ("__3a", "__3a"),
-            ("_3a", "_3a"),
-            ("a__3b", "a__3b"),
-            ("get_user_name", "getUserName"),
-            ("fooBar", "fooBar"),
+    fn upper_and_lower() {
+        for (upper, lower, camel) in [
+            ("A_B", "a_b", "aB"),
+            ("A__B", "a__b", "a_B"),
+            ("A_3", "a_3", "a_3"),
+            ("A_", "a_", "a_"),
+            ("A_B_", "a_b_", "aB_"),
+            ("A_3_", "a_3_", "a_3_"),
+            ("_ABC", "_abc", "Abc"),
+            ("__A", "__a", "_A"),
+            ("__3A", "__3a", "__3a"),
+            ("_3A", "_3a", "_3a"),
+            ("A__3B", "a__3b", "a__3b"),
+            ("_A_3B", "_a_3b", "A_3b"),
+            ("GET_USER_NAME", "get_user_name", "getUserName"),
+            ("FOO_BAR", "foo_bar", "fooBar"),
+            ("FOO", "foo", "foo"),
+            // accented and cyrillic examples
+            ("ÄRGER", "ärger", "ärger"),
+            ("_ÄRGER", "_ärger", "Ärger"),
+            ("ПРИВЕТ_МИР", "привет_мир", "приветМир"),
+            ("DONNÉES_BRUTES", "données_brutes", "donnéesBrutes"),
+            // part-inert examples; the inert letters do not vote
+            ("STRAßE", "straße", "straße"),
+            ("A_日本", "a_日本", "a_日本"),
         ] {
-            assert_eq!(to_camel(s), want, "to_camel({s:?})");
+            classify_and_round_trip(upper, Class::Upper, camel);
+            classify_and_round_trip(lower, Class::Lower, camel);
         }
-        assert_eq!(classify("fooBar"), Class::Camel);
-        assert_eq!(classify("FOO"), Class::Upper);
-        assert_eq!(classify("foo"), Class::Lower);
-        assert_eq!(classify("123_"), Class::Lower);
     }
 
+    /// Examples of camel-case names.
     #[test]
-    fn accented_and_cyrillic_identifiers_convert() {
-        assert_eq!(to_camel("ÄRGER"), "ärger");
-        assert_eq!(to_camel("_ÄRGER"), "Ärger");
-        assert_eq!(to_camel("ПРИВЕТ_МИР"), "приветМир");
-        assert_eq!(to_camel("données_brutes"), "donnéesBrutes");
-        // a part-inert script is consistent: the inert letter does not vote
-        assert_eq!(classify("straße"), Class::Lower);
-        assert_eq!(to_camel("straße"), "straße");
-        assert_eq!(classify("Ελληνικά"), Class::Lower);
-        assert_eq!(to_camel("Ελληνικά"), "Ελληνικά");
-        assert_eq!(to_camel("a_日本"), "a_日本");
+    fn camel() {
+        for camel in [
+            "fooBar",
+            "Foo",
+            "Ärger",
+            "_Ärger",
+            "ПриветМир",
+            "DonnéesBrutes",
+            "Straße",
+            "Abc",
+        ] {
+            classify_and_round_trip(camel, Class::Camel, camel);
+        }
     }
 
+    /// Examples of caseless names, which classify as lower-case.
     #[test]
-    fn the_round_trip_is_exact() {
+    fn caseless() {
+        for lower in [
+            "_",
+            "123_",
+            "_123",
+            "Ελληνικά",
+        ] {
+            classify_and_round_trip(lower, Class::Lower, lower);
+        }
+    }
+
+    /// Synthetic examples of upper- and lower-case names.
+    #[test]
+    fn chars() {
         for (u, l) in pairs() {
-            for (name, class) in [
-                (format!("x_{l}y"), Class::Lower),
-                (format!("x{l}y"), Class::Lower),
-                (format!("X_{u}Y"), Class::Upper),
-                (format!("X{u}Y"), Class::Upper),
-            ] {
-                let camel = to_camel(&name);
-                assert_eq!(
-                    camel.chars().count() + name.matches('_').count(),
-                    name.chars().count(),
-                    "{name}: one underscore per swallowed separator"
-                );
-                assert_eq!(from_camel(&camel, class), name);
-            }
-        }
-    }
-
-    #[test]
-    fn to_camel_is_idempotent() {
-        for s in ["a_b", "A_B", "fooBar", "_ABC", "ÄRGER", "straße", "a_日本"] {
-            let once = to_camel(s);
-            assert_eq!(to_camel(&once), once, "{s}");
+            classify_and_round_trip(&format!("x_{l}y"), Class::Lower, &format!("x{u}y"));
+            classify_and_round_trip(&format!("x{l}y"), Class::Lower, &format!("x{l}y"));
+            classify_and_round_trip(&format!("X_{u}Y"), Class::Upper, &format!("x{u}y"));
+            classify_and_round_trip(&format!("X{u}Y"), Class::Upper, &format!("x{l}y"));
         }
     }
 }
