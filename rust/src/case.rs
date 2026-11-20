@@ -12,10 +12,11 @@
 //! assert_eq!(from_camel("getUserName", classify("get_user_name")), "get_user_name");
 //! ```
 //!
-//! The transform is exact: every cased character maps to exactly one
-//! character, so conversion never changes an identifier's length, and within a
-//! case class [`from_camel`] inverts [`to_camel`].  Only the class has to
-//! travel along with the name.
+//! The transform is exact: every cased character maps to exactly one character
+//! and every other character is copied unchanged, so conversion changes an
+//! identifier's length only by the separators it swallows — and within a case
+//! class [`from_camel`] inverts [`to_camel`].  Only the class has to travel
+//! along with the name, because it is the one thing the normal form drops.
 //!
 //! The cased characters are the ASCII letters and the letters of
 //! `U+00C0–U+017F` and `U+0400–U+052F` that have a 1:1 upper/lower pair; they
@@ -112,12 +113,13 @@ pub fn classify(s: &str) -> Class {
 ///
 /// A cased character immediately preceded by an underscore is upper-cased and
 /// every other cased character, the leading one included, is lower-cased: `a`
-/// stays `a`, `_a` becomes `_A`, and `__3a` is unchanged because the digit is
-/// what precedes the `a`.  A run of underscores followed by a cased character
-/// gives up exactly one underscore, its word separator, and keeps the rest, so
-/// `a_b` becomes `aB` and `a__b` becomes `a_B`; an underscore not followed by
-/// a cased character (before a digit, before an inert character, or at the
-/// end) is kept as it is.
+/// stays `a`, and `_a` becomes `A` — upper-cased, and its separator dropped by
+/// the next rule — while `__3a` is unchanged because the digit is what precedes
+/// the `a`.  A run of underscores followed by a cased character gives up
+/// exactly one underscore, its word separator, and keeps the rest, so `a_b`
+/// becomes `aB` and `a__b` becomes `a_B`; an underscore not followed by a
+/// cased character (before a digit, before an inert character, or at the end)
+/// is kept as it is.
 pub fn to_camel(s: &str) -> String {
     if classify(s) == Class::Camel {
         return s.to_string();

@@ -11,9 +11,10 @@ CamelCase, and back, so a caller can meet the model where it is:
     >>> from_camel("getUserName", classify("get_user_name"))
     'get_user_name'
 
-The transform is exact.  Every cased character maps to exactly one character,
-so conversion never changes an identifier's length, and within a case class
-`from_camel` inverts `to_camel`; only the class has to travel along with the
+The transform is exact.  Every cased character maps to exactly one character
+and every other character is copied unchanged, so conversion changes an
+identifier's length only by the separators it swallows; within a case class
+`from_camel` inverts `to_camel`, so only the class has to travel along with the
 name.  That is why a case class (`'lower'`, `'upper'`, `'camel'`) is an
 argument to the inverse and not information hidden in the output.
 
@@ -84,13 +85,14 @@ def to_camel(s):
 
     A cased character immediately preceded by an underscore is upper-cased and
     every other cased character, the leading one included, is lower-cased: `a`
-    stays `a`, `_a` becomes `_A`, and `__3a` is unchanged because the digit is
-    what precedes the `a`.  A run of underscores followed by a cased character
-    gives up exactly one underscore, its word separator, and keeps the rest, so
-    ``a_b`` → ``aB`` and ``a__b`` → ``a_B``; an underscore not followed by a
-    cased character (before a digit, before an inert character, or at the end)
-    is kept as it is.  A ``camel`` identifier is already in the target form and
-    is returned unchanged.
+    stays `a`, and ``_a`` becomes ``A`` — upper-cased, and its separator
+    dropped by the next rule — while ``__3a`` is unchanged because the digit is
+    what precedes the ``a``.  A run of underscores followed by a cased
+    character gives up exactly one underscore, its word separator, and keeps
+    the rest, so ``a_b`` → ``aB`` and ``a__b`` → ``a_B``; an underscore not
+    followed by a cased character (before a digit, before an inert character,
+    or at the end) is kept as it is.  A ``camel`` identifier is already in the
+    target form and is returned unchanged.
     """
     if classify(s) == 'camel':
         return s
