@@ -11,7 +11,7 @@ import unittest
 
 from varnames import Codec, DecodeError, EncodeError, Model, ModelError
 from varnames.bitio import BitReader, BitWriter, bits_length, bits_to_int
-from varnames.case import cased, classify, from_camel, to_camel
+from varnames.case import cased, classify, from_camel, is_upper, to_camel
 from varnames.codec import _merge_pairs
 from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
@@ -370,6 +370,27 @@ class TestCaseConversion(unittest.TestCase):
                     out.append((up, lo))
         return out
 
+    def check(self, cased, cls, camel):
+        """`cased` has class `cls`, maps to `camel`, and `camel` maps back.
+
+        The length check is `STANDARD.md` §11's "conversion shortens an
+        identifier by exactly the separators it swallows and by nothing else":
+        in the normal form an upper-case cased character always marks a
+        swallowed separator, and no other character can be upper-case, so the
+        two counts move together.
+        """
+        self.assertEqual(classify(cased), cls, cased)
+        self.assertEqual(to_camel(cased), camel, cased)
+        self.assertEqual(from_camel(camel, cls), cased, camel)
+        if cls == "camel":
+            # the identity, so this arm checks the classification alone
+            self.assertEqual(cased, camel, cased)
+        else:
+            swallowed = sum(1 for ch in camel if is_upper(ch))
+            self.assertEqual(len(camel) + swallowed, len(cased),
+                             "%s: one swallowed separator per capital in %s"
+                             % (cased, camel))
+
     def test_table_is_the_published_one(self):
         pairs = self.pairs()
         self.assertEqual(len(pairs), 266)
@@ -429,19 +450,41 @@ class TestCaseConversion(unittest.TestCase):
 
     def test_the_round_trip_is_exact(self):
         for up, lo in self.pairs():
-            for name, cls in [("x_" + lo + "y", "lower"),
-                              ("x" + lo + "y", "lower"),
-                              ("X_" + up + "Y", "upper"),
-                              ("X" + up + "Y", "upper")]:
-                camel = to_camel(name)
-                self.assertEqual(len(camel), len(name) - name.count("_"), name)
-                self.assertEqual(from_camel(camel, cls), name)
+            self.check("x_" + lo + "y", "lower", "x" + up + "y")
+            self.check("x" + lo + "y", "lower", "x" + lo + "y")
+            self.check("X_" + up + "Y", "upper", "x" + up + "y")
+            self.check("X" + up + "Y", "upper", "x" + lo + "y")
 
-    def test_to_camel_is_idempotent(self):
+    def test_a_retained_underscore_is_not_swallowed(self):
+        # an underscore the transform keeps — before a digit, before an inert
+        # character, or at the end — costs no capital, so it does not shorten
+        # the name either
+        for cased, cls, camel in [
+            ("A_B_", "upper", "aB_"),
+            ("A_3_", "upper", "a_3_"),
+            ("_A_3B", "upper", "A_3b"),
+            ("__3A", "upper", "__3a"),
+            ("A__3B", "upper", "a__3b"),
+            ("A_日本", "upper", "a_日本"),
+        ]:
+            self.check(cased, cls, camel)
+
+    def test_to_camel_is_not_idempotent(self):
+        # The transform is defined up to the class, so it cannot be idempotent:
+        # `_a` normalises to `A`, which is *upper*, so a second pass lower-cases
+        # it to `a`.  The examples below are fixed points only because each one
+        # normalises to a `camel` name, which `to_camel` returns unchanged.
         for name in ["a_b", "A_B", "fooBar", "_ABC", "ÄRGER", "straße",
                      "a_日本", "a__b", "a__3"]:
             once = to_camel(name)
             self.assertEqual(to_camel(once), once, name)
+        self.assertEqual(to_camel("_a"), "A")
+        self.assertEqual(classify(to_camel("_a")), "upper")
+        self.assertEqual(to_camel(to_camel("_a")), "a")
+        # a run of underscores peels one per pass until the class settles
+        self.assertEqual(to_camel("__a"), "_A")
+        self.assertEqual(to_camel("_A"), "A")
+        self.assertEqual(to_camel(to_camel(to_camel("__A__B"))), "ab")
 
     def test_an_unknown_class_is_refused(self):
         with self.assertRaises(ValueError):
