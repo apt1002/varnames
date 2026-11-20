@@ -98,30 +98,22 @@ def to_camel(s):
     if classify(s) == 'camel':
         return s
     out = []
-    upper = False         # the leading character is *not* capitalised
-    i, n = 0, len(s)
-    while i < n:
-        c = s[i]
-        if c == '_':
-            j = i
-            while j < n and s[j] == '_':
-                j += 1
-            if j < n and cased(s[j]):
-                out.append('_' * (j - i - 1))   # keep all but one underscore
-                upper = True                    # next character upper-case
-                i = j
-                continue
-            out.append('_' * (j - i))
-            upper = False
-            i = j
-            continue
+    follows_underscore = False    # the leading character is *not* capitalised
+    for c in s:
         if c in _UPPER:
-            out.append(_UPPER[c] if upper else _LOWER[c])
-            upper = False
+            # A held-back underscore was a separator: drop it and capitalise.
+            out.append(_UPPER[c] if follows_underscore else _LOWER[c])
         else:
-            out.append(c)
-            upper = False
-        i += 1
+            # A held-back underscore had no cased character to precede.
+            if follows_underscore:
+                out.append('_')
+            if c != '_':
+                out.append(c)
+        follows_underscore = c == '_'
+    if follows_underscore:
+        # A run at the end has no cased character to surrender its separator
+        # to, so every underscore in it is kept.
+        out.append('_')
     return ''.join(out)
 
 
@@ -141,26 +133,8 @@ def from_camel(s, cls):
         raise ValueError("the case class is 'lower', 'upper' or 'camel'")
     fix = _LOWER if cls == 'lower' else _UPPER
     out = []
-    i, n = 0, len(s)
-    while i < n:
-        c = s[i]
-        if c == '_':
-            j = i
-            while j < n and s[j] == '_':
-                j += 1
-            m = j - i
-            if j < n and is_upper(s[j]):      # run that swallowed a separator
-                out.append('_' * (m + 1))
-                out.append(fix[s[j]])
-                i = j + 1
-            else:                             # run not followed by a cased char
-                out.append('_' * m)
-                i = j
-        elif is_upper(c):                     # capitalised: a run hid here
+    for c in s:
+        if is_upper(c):                   # capitalised: a run hid here
             out.append('_')
-            out.append(fix[c])
-            i += 1
-        else:
-            out.append(fix.get(c, c))
-            i += 1
+        out.append(fix.get(c, c))
     return ''.join(out)
