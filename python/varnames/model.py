@@ -77,17 +77,22 @@ class Tree:
             writer.put((value >> shift) & 1, 1)
 
     def read(self, reader):
-        """Read one codeword; returns the leaf position."""
+        """Read one codeword; returns the leaf position.
+
+        A codeword is a prefix of the stream, so the depths are tried from 0
+        upwards: the test at each depth asks whether the bits read so far are
+        one of that depth's leaves, and if not, one more bit is read.  Depth 0
+        is a tree with one leaf -- the empty codeword -- so it is found before
+        any bit is read.
+        """
         if not self.codes:
             raise ModelError("an empty tree has no codewords")
-        if (0, 0) in self.book:          # a one-leaf tree codes in zero bits
-            return self.book[(0, 0)]
         value = 0
-        for length in range(1, self.maxlen + 1):
-            value = (value << 1) | reader.get(1)
+        for length in range(self.maxlen + 1):
             pos = self.book.get((length, value))
             if pos is not None:
                 return pos
+            value = (value << 1) | reader.get(1)
         raise ModelError("no codeword within the tree's maximum depth")
 
 

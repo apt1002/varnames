@@ -218,22 +218,21 @@ impl Codes {
 
     /// Read one codeword and return the leaf position.
     ///
-    /// A codeword is a prefix of the stream.  The empty prefix is one exactly
-    /// when there is a single leaf, which sits at depth 0 and is position 0;
-    /// that is the one case that spends no bits.
+    /// A codeword is a prefix of the stream, so the depths are tried from 0
+    /// upwards: the test at each depth asks whether the bits read so far are
+    /// one of that depth's leaves, and if not, one more bit is read.  Depth 0
+    /// is a tree with one leaf — the empty codeword — so it is found before
+    /// any bit is read.
     fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
         if self.book.is_empty() {
             return Err(Error::EmptyTree);
         }
-        if self.book.len() == 1 {
-            return Ok(self.book[0]);
-        }
         let mut value = 0;
-        for level in &self.levels[1..] {
-            value = (value << 1) | reader.get_bit();
+        for level in &self.levels {
             if value >= level.first && value - level.first < level.count {
                 return Ok(self.book[(level.index + value - level.first) as usize]);
             }
+            value = (value << 1) | reader.get_bit();
         }
         Err(Error::Model("no codeword within the tree's maximum depth"))
     }
