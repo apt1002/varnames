@@ -30,6 +30,7 @@ use std::fmt;
 pub mod bitio;
 pub mod case;
 pub mod codec;
+mod huffman;
 pub mod ladder;
 pub mod model;
 pub mod sha256;

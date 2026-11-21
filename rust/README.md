@@ -19,7 +19,8 @@ assert_eq!(codec.decode(code.value)?, "getUserName");
 |---|---|
 | `bitio` | bits packed least-significant-bit first, and a reader that reads zeros past the end |
 | `ladder` | the static rule-pair ladder and the variable-width integer (`MODEL_FORMAT.md` §4) |
-| `model` | the `NVM1` reader: strict invariant checks, canonical codewords, derived trees |
+| `huffman` | canonical Huffman trees, crate-internal: depth tables in, codewords and the decoding walk out (`MODEL_FORMAT.md` §2) |
+| `model` | the `NVM1` reader: strict invariant checks, the typed index tables, the derived trees |
 | `codec` | the tokeniser, the encoding loop, decoding |
 | `standard` | the embedded standard tables and their SHA-256 |
 | `case` | `classify`, `to_camel`, `from_camel` over the 266 cased pairs (`STANDARD.md` §11) |
