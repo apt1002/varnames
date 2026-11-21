@@ -6,15 +6,15 @@
 //! stage reaches its STOP leaf, whose codeword is all zeros — also the padding
 //! above the integer, so the end costs nothing and is not stored.
 
-use std::cmp::Reverse;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap};
 
 use crate::bitio::{Bits, BitWriter};
 use crate::model::Model;
 use crate::Error;
 
-/// The identifier terminates after this many symbols, whatever the bits say.
-const MAX_SYMBOLS: usize = 1_000_000;
+/// The identifier terminates after this many words, whatever the bits say.
+const MAX_WORDS: usize = 1_000_000;
 
 /// An integer code and its exact bit length.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,26 +51,26 @@ impl Codec {
 
     // ------------------------------------------------------------- encoding
 
-    /// Split an identifier into the model's symbols (`ENCODING.md` §1).
+    /// Split an identifier into the model's words (`ENCODING.md` §1).
     pub fn tokenise(&self, identifier: &str) -> Result<Vec<u32>, Error> {
-        let mut tokens = Vec::with_capacity(identifier.len());
+        let mut words = Vec::with_capacity(identifier.len());
         for c in identifier.chars() {
-            tokens.push(
+            words.push(
                 self.model
                     .char_id(c)
                     .ok_or(Error::UnknownCharacter(c))?,
             );
         }
-        Ok(merge_pairs(tokens, self.model.plan()))
+        Ok(merge_pairs(words, self.model.plan()))
     }
 
     /// The codeword as a bit string, stream order, trailing zeros cut.
     pub fn encode_bits(&self, identifier: &str) -> Result<Bits, Error> {
-        let tokens = self.tokenise(identifier)?;
+        let words = self.tokenise(identifier)?;
         let mut writer = BitWriter::new();
         let mut left = 0u32;
-        for symbol in tokens {
-            let cluster = self.model.cluster_of(symbol)?;
+        for word in words {
+            let cluster = self.model.cluster_of(word)?;
             self.model
                 .top_tree(left)
                 .write(&mut writer, 1 + cluster as usize)?;
@@ -78,8 +78,8 @@ impl Codec {
                 .model
                 .bottom_tree(cluster)
                 .ok_or(Error::EmptyCluster(cluster))?;
-            tree.write(&mut writer, self.model.position_of(symbol)? as usize)?;
-            left = self.model.left_cluster(symbol);
+            tree.write(&mut writer, self.model.position_of(word)? as usize)?;
+            left = self.model.left_cluster(word);
         }
         self.model.top_tree(left).write(&mut writer, 0)?; // the STOP leaf
         Ok(writer.finish())
@@ -103,12 +103,12 @@ impl Codec {
     /// Decode a bit string; bits past the end read as zeros.
     pub fn decode_bits(&self, bits: &Bits) -> Result<String, Error> {
         let mut reader = bits.reader();
-        let mut tokens = Vec::new();
+        let mut words = Vec::new();
         let mut left = 0u32;
-        for _ in 0..MAX_SYMBOLS {
+        for _ in 0..MAX_WORDS {
             let slot = self.model.top_tree(left).read(&mut reader)?;
             if slot == 0 {
-                return self.spell(&tokens);
+                return self.spell(&words);
             }
             let cluster = slot - 1;
             let tree = self
@@ -116,8 +116,9 @@ impl Codec {
                 .bottom_tree(cluster)
                 .ok_or(Error::EmptyCluster(cluster))?;
             let position = tree.read(&mut reader)?;
-            tokens.push(self.model.symbol_of(cluster, position)?);
-            left = self.model.left_cluster(*tokens.last().unwrap());
+            let word = self.model.word_of(cluster, position)?;
+            words.push(word);
+            left = self.model.left_cluster(word);
         }
         Err(Error::DoesNotTerminate)
     }
@@ -127,30 +128,30 @@ impl Codec {
         self.decode_bits(&Bits::from_u128(value))
     }
 
-    /// Word ids back to characters, expanding only the tokens that are present.
+    /// Words back to characters, expanding only the words that are present.
     ///
     /// A rule names children whose ids are smaller than its own — [`Model`]
     /// rejects any other rule — so expansion is a walk down a finite tree, and
-    /// the tokens of one identifier are all it needs.  The rule list is never
+    /// the words of one identifier are all it needs.  The rule list is never
     /// replayed, so the cost follows the output, not the model.
-    fn spell(&self, tokens: &[u32]) -> Result<String, Error> {
+    fn spell(&self, words: &[u32]) -> Result<String, Error> {
         let model = &self.model;
         let first_rule = model.nchars() as usize;
-        let mut out = String::with_capacity(tokens.len());
-        let mut stack: Vec<u32> = tokens.iter().rev().copied().collect();
-        while let Some(symbol) = stack.pop() {
-            let symbol = symbol as usize;
-            if symbol < first_rule {
+        let mut out = String::with_capacity(words.len());
+        let mut stack: Vec<u32> = words.iter().rev().copied().collect();
+        while let Some(word) = stack.pop() {
+            let word = word as usize;
+            if word < first_rule {
                 let c = *model
                     .alphabet()
-                    .get(symbol)
-                    .ok_or(Error::Model("a token is outside the model"))?;
+                    .get(word)
+                    .ok_or(Error::Model("a word is outside the model"))?;
                 out.push(c);
             } else {
                 let &(a, b) = model
                     .rules()
-                    .get(symbol - first_rule)
-                    .ok_or(Error::Model("a token is outside the model"))?;
+                    .get(word - first_rule)
+                    .ok_or(Error::Model("a word is outside the model"))?;
                 stack.push(b); // the left operand comes off the stack first
                 stack.push(a);
             }
@@ -159,40 +160,71 @@ impl Codec {
     }
 }
 
-/// A live token: a word id and its neighbours in the identifier.
+/// A live node: a word id and its neighbours in the identifier.
 ///
-/// A merge keeps the left token and removes the right one, so the head of the
-/// list is always token 0 and the tail has no `next`.
+/// A merge keeps the left node and removes the right one, so the head of the
+/// list is always position 0 and the tail has no `next`.
 #[derive(Clone, Copy)]
-struct Token {
+struct Node {
     word: u32,
     next: Option<usize>,
     prev: Option<usize>,
+}
+
+/// A queued merge: the rank of the rule, and the position it applies at.
+///
+/// Only the rank orders the heap.  Two occurrences of one rule cannot overlap —
+/// a rule's children differ, and the plan holds one entry per pair — so merges
+/// of equal rank are independent, and the order among them cannot matter.
+/// That is why nothing here has to implement "the leftmost of a tie".
+#[derive(Clone, Copy)]
+struct Candidate {
+    rank: u32,
+    position: usize,
+}
+
+impl PartialEq for Candidate {
+    fn eq(&self, other: &Self) -> bool {
+        self.rank == other.rank
+    }
+}
+
+impl Eq for Candidate {}
+
+impl PartialOrd for Candidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Candidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.rank.cmp(&other.rank)
+    }
 }
 
 /// The state of one `merge_pairs` call: the sweep of `ENCODING.md` §1.
 ///
 /// Ranks are nested — a merge's rank exceeds the ranks that built its operands
 /// — so any pair a merge creates has a rank above the one just used, and a
-/// sweep that always takes the lowest rank performs the merges in the order
-/// the model defines.  `(rank, position)` in the heap gives the lowest rank
-/// first and the leftmost of a rank, which is exactly the tie-break.
+/// sweep that always takes the lowest rank performs the merges in the order the
+/// model defines.
 struct MergePairs<'a> {
-    /// `None` where a token has been merged away.
-    tokens: Vec<Option<Token>>,
+    /// `None` where a node has been merged away.
+    nodes: Vec<Option<Node>>,
     plan: &'a HashMap<(u32, u32), (u32, u32)>,
-    heap: BinaryHeap<Reverse<(u32, usize)>>,
+    heap: BinaryHeap<Reverse<Candidate>>,
 }
 
 impl<'a> MergePairs<'a> {
-    /// A sweep over `tokens`, whose adjacent pairs are looked up in `plan`.
-    fn new(tokens: Vec<u32>, plan: &'a HashMap<(u32, u32), (u32, u32)>) -> Self {
-        let n = tokens.len();
-        let tokens = tokens
+    /// A sweep over `words`, whose adjacent pairs are looked up in `plan`.
+    fn new(words: Vec<u32>, plan: &'a HashMap<(u32, u32), (u32, u32)>) -> Self {
+        let n = words.len();
+        let nodes = words
             .into_iter()
             .enumerate()
             .map(|(i, word)| {
-                Some(Token {
+                Some(Node {
                     word,
                     next: (i + 1 < n).then_some(i + 1),
                     prev: i.checked_sub(1),
@@ -200,7 +232,7 @@ impl<'a> MergePairs<'a> {
             })
             .collect();
         MergePairs {
-            tokens,
+            nodes,
             plan,
             heap: BinaryHeap::new(),
         }
@@ -208,42 +240,42 @@ impl<'a> MergePairs<'a> {
 
     /// Offer the pair that starts at `i`, if the model has a rule for it.
     fn push(&mut self, i: usize) {
-        let Some(Token { word, next: Some(j), .. }) = self.tokens[i] else {
+        let Some(Node { word, next: Some(j), .. }) = self.nodes[i] else {
             return;
         };
-        let Some(right) = self.tokens[j] else { return };
+        let Some(right) = self.nodes[j] else { return };
         if let Some(&(rank, _)) = self.plan.get(&(word, right.word)) {
-            self.heap.push(Reverse((rank, i)));
+            self.heap.push(Reverse(Candidate { rank, position: i }));
         }
     }
 
-    /// Merge until no adjacent pair has a rule; return the surviving words.
+    /// Merge until no adjacent pair has a rule; return the words that remain.
     fn run(mut self) -> Vec<u32> {
-        for i in 0..self.tokens.len().saturating_sub(1) {
+        for i in 0..self.nodes.len().saturating_sub(1) {
             self.push(i);
         }
-        while let Some(Reverse((rank, i))) = self.heap.pop() {
+        while let Some(Reverse(Candidate { rank, position: i })) = self.heap.pop() {
             // The pair at `i` may have gone, or changed, since it was queued.
-            let Some(Token { word, next: Some(j), prev }) = self.tokens[i] else {
+            let Some(Node { word, next: Some(j), prev }) = self.nodes[i] else {
                 continue;
             };
-            let Some(right) = self.tokens[j] else { continue };
-            let Some(&(found, new_word)) = self.plan.get(&(word, right.word)) else {
+            let Some(right) = self.nodes[j] else { continue };
+            let Some(&(found, merged)) = self.plan.get(&(word, right.word)) else {
                 continue;
             };
             if found != rank {
                 continue; // stale: the pair at `i` is not the one we queued
             }
-            let following = right.next;
-            self.tokens[i] = Some(Token {
-                word: new_word,
-                next: following,
+            let followed = right.next;
+            self.nodes[i] = Some(Node {
+                word: merged,
+                next: followed,
                 prev,
             });
-            self.tokens[j] = None;
-            if let Some(f) = following {
-                if let Some(after) = self.tokens[f].as_mut() {
-                    after.prev = Some(i);
+            self.nodes[j] = None;
+            if let Some(f) = followed {
+                if let Some(node) = self.nodes[f].as_mut() {
+                    node.prev = Some(i);
                 }
             }
             // The pair before `i` is new too, because `i`'s word has changed.
@@ -252,14 +284,8 @@ impl<'a> MergePairs<'a> {
             }
             self.push(i);
         }
-        let mut out = Vec::with_capacity(self.tokens.len());
-        let mut cursor = Some(0);
-        while let Some(i) = cursor {
-            let Some(token) = self.tokens[i] else { break };
-            out.push(token.word);
-            cursor = token.next;
-        }
-        out
+        // A merge keeps the left node, so the survivors are still in order.
+        self.nodes.iter().flatten().map(|node| node.word).collect()
     }
 }
 
@@ -268,11 +294,8 @@ impl<'a> MergePairs<'a> {
 /// A linked list over the positions makes each merge a constant amount of work
 /// besides the heap; the heap holds one entry per candidate pair, and entries
 /// whose pair has since changed are skipped when they surface.
-pub fn merge_pairs(tokens: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
-    if tokens.len() < 2 || plan.is_empty() {
-        return tokens;
-    }
-    MergePairs::new(tokens, plan).run()
+pub fn merge_pairs(words: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
+    MergePairs::new(words, plan).run()
 }
 
 #[cfg(test)]
@@ -281,7 +304,7 @@ mod tests {
     use crate::standard;
 
     #[test]
-    fn spelling_is_the_expansion_of_the_tokens_alone() {
+    fn spelling_is_the_expansion_of_the_words_alone() {
         let codec = standard().expect("the embedded tables");
         let model = codec.model();
         let first_rule = model.nchars() as usize;
@@ -297,29 +320,29 @@ mod tests {
     }
 
     #[test]
-    fn a_token_outside_the_model_is_an_error() {
+    fn a_word_outside_the_model_is_an_error() {
         let codec = standard().expect("the embedded tables");
         assert!(matches!(
             codec.spell(&[u32::MAX]),
-            Err(Error::Model("a token is outside the model"))
+            Err(Error::Model("a word is outside the model"))
         ));
     }
 
     /// The definition of `ENCODING.md` §1, written the slow obvious way:
     /// repeatedly merge the lowest-rank adjacent pair, the leftmost of a tie.
-    fn naive(tokens: &[u32], plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
-        let mut words = tokens.to_vec();
-        while let Some((i, new_word)) = words
+    fn naive(words: &[u32], plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
+        let mut out = words.to_vec();
+        while let Some((i, new_word)) = out
             .windows(2)
             .enumerate()
             .filter_map(|(i, pair)| plan.get(&(pair[0], pair[1])).map(|&(r, w)| (r, i, w)))
             .min_by_key(|&(rank, i, _)| (rank, i))
             .map(|(_, i, w)| (i, w))
         {
-            words[i] = new_word;
-            words.remove(i + 1);
+            out[i] = new_word;
+            out.remove(i + 1);
         }
-        words
+        out
     }
 
     #[test]
@@ -337,7 +360,7 @@ mod tests {
         };
         for _ in 0..20_000 {
             let len = (roll() % 10) as usize;
-            let tokens: Vec<u32> = (0..len)
+            let words: Vec<u32> = (0..len)
                 .map(|_| {
                     let r = roll();
                     let wide = (r / 4) as u32;
@@ -347,9 +370,9 @@ mod tests {
                 })
                 .collect();
             assert_eq!(
-                merge_pairs(tokens.clone(), plan),
-                naive(&tokens, plan),
-                "{tokens:?}"
+                merge_pairs(words.clone(), plan),
+                naive(&words, plan),
+                "{words:?}"
             );
         }
     }
@@ -366,10 +389,10 @@ mod tests {
         // random test above only stumbles on such a case by luck of the draw.
         let codec = standard().expect("the embedded tables");
         let model = codec.model();
-        let tokens: Vec<u32> = "Find"
+        let words: Vec<u32> = "Find"
             .chars()
             .map(|c| model.char_id(c).expect("a character of the alphabet"))
             .collect();
-        assert_eq!(merge_pairs(tokens, model.plan()).len(), 1);
+        assert_eq!(merge_pairs(words, model.plan()).len(), 1);
     }
 }

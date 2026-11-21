@@ -55,7 +55,7 @@ pub enum Error {
     },
     /// The bits name a right cluster that has no words.
     EmptyCluster(u32),
-    /// The bits do not reach the STOP leaf within the symbol budget.
+    /// The bits do not reach the STOP leaf within the word budget.
     DoesNotTerminate,
     /// The embedded standard model is not the one this crate was built with.
     Checksum {

@@ -51,7 +51,7 @@ class Tree:
     """One canonical Huffman tree: ``codes[position] = (value, length)``.
 
     Position is the leaf's place in the stored depth sequence, which is the
-    symbol id for a word tree and ``0 = STOP, 1 + J = right cluster J`` for a
+    word id for a word tree and ``0 = STOP, 1 + J = right cluster J`` for a
     top tree.
     """
 

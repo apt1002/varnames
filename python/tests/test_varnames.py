@@ -306,8 +306,7 @@ class TestCodec(unittest.TestCase):
         plan = m._plan
         # every rule rank survives a round trip through the tokeniser
         for a, b in list(m.rules)[:200]:
-            tokens = [a, b]
-            self.assertEqual(len(_merge_pairs(tokens, plan)), 1)
+            self.assertEqual(len(_merge_pairs([a, b], plan)), 1)
 
     def test_the_sweep_agrees_with_the_definition(self):
         # The definition of ENCODING.md section 1, written the slow obvious
@@ -317,19 +316,19 @@ class TestCodec(unittest.TestCase):
         plan = model._plan
         n_words = model.nchars + len(model.rules)
 
-        def naive(tokens):
-            words = list(tokens)
+        def naive(words):
+            out = list(words)
             while True:
                 best = None
-                for i in range(len(words) - 1):
-                    found = plan.get((words[i], words[i + 1]))
+                for i in range(len(out) - 1):
+                    found = plan.get((out[i], out[i + 1]))
                     if found is not None and (best is None or found[0] < best[0]):
                         best = (found[0], i, found[1])
                 if best is None:
-                    return words
+                    return out
                 _, i, new_word = best
-                words[i] = new_word
-                del words[i + 1]
+                out[i] = new_word
+                del out[i + 1]
 
         state = 0x2545F4914F6CDD1D
         mask = (1 << 64) - 1
@@ -342,14 +341,14 @@ class TestCodec(unittest.TestCase):
             return state
 
         for _ in range(20000):
-            tokens = []
+            words = []
             for _ in range(roll() % 10):
                 r = roll()
                 wide = (r // 4) % n_words
                 # Mostly characters, sometimes a longer word, so that the same
                 # pair can turn up in several places at once.
-                tokens.append(wide if r % 4 == 0 else (r // 4) % 64)
-            self.assertEqual(_merge_pairs(tokens, plan), naive(tokens), tokens)
+                words.append(wide if r % 4 == 0 else (r // 4) % 64)
+            self.assertEqual(_merge_pairs(words, plan), naive(words), words)
 
     def test_a_stale_heap_entry_does_not_merge_early(self):
         # "Find".  The pairs are (F,i) rank 92, (i,n) rank 4 and (n,d) rank
@@ -362,13 +361,13 @@ class TestCodec(unittest.TestCase):
         # random test above only stumbles on such a case by luck of the draw.
         model = self.codec.model
         plan = model._plan
-        tokens = [model._char_id[c] for c in "Find"]
-        self.assertEqual(len(_merge_pairs(tokens, plan)), 1)
+        words = [model._char_id[c] for c in "Find"]
+        self.assertEqual(len(_merge_pairs(words, plan)), 1)
 
-    def test_spelling_expands_only_the_tokens_present(self):
+    def test_spelling_expands_only_the_words_present(self):
         # The second rule names children that do not exist.  Replaying the rule
-        # list would trip over it; expanding the tokens present cannot, because
-        # no token here is that rule.
+        # list would trip over it; expanding the words present cannot, because
+        # no word here is that rule.
         class _Stub:
             nchars = 1
             alphabet = ["a"]
@@ -379,7 +378,7 @@ class TestCodec(unittest.TestCase):
         self.assertEqual(_spell(_Stub, [1]), "aa")
         self.assertEqual(_spell(_Stub, [1, 0, 1]), "aaaaa")
 
-    def test_a_token_outside_the_model_is_an_error(self):
+    def test_a_word_outside_the_model_is_an_error(self):
         with self.assertRaises(DecodeError):
             _spell(self.codec.model, [10 ** 6])
         with self.assertRaises(DecodeError):

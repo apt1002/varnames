@@ -29,14 +29,14 @@ class Codec:
     # --------------------------------------------------------------- encoding
 
     def tokenise(self, identifier):
-        """Split an identifier into the model's symbols (``ENCODING.md`` §1)."""
+        """Split an identifier into the model's words (``ENCODING.md`` §1)."""
         model = self.model
         try:
-            tokens = [model._char_id[c] for c in identifier]
+            words = [model._char_id[c] for c in identifier]
         except KeyError as exc:
             raise EncodeError(f"character {exc.args[0]!r} is not in the "
                               "model's alphabet") from None
-        return _merge_pairs(tokens, model._plan)
+        return _merge_pairs(words, model._plan)
 
     def encode_bits(self, identifier):
         """The codeword as a list of bits, stream order, trailing zeros cut."""
@@ -49,11 +49,11 @@ class Codec:
                 bits.append((value >> shift) & 1)
 
         left = 0
-        for symbol in self.tokenise(identifier):
-            cluster = model.memberships[symbol]
+        for word in self.tokenise(identifier):
+            cluster = model.memberships[word]
             emit(model.top_trees[left], 1 + cluster)
-            emit(model.bottom_trees[cluster], model.pos_in_cluster[symbol])
-            left = model.left[symbol]
+            emit(model.bottom_trees[cluster], model.pos_in_cluster[word])
+            left = model.left[word]
         emit(model.top_trees[left], 0)          # the STOP leaf: all zeros
         while bits and bits[-1] == 0:
             bits.pop()
@@ -85,9 +85,9 @@ class Codec:
             tree = model.bottom_trees.get(cluster)
             if tree is None:
                 raise DecodeError(f"right cluster {cluster} is empty")
-            symbol = model.cluster_ids[cluster][tree.read(reader)]
-            out.append(symbol)
-            left = model.left[symbol]
+            word = model.cluster_ids[cluster][tree.read(reader)]
+            out.append(word)
+            left = model.left[word]
         raise DecodeError("the identifier does not terminate")
 
     def decode(self, value, bits=None):
@@ -106,9 +106,9 @@ class Codec:
             tree = model.bottom_trees.get(cluster)
             if tree is None:
                 raise DecodeError(f"right cluster {cluster} is empty")
-            symbol = model.cluster_ids[cluster][tree.read(reader)]
-            out.append(symbol)
-            left = model.left[symbol]
+            word = model.cluster_ids[cluster][tree.read(reader)]
+            out.append(word)
+            left = model.left[word]
         else:
             raise DecodeError("the identifier does not terminate")
         if bits is not None and bits_length_of(value) > bits:
@@ -116,26 +116,26 @@ class Codec:
         return _spell(model, out)
 
 
-def _spell(model, symbols):
-    """Word ids back to characters, expanding only the tokens that are present.
+def _spell(model, words):
+    """Words back to characters, expanding only the words that are present.
 
     A rule names children whose ids are smaller than its own, so expansion is a
-    walk down a finite tree of the tokens this identifier actually contains.
+    walk down a finite tree of the words this identifier actually contains.
     Spelling one identifier never replays the rule list, so the cost follows
     the output, not the model.
     """
     first_rule = model.nchars
     limit = first_rule + len(model.rules)
     out = []
-    stack = list(reversed(symbols))
+    stack = list(reversed(words))
     while stack:
-        symbol = stack.pop()
-        if not 0 <= symbol < limit:
-            raise DecodeError("a token is outside the model")
-        if symbol < first_rule:
-            out.append(model.alphabet[symbol])
+        word = stack.pop()
+        if not 0 <= word < limit:
+            raise DecodeError("a word is outside the model")
+        if word < first_rule:
+            out.append(model.alphabet[word])
         else:
-            a, b = model.rules[symbol - first_rule]
+            a, b = model.rules[word - first_rule]
             stack.append(b)               # the left operand comes off first
             stack.append(a)
     return "".join(out)
@@ -179,12 +179,12 @@ class _IntReader:
         return out
 
 
-class _Token:
+class _Node:
     """One word of the identifier, with the neighbours it can merge with.
 
-    A merge keeps the left token and removes the right one, so the head of the
-    list is always token 0 and the last token has no ``next``.  A token that has
-    been merged away is replaced by ``None``.
+    A merge keeps the left node and removes the right one, so the head of the
+    list is always position 0 and the last node has no ``next``.  A node that
+    has been merged away is replaced by ``None``.
     """
 
     __slots__ = ("word", "next", "prev")
@@ -195,85 +195,96 @@ class _Token:
         self.prev = prev
 
 
+class _Candidate:
+    """A queued merge: the rank of the rule, and the position it applies at.
+
+    Only the rank orders the heap.  Two occurrences of one rule cannot overlap
+    — a rule's two children differ, and the plan holds one entry per pair — so
+    merges of equal rank are independent, and the order among them cannot
+    matter.  That is why nothing here has to implement "the leftmost of a tie".
+    """
+
+    __slots__ = ("rank", "position")
+
+    def __init__(self, rank, position):
+        self.rank = rank
+        self.position = position
+
+    def __lt__(self, other):
+        return self.rank < other.rank
+
+
 class _MergePairs:
     """One sweep over the adjacent pairs of an identifier (``ENCODING.md`` §1).
 
     Ranks are nested — a merge's rank exceeds the ranks that built its operands
     — so any pair a merge creates has a rank above the one just used, and a
     sweep that always takes the lowest rank performs the merges in the order the
-    model defines.  The heap holds ``(rank, position)``, so "lowest rank first"
-    comes out of the ordering and "leftmost of a rank" out of the second field.
+    model defines.
 
     The pair at a position can change after it has been queued, so the rank is
     read from the plan again when an entry surfaces, and an entry that no longer
     matches is dropped.
     """
 
-    __slots__ = ("tokens", "plan", "heap")
+    __slots__ = ("nodes", "plan", "heap")
 
-    def __init__(self, tokens, plan):
-        n = len(tokens)
-        self.tokens = [
-            _Token(word, i + 1 if i + 1 < n else None, i - 1 if i > 0 else None)
-            for i, word in enumerate(tokens)
+    def __init__(self, words, plan):
+        n = len(words)
+        self.nodes = [
+            _Node(word, i + 1 if i + 1 < n else None, i - 1 if i > 0 else None)
+            for i, word in enumerate(words)
         ]
         self.plan = plan
         self.heap = []
 
     def push(self, i):
         """Offer the pair that starts at ``i``, if the model has a rule for it."""
-        token = self.tokens[i]
-        if token is None or token.next is None:
+        node = self.nodes[i]
+        if node is None or node.next is None:
             return
-        other = self.tokens[token.next]
-        if other is None:
+        right = self.nodes[node.next]
+        if right is None:
             return
-        found = self.plan.get((token.word, other.word))
+        found = self.plan.get((node.word, right.word))
         if found is not None:
-            heapq.heappush(self.heap, (found[0], i))
+            heapq.heappush(self.heap, _Candidate(found[0], i))
 
     def run(self):
         """Merge until no adjacent pair has a rule; return the words that remain."""
-        for i in range(len(self.tokens) - 1):
+        for i in range(len(self.nodes) - 1):
             self.push(i)
         while self.heap:
-            rank, i = heapq.heappop(self.heap)
+            candidate = heapq.heappop(self.heap)
+            rank, i = candidate.rank, candidate.position
             # The pair at `i` may have gone, or changed, since it was queued.
-            token = self.tokens[i]
-            if token is None or token.next is None:
+            node = self.nodes[i]
+            if node is None or node.next is None:
                 continue
-            j = token.next
-            other = self.tokens[j]
-            if other is None:
+            j = node.next
+            right = self.nodes[j]
+            if right is None:
                 continue
-            found = self.plan.get((token.word, other.word))
+            found = self.plan.get((node.word, right.word))
             if found is None or found[0] != rank:
                 continue                    # not the pair we queued: stale
-            following = other.next
-            token.word = found[1]
-            token.next = following
-            self.tokens[j] = None
+            following = right.next
+            node.word = found[1]
+            node.next = following
+            self.nodes[j] = None
             if following is not None:
-                self.tokens[following].prev = i
-            # The pair before `i` is new, because `i`'s word has changed.
-            if token.prev is not None:
-                self.push(token.prev)
+                self.nodes[following].prev = i
+            # The pair before `i` is new too, because `i`'s word has changed.
+            if node.prev is not None:
+                self.push(node.prev)
             self.push(i)
-        out = []
-        i = 0
-        while i is not None:
-            token = self.tokens[i]
-            out.append(token.word)
-            i = token.next
-        return out
+        # A merge keeps the left node, so the survivors are still in order.
+        return [node.word for node in self.nodes if node is not None]
 
 
-def _merge_pairs(tokens, plan):
+def _merge_pairs(words, plan):
     """The production tokeniser of ``ENCODING.md`` §1, in one pass.
 
-    See :class:`_MergePairs` for the sweep; this only keeps the empty cases out
-    of it.
+    See :class:`_MergePairs` for the sweep.
     """
-    if len(tokens) < 2 or not plan:
-        return tokens
-    return _MergePairs(tokens, plan).run()
+    return _MergePairs(words, plan).run()

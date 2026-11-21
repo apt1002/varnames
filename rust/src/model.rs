@@ -21,7 +21,7 @@ pub const DEPTH_BITS: u32 = 4;
 
 /// One canonical Huffman tree: `codes[position] = (value, length)`.
 ///
-/// Position is the leaf's place in the stored depth sequence: the symbol id for
+/// Position is the leaf's place in the stored depth sequence: the word id for
 /// a word tree, and `0 = STOP, 1 + j = right cluster j` for a top tree.
 #[derive(Clone, Debug)]
 pub struct Tree {
@@ -275,13 +275,13 @@ impl Model {
             .collect();
 
         let mut cluster_ids: Vec<Vec<u32>> = vec![Vec::new(); kq as usize];
-        for (symbol, &cluster) in memberships.iter().enumerate() {
+        for (word, &cluster) in memberships.iter().enumerate() {
             if cluster >= kq {
                 return Err(Error::Model(
                     "a membership names a cluster that does not exist",
                 ));
             }
-            cluster_ids[cluster as usize].push(symbol as u32);
+            cluster_ids[cluster as usize].push(word as u32);
         }
         let mut pos_in_cluster = vec![0u32; v as usize];
         let mut bottom_trees: Vec<Option<Tree>> = vec![None; kq as usize];
@@ -295,8 +295,8 @@ impl Model {
                 continue;
             }
             require_kraft(&depths)?;
-            for (position, &symbol) in ids.iter().enumerate() {
-                pos_in_cluster[symbol as usize] = position as u32;
+            for (position, &word) in ids.iter().enumerate() {
+                pos_in_cluster[word as usize] = position as u32;
             }
             bottom_trees[cluster as usize] = Some(Tree::new(&depths)?);
         }
@@ -460,15 +460,15 @@ impl Model {
     pub fn rules(&self) -> &[(u32, u32)] {
         &self.rules
     }
-    /// The characters, in symbol-id order.
+    /// The characters, in word-id order.
     pub fn alphabet(&self) -> &[char] {
         &self.alphabet
     }
-    /// The right cluster of every symbol.
+    /// The right cluster of every word.
     pub fn memberships(&self) -> &[u32] {
         &self.memberships
     }
-    /// The stored word-tree depth of every symbol.
+    /// The stored word-tree depth of every word.
     pub fn bottom_depths(&self) -> &[u32] {
         &self.bottom_depths
     }
@@ -476,33 +476,33 @@ impl Model {
     pub fn top_depths(&self) -> &[Vec<u32>] {
         &self.top_depths
     }
-    /// The left cluster a symbol starts in.
-    pub fn left_cluster(&self, symbol: u32) -> u32 {
-        self.left[symbol as usize]
+    /// The left cluster a word starts in.
+    pub fn left_cluster(&self, word: u32) -> u32 {
+        self.left[word as usize]
     }
-    /// The symbol at a position in a right cluster.
-    pub fn symbol_of(&self, cluster: u32, position: u32) -> Result<u32, Error> {
+    /// The word at a position in a right cluster.
+    pub fn word_of(&self, cluster: u32, position: u32) -> Result<u32, Error> {
         self.cluster_ids
             .get(cluster as usize)
             .and_then(|ids| ids.get(position as usize))
             .copied()
             .ok_or(Error::Model("a word position is outside its cluster"))
     }
-    /// The position of a symbol in its right cluster.
-    pub fn position_of(&self, symbol: u32) -> Result<u32, Error> {
+    /// The position of a word in its right cluster.
+    pub fn position_of(&self, word: u32) -> Result<u32, Error> {
         self.pos_in_cluster
-            .get(symbol as usize)
+            .get(word as usize)
             .copied()
-            .ok_or(Error::Model("a symbol is outside the model"))
+            .ok_or(Error::Model("a word is outside the model"))
     }
-    /// The right cluster a symbol belongs to.
-    pub fn cluster_of(&self, symbol: u32) -> Result<u32, Error> {
+    /// The right cluster a word belongs to.
+    pub fn cluster_of(&self, word: u32) -> Result<u32, Error> {
         self.memberships
-            .get(symbol as usize)
+            .get(word as usize)
             .copied()
-            .ok_or(Error::Model("a symbol is outside the model"))
+            .ok_or(Error::Model("a word is outside the model"))
     }
-    /// A character's symbol id, if the model has it.
+    /// A character's word id, if the model has it.
     pub fn char_id(&self, c: char) -> Option<u32> {
         self.char_id.get(&c).copied()
     }
