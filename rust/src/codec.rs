@@ -6,7 +6,7 @@
 //! stage reaches its STOP leaf, whose codeword is all zeros — also the padding
 //! above the integer, so the end costs nothing and is not stored.
 
-use std::cmp::{Ordering, Reverse};
+use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
 use crate::bitio::{Bits, BitWriter};
@@ -177,6 +177,9 @@ struct Node {
 /// a rule's children differ, and the plan holds one entry per pair — so merges
 /// of equal rank are independent, and the order among them cannot matter.
 /// That is why nothing here has to implement "the leftmost of a tie".
+///
+/// The order is *reversed*: a low rank is the higher priority, and the heap is
+/// a max-heap, so `cmp` puts the smaller rank first.
 #[derive(Clone, Copy)]
 struct Candidate {
     rank: u32,
@@ -199,7 +202,7 @@ impl PartialOrd for Candidate {
 
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.rank.cmp(&other.rank)
+        other.rank.cmp(&self.rank)
     }
 }
 
@@ -213,7 +216,7 @@ struct MergePairs<'a> {
     /// `None` where a node has been merged away.
     nodes: Vec<Option<Node>>,
     plan: &'a HashMap<(u32, u32), (u32, u32)>,
-    heap: BinaryHeap<Reverse<Candidate>>,
+    heap: BinaryHeap<Candidate>,
 }
 
 impl<'a> MergePairs<'a> {
@@ -245,7 +248,7 @@ impl<'a> MergePairs<'a> {
         };
         let Some(right) = self.nodes[j] else { return };
         if let Some(&(rank, _)) = self.plan.get(&(word, right.word)) {
-            self.heap.push(Reverse(Candidate { rank, position: i }));
+            self.heap.push(Candidate { rank, position: i });
         }
     }
 
@@ -254,7 +257,7 @@ impl<'a> MergePairs<'a> {
         for i in 0..self.nodes.len().saturating_sub(1) {
             self.push(i);
         }
-        while let Some(Reverse(Candidate { rank, position: i })) = self.heap.pop() {
+        while let Some(Candidate { rank, position: i }) = self.heap.pop() {
             // The pair at `i` may have gone, or changed, since it was queued.
             let Some(Node { word, next: Some(j), prev }) = self.nodes[i] else {
                 continue;
