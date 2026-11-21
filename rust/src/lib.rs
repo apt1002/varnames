@@ -18,6 +18,10 @@
 //! The tables ship inside the crate ([`mod@standard`]); a project that prefers its
 //! own can load any `NVM1` file with [`Model::from_bytes`] and hand it to
 //! [`Codec::new`].
+//!
+//! The tables are read through typed indices — [`Word`], [`Rule`], [`Char`],
+//! [`Left`], [`Right`], [`LeftLeaf`], [`RightLeaf`] — so a right cluster cannot
+//! be passed where a left cluster is meant, and no table is indexed by hand.
 
 #![warn(missing_docs)]
 
@@ -34,7 +38,9 @@ pub mod standard;
 pub use bitio::Bits;
 pub use case::{classify, from_camel, to_camel, Class};
 pub use codec::{Code, Codec};
-pub use model::{Model, Tree};
+pub use model::{
+    BottomTree, Char, CharOrRule, Left, LeftLeaf, Model, Right, RightLeaf, Rule, TopTree, Word,
+};
 pub use standard::standard;
 
 /// Everything that can go wrong encoding or decoding.
@@ -54,7 +60,7 @@ pub enum Error {
         bits: usize,
     },
     /// The bits name a right cluster that has no words.
-    EmptyCluster(u32),
+    EmptyCluster(Right),
     /// The bits do not reach the STOP leaf within the word budget.
     DoesNotTerminate,
     /// The embedded standard model is not the one this crate was built with.
@@ -79,8 +85,8 @@ impl fmt::Display for Error {
                 f,
                 "the code needs {bits} bits, more than the 128 this call accepts"
             ),
-            Error::EmptyCluster(cluster) => {
-                write!(f, "right cluster {cluster} is empty")
+            Error::EmptyCluster(right) => {
+                write!(f, "right cluster {} is empty", right.0)
             }
             Error::DoesNotTerminate => write!(f, "the identifier does not terminate"),
             Error::Checksum { expected, found } => write!(

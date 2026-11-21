@@ -56,8 +56,11 @@ mod tests {
     fn dimensions() {
         let codec = standard().unwrap();
         let m = codec.model();
-        assert_eq!((m.v(), m.k(), m.q()), (8_191, 32, 1));
-        assert_eq!(m.nchars(), 63);
-        assert_eq!(m.rules().len(), 8_128);
+        assert_eq!(
+            (m.num_words(), m.num_lefts(), m.num_rights_per_left()),
+            (8_191, 32, 1)
+        );
+        assert_eq!(m.num_chars(), 63);
+        assert_eq!(m.num_rules(), 8_128);
     }
 }

@@ -27,6 +27,18 @@ assert_eq!(codec.decode(code.value)?, "getUserName");
 
 The crate has no dependencies and no build script.
 
+## Every index has a type
+
+A model is a set of tables indexed by small integers of several different
+kinds, so `model` gives each kind its own one-field struct: `Word`, `Rule`,
+`Char`, `Left`, `Right`, `LeftLeaf` and `RightLeaf`.  `Model`'s accessors take
+one kind and return the next — `model.right(word)`, `model.left_of(right)`,
+`model.top_tree(left)`, `model.position(word)` — so a right cluster cannot be
+passed where a left cluster is meant, and no caller ever indexes a table
+directly.  The tables themselves are private; the sizes are methods
+(`num_words()`, `num_lefts()`, …), each docstring naming its letter in
+`STANDARD.md`.
+
 ## Case conversion
 
 The model is trained on CamelCase, so `FOO_BAR` and `foo_bar` code less well

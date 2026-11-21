@@ -5,6 +5,12 @@
 //! Everything else — codewords, leaf lists, the cluster of a word — is derived
 //! here, once, at load time.
 //!
+//! Every index has its own type — [`Char`], [`Rule`], [`Word`], [`Left`],
+//! [`Right`], [`RightLeaf`], [`LeftLeaf`] — so a right cluster cannot be passed
+//! where a left cluster is meant.  The accessors below validate what they are
+//! given and return the derived information; the tables themselves stay
+//! private.
+//!
 //! The reader is strict: every invariant the format states is checked, so a
 //! corrupt or truncated file fails at load rather than at decode.
 
@@ -19,56 +25,136 @@ pub const MAGIC: [u8; 4] = *b"NVM1";
 /// The depth field is always four bits (`MODEL_FORMAT.md` §3).
 pub const DEPTH_BITS: u32 = 4;
 
-/// One canonical Huffman tree: `codes[position] = (value, length)`.
+// ------------------------------------------------------------ index types
+//
+// The tables are indexed by small integers of several different kinds, and a
+// bare `u32` cannot say which kind it is.  These one-field structs can.  They
+// cost nothing at run time (`#[repr(transparent)]`), and every `Model` method
+// that takes one checks it, so an index invented by hand is an error rather
+// than a wrong answer.
+
+/// An index into the alphabet: `0 <= c < num_chars()`.
 ///
-/// Position is the leaf's place in the stored depth sequence: the word id for
-/// a word tree, and `0 = STOP, 1 + j = right cluster j` for a top tree.
+/// Characters are the first words of the model — `STANDARD.md` numbers them
+/// `0 … C-1` — so a `Char` is also a [`Word`] of the same value
+/// ([`Char::word`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Char(pub u32);
+
+/// An index into the rule list: `0 <= r < num_rules()`.
+///
+/// The index is also the rule's **rank** in `STANDARD.md` §5, the order in
+/// which the tokeniser applies rules; the word the rule defines is
+/// `num_chars() + rule` ([`Model::word_of_rule`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct Rule(pub u32);
+
+/// A word id: `0 <= w < num_words()`, which is `V` in `STANDARD.md`.
+///
+/// Ids below `num_chars()` are characters; the rest are the words the rules
+/// define.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Word(pub u32);
+
+/// A left cluster: `0 <= l < num_lefts()`, which is `k` in `STANDARD.md`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Left(pub u32);
+
+/// A right cluster: `0 <= r < num_rights()`, which is `kq` in `STANDARD.md`.
+///
+/// The right clusters `l·q … l·q + q - 1` belong to left cluster `l`, where
+/// `q` is [`Model::num_rights_per_left`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Right(pub u32);
+
+/// A word's position in its right cluster's word list, from 0 to the number of
+/// words in the cluster minus one.
+///
+/// The list is in ascending word id (`MODEL_FORMAT.md` §2), and the tree that
+/// codes a position is [`Model::bottom_tree`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct RightLeaf(pub u32);
+
+/// A leaf of a left cluster's tree.
+///
+/// Leaf 0 is the STOP leaf; leaf `1 + r` codes `Right(r)`, so
+/// `LeftLeaf::from(right)` and [`LeftLeaf::right`] convert between the two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct LeftLeaf(pub u32);
+
+impl Char {
+    /// The word id of this character: a character is its own word.
+    pub fn word(self) -> Word {
+        Word(self.0)
+    }
+}
+
+impl LeftLeaf {
+    /// The STOP leaf: leaf 0 of every left cluster's tree.
+    pub const STOP: LeftLeaf = LeftLeaf(0);
+
+    /// The right cluster this leaf codes; `None` for the STOP leaf.
+    pub fn right(self) -> Option<Right> {
+        Some(Right(self.0.checked_sub(1)?))
+    }
+}
+
+impl From<Right> for LeftLeaf {
+    fn from(right: Right) -> LeftLeaf {
+        LeftLeaf(right.0 + 1)
+    }
+}
+
+/// What a word is: a character, or a rule that expands to two words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CharOrRule {
+    /// The word is a character of the alphabet.
+    Char(Char),
+    /// The word is the one a rule defines.
+    Rule(Rule),
+}
+
+/// A canonical Huffman tree: `codes[position] = (value, length)`.
 #[derive(Clone, Debug)]
-pub struct Tree {
+struct Codes {
     codes: Vec<(u32, u32)>,
     book: HashMap<(u32, u32), u32>,
     max_len: u32,
     single: Option<u32>,
 }
 
-impl Tree {
+impl Codes {
     /// Build a tree from its leaf depths, in stored order.
-    pub fn new(depths: &[u32]) -> Result<Tree, Error> {
+    fn new(depths: &[u32]) -> Codes {
         let codes = canonical_codes(depths);
         let mut book = HashMap::with_capacity(codes.len());
         for (pos, &(value, length)) in codes.iter().enumerate() {
             book.insert((length, value), pos as u32);
         }
-        let max_len = depths.iter().copied().max().unwrap_or(0);
-        let single = if depths.len() == 1 { Some(0) } else { None };
-        Ok(Tree {
+        Codes {
+            max_len: depths.iter().copied().max().unwrap_or(0),
+            single: (depths.len() == 1).then_some(0),
             codes,
             book,
-            max_len,
-            single,
-        })
+        }
     }
 
-    /// The number of leaves.
-    pub fn len(&self) -> usize {
-        self.codes.len()
-    }
-
-    /// Whether the tree has no leaves.
-    pub fn is_empty(&self) -> bool {
-        self.codes.is_empty()
-    }
-
-    /// The longest codeword, in bits.
-    pub fn max_len(&self) -> u32 {
-        self.max_len
+    fn len(&self) -> u32 {
+        self.codes.len() as u32
     }
 
     /// Append the codeword of `position`, most significant bit first.
-    pub fn write(&self, writer: &mut BitWriter, position: usize) -> Result<(), Error> {
+    fn write(&self, writer: &mut BitWriter, position: u32) -> Result<(), Error> {
         let &(value, length) = self
             .codes
-            .get(position)
+            .get(position as usize)
             .ok_or(Error::Model("a codeword position is outside the table"))?;
         for shift in (0..length).rev() {
             writer.put((value >> shift) & 1, 1);
@@ -77,7 +163,7 @@ impl Tree {
     }
 
     /// Read one codeword and return the leaf position.
-    pub fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
+    fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
         if let Some(pos) = self.single {
             return Ok(pos); // a one-leaf tree codes in zero bits
         }
@@ -92,12 +178,68 @@ impl Tree {
     }
 }
 
+/// The tree that codes the right clusters: one per left cluster
+/// (`STANDARD.md` §4).
+///
+/// Leaf 0 is the STOP leaf and leaf `1 + r` codes right cluster `r`.
+#[derive(Clone, Debug)]
+pub struct TopTree(Codes);
+
+impl TopTree {
+    fn from_depths(depths: &[u32]) -> TopTree {
+        TopTree(Codes::new(depths))
+    }
+
+    /// The number of leaves, the STOP leaf included: `kq + 1`.
+    pub fn num_leaves(&self) -> u32 {
+        self.0.len()
+    }
+
+    /// Append the codeword of `leaf`, most significant bit first.
+    pub fn write(&self, writer: &mut BitWriter, leaf: LeftLeaf) -> Result<(), Error> {
+        self.0.write(writer, leaf.0)
+    }
+
+    /// Read one codeword and return its leaf.
+    pub fn read(&self, reader: &mut BitReader<'_>) -> Result<LeftLeaf, Error> {
+        self.0.read(reader).map(LeftLeaf)
+    }
+}
+
+/// The tree that codes the words of one right cluster (`STANDARD.md` §4).
+///
+/// Its leaves are [`RightLeaf`]s: positions in the cluster's ascending word
+/// list.
+#[derive(Clone, Debug)]
+pub struct BottomTree(Codes);
+
+impl BottomTree {
+    fn from_depths(depths: &[u32]) -> BottomTree {
+        BottomTree(Codes::new(depths))
+    }
+
+    /// The number of leaves: the number of words in this right cluster.
+    pub fn num_leaves(&self) -> u32 {
+        self.0.len()
+    }
+
+    /// Append the codeword of `leaf`, most significant bit first.
+    pub fn write(&self, writer: &mut BitWriter, leaf: RightLeaf) -> Result<(), Error> {
+        self.0.write(writer, leaf.0)
+    }
+
+    /// Read one codeword and return its leaf.
+    pub fn read(&self, reader: &mut BitReader<'_>) -> Result<RightLeaf, Error> {
+        self.0.read(reader).map(RightLeaf)
+    }
+}
+
 /// `MODEL_FORMAT.md` §2: code 0 is the first leaf at the maximum depth.
 ///
 /// Codes ascend within a depth and the space is filled from the top down, so
 /// the deepest leaves take the low values — which is what puts the all-zeros
 /// path on leaf 0 of a top tree, the STOP leaf.
-pub fn canonical_codes(depths: &[u32]) -> Vec<(u32, u32)> {
+fn canonical_codes(depths: &[u32]) -> Vec<(u32, u32)> {
     let n = depths.len();
     if n == 0 {
         return Vec::new();
@@ -192,24 +334,25 @@ fn read_alphabet(
 }
 
 /// A loaded model: the tables plus every derived view the codec needs.
+///
+/// The sizes are not stored separately: the vocabulary is the alphabet plus the
+/// rule list, the left clusters are the trees that code right clusters, and the
+/// right clusters are the word lists.
 #[derive(Clone, Debug)]
 pub struct Model {
-    alphabet: Vec<char>,
-    rules: Vec<(u32, u32)>,
-    memberships: Vec<u32>,
-    bottom_depths: Vec<u32>,
-    top_depths: Vec<Vec<u32>>,
-    v: u32,
-    k: u32,
-    q: u32,
+    /// The alphabet size: word ids below this are characters.
     nchars: u32,
-    char_id: HashMap<char, u32>,
-    left: Vec<u32>,
-    cluster_ids: Vec<Vec<u32>>,
-    pos_in_cluster: Vec<u32>,
-    bottom_trees: Vec<Option<Tree>>,
-    top_trees: Vec<Tree>,
-    plan: HashMap<(u32, u32), (u32, u32)>,
+    /// `q` in `STANDARD.md`: right clusters per left cluster.
+    q: u32,
+    alphabet: Vec<char>,
+    rules: Vec<(Word, Word)>,
+    memberships: Vec<Right>,
+    char_id: HashMap<char, Char>,
+    cluster_ids: Vec<Vec<Word>>,
+    pos_in_cluster: Vec<RightLeaf>,
+    bottom_trees: Vec<Option<BottomTree>>,
+    top_trees: Vec<TopTree>,
+    plan: HashMap<(Word, Word), Rule>,
 }
 
 impl Model {
@@ -271,59 +414,58 @@ impl Model {
         let char_id = alphabet
             .iter()
             .enumerate()
-            .map(|(i, &c)| (c, i as u32))
+            .map(|(i, &c)| (c, Char(i as u32)))
             .collect();
 
-        let mut cluster_ids: Vec<Vec<u32>> = vec![Vec::new(); kq as usize];
-        for (word, &cluster) in memberships.iter().enumerate() {
-            if cluster >= kq {
+        let mut cluster_ids: Vec<Vec<Word>> = vec![Vec::new(); kq as usize];
+        for (word, &right) in memberships.iter().enumerate() {
+            if right >= kq {
                 return Err(Error::Model(
                     "a membership names a cluster that does not exist",
                 ));
             }
-            cluster_ids[cluster as usize].push(word as u32);
+            cluster_ids[right as usize].push(Word(word as u32));
         }
-        let mut pos_in_cluster = vec![0u32; v as usize];
-        let mut bottom_trees: Vec<Option<Tree>> = vec![None; kq as usize];
-        for cluster in 0..kq {
-            let ids = &cluster_ids[cluster as usize];
+        let mut pos_in_cluster = vec![RightLeaf(0); v as usize];
+        let mut bottom_trees: Vec<Option<BottomTree>> = vec![None; kq as usize];
+        for right in 0..kq {
+            let ids = &cluster_ids[right as usize];
             let depths: Vec<u32> = ids
                 .iter()
-                .map(|&s| bottom_depths[s as usize])
+                .map(|&Word(word)| bottom_depths[word as usize])
                 .collect();
             if depths.is_empty() {
                 continue;
             }
             require_kraft(&depths)?;
             for (position, &word) in ids.iter().enumerate() {
-                pos_in_cluster[word as usize] = position as u32;
+                pos_in_cluster[word.0 as usize] = RightLeaf(position as u32);
             }
-            bottom_trees[cluster as usize] = Some(Tree::new(&depths)?);
+            bottom_trees[right as usize] = Some(BottomTree::from_depths(&depths));
         }
 
-        let top_trees: Vec<Tree> = top_depths
+        let top_trees: Vec<TopTree> = top_depths
             .iter()
-            .map(|depths| Tree::new(depths))
-            .collect::<Result<_, _>>()?;
+            .map(|depths| TopTree::from_depths(depths))
+            .collect();
 
-        let left: Vec<u32> = memberships.iter().map(|&m| m / q).collect();
+        let rules: Vec<(Word, Word)> = rules
+            .into_iter()
+            .map(|(a, b)| (Word(a), Word(b)))
+            .collect();
+        let memberships: Vec<Right> = memberships.into_iter().map(Right).collect();
         let mut plan = HashMap::with_capacity(rules.len());
         for (rank, &(a, b)) in rules.iter().enumerate() {
-            plan.insert((a, b), (rank as u32, nchars + rank as u32));
+            plan.insert((a, b), Rule(rank as u32));
         }
 
         Ok(Model {
+            nchars,
+            q,
             alphabet,
             rules,
             memberships,
-            bottom_depths,
-            top_depths,
-            v,
-            k,
-            q,
-            nchars,
             char_id,
-            left,
             cluster_ids,
             pos_in_cluster,
             bottom_trees,
@@ -438,97 +580,134 @@ impl Model {
         )
     }
 
-    // ------------------------------------------------------------- accessors
+    // ------------------------------------------------------------- sizes
+    //
+    // The names here are the type names, not the single letters of
+    // `STANDARD.md`; each docstring gives the letter it corresponds to.
 
-    /// The vocabulary size: the alphabet plus the rule list.
-    pub fn v(&self) -> u32 {
-        self.v
-    }
-    /// The number of left clusters.
-    pub fn k(&self) -> u32 {
-        self.k
-    }
-    /// The number of right clusters per left cluster.
-    pub fn q(&self) -> u32 {
-        self.q
-    }
-    /// The alphabet size; word ids start here and the STOP id is `nchars`.
-    pub fn nchars(&self) -> u32 {
+    /// The number of characters — `C` in `STANDARD.md`, `nchars` in the file.
+    pub fn num_chars(&self) -> u32 {
         self.nchars
     }
-    /// The pair-merge rule list, in rank order.
-    pub fn rules(&self) -> &[(u32, u32)] {
-        &self.rules
+    /// The number of rules — `V − C` in `STANDARD.md`.
+    pub fn num_rules(&self) -> u32 {
+        self.rules.len() as u32
     }
-    /// The characters, in word-id order.
-    pub fn alphabet(&self) -> &[char] {
-        &self.alphabet
+    /// The vocabulary size — `V` in `STANDARD.md`.
+    pub fn num_words(&self) -> u32 {
+        self.nchars + self.num_rules()
     }
-    /// The right cluster of every word.
-    pub fn memberships(&self) -> &[u32] {
-        &self.memberships
+    /// The number of left clusters — `k` in `STANDARD.md`.
+    pub fn num_lefts(&self) -> u32 {
+        self.top_trees.len() as u32
     }
-    /// The stored word-tree depth of every word.
-    pub fn bottom_depths(&self) -> &[u32] {
-        &self.bottom_depths
+    /// The number of right clusters — `kq` in `STANDARD.md`.
+    pub fn num_rights(&self) -> u32 {
+        self.cluster_ids.len() as u32
     }
-    /// The stored depths of the cluster trees, one per left cluster.
-    pub fn top_depths(&self) -> &[Vec<u32>] {
-        &self.top_depths
+    /// The number of right clusters per left cluster — `q` in `STANDARD.md`.
+    pub fn num_rights_per_left(&self) -> u32 {
+        self.q
+    }
+
+    // ------------------------------------------------------------- lookups
+
+    /// The character at an index.
+    pub fn char_at(&self, at: Char) -> Result<char, Error> {
+        self.alphabet
+            .get(at.0 as usize)
+            .copied()
+            .ok_or(Error::Model("a character index is outside the alphabet"))
+    }
+    /// A character's index, if the model has that character.
+    pub fn char_id(&self, c: char) -> Option<Char> {
+        self.char_id.get(&c).copied()
+    }
+    /// The two words a rule merges.
+    pub fn children(&self, rule: Rule) -> Result<(Word, Word), Error> {
+        self.rules
+            .get(rule.0 as usize)
+            .copied()
+            .ok_or(Error::Model("a rule is outside the model"))
+    }
+    /// The word a rule defines: `num_chars() + rule`.
+    pub fn word_of_rule(&self, rule: Rule) -> Word {
+        Word(self.nchars + rule.0)
+    }
+    /// What a word is: a character, or a rule.
+    pub fn parts(&self, word: Word) -> Result<CharOrRule, Error> {
+        if word.0 < self.nchars {
+            Ok(CharOrRule::Char(Char(word.0)))
+        } else if word.0 < self.num_words() {
+            Ok(CharOrRule::Rule(Rule(word.0 - self.nchars)))
+        } else {
+            Err(Error::Model("a word is outside the model"))
+        }
+    }
+    /// The rule that merges an adjacent pair of words, if the model has one.
+    pub fn rule_for(&self, a: Word, b: Word) -> Option<Rule> {
+        self.plan.get(&(a, b)).copied()
+    }
+    /// The right cluster a word belongs to.
+    pub fn right(&self, word: Word) -> Result<Right, Error> {
+        self.memberships
+            .get(word.0 as usize)
+            .copied()
+            .ok_or(Error::Model("a word is outside the model"))
     }
     /// The left cluster a word starts in.
-    pub fn left_cluster(&self, word: u32) -> u32 {
-        self.left[word as usize]
+    pub fn left(&self, word: Word) -> Result<Left, Error> {
+        self.left_of(self.right(word)?)
     }
-    /// The word at a position in a right cluster.
-    pub fn word_of(&self, cluster: u32, position: u32) -> Result<u32, Error> {
+    /// The left cluster that owns a right cluster: `right / q`.
+    pub fn left_of(&self, right: Right) -> Result<Left, Error> {
+        let left = Left(right.0 / self.q);
+        if left.0 < self.num_lefts() {
+            Ok(left)
+        } else {
+            Err(Error::Model("a right cluster is outside the model"))
+        }
+    }
+    /// The position of a word in its right cluster's word list.
+    pub fn position(&self, word: Word) -> Result<RightLeaf, Error> {
+        self.pos_in_cluster
+            .get(word.0 as usize)
+            .copied()
+            .ok_or(Error::Model("a word is outside the model"))
+    }
+    /// The word at a position in a right cluster's word list.
+    pub fn word_at(&self, right: Right, at: RightLeaf) -> Result<Word, Error> {
         self.cluster_ids
-            .get(cluster as usize)
-            .and_then(|ids| ids.get(position as usize))
+            .get(right.0 as usize)
+            .and_then(|ids| ids.get(at.0 as usize))
             .copied()
             .ok_or(Error::Model("a word position is outside its cluster"))
     }
-    /// The position of a word in its right cluster.
-    pub fn position_of(&self, word: u32) -> Result<u32, Error> {
-        self.pos_in_cluster
-            .get(word as usize)
-            .copied()
-            .ok_or(Error::Model("a word is outside the model"))
+    /// The tree of a left cluster.
+    pub fn top_tree(&self, left: Left) -> Result<&TopTree, Error> {
+        self.top_trees
+            .get(left.0 as usize)
+            .ok_or(Error::Model("a left cluster is outside the model"))
     }
-    /// The right cluster a word belongs to.
-    pub fn cluster_of(&self, word: u32) -> Result<u32, Error> {
-        self.memberships
-            .get(word as usize)
-            .copied()
-            .ok_or(Error::Model("a word is outside the model"))
-    }
-    /// A character's word id, if the model has it.
-    pub fn char_id(&self, c: char) -> Option<u32> {
-        self.char_id.get(&c).copied()
-    }
-    /// The tokeniser plan: child pair -> (rank, new id).
-    pub fn plan(&self) -> &HashMap<(u32, u32), (u32, u32)> {
-        &self.plan
-    }
-    /// The cluster tree of a left cluster.
-    pub fn top_tree(&self, left: u32) -> &Tree {
-        &self.top_trees[left as usize]
-    }
-    /// The word tree of a right cluster, if it has words.
-    pub fn bottom_tree(&self, cluster: u32) -> Option<&Tree> {
-        self.bottom_trees[cluster as usize].as_ref()
+    /// The tree of a right cluster; an empty cluster has no tree.
+    pub fn bottom_tree(&self, right: Right) -> Result<&BottomTree, Error> {
+        match self.bottom_trees.get(right.0 as usize) {
+            Some(Some(tree)) => Ok(tree),
+            Some(None) => Err(Error::EmptyCluster(right)),
+            None => Err(Error::Model("a right cluster is outside the model")),
+        }
     }
 
     /// One line describing the model, for logs and the CLI.
     pub fn info(&self) -> String {
         format!(
             "V={} k={} q={} alphabet={} rules={} kq={}",
-            self.v,
-            self.k,
+            self.num_words(),
+            self.num_lefts(),
             self.q,
             self.nchars,
-            self.rules.len(),
-            self.k * self.q
+            self.num_rules(),
+            self.num_rights()
         )
     }
 }
@@ -604,12 +783,42 @@ mod tests {
         let buf = tiny_utf8_model();
         assert_eq!(buf.len(), 17);
         let model = Model::from_bytes(&buf).expect("a valid model");
-        assert_eq!(model.nchars(), 2);
-        assert_eq!(model.alphabet(), &['a', 'é']);
+        assert_eq!(model.num_chars(), 2);
+        assert_eq!(model.char_at(Char(0)), Ok('a'));
+        assert_eq!(model.char_at(Char(1)), Ok('é'));
         let codec = Codec::new(model);
         let code = codec.encode("aé").expect("an encodable name");
         assert_eq!(code.bits, 2);
         assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+    }
+
+    #[test]
+    fn lookups_check_their_index() {
+        let model = Model::from_bytes(&tiny_utf8_model()).expect("a valid model");
+        // V = 4: the characters `a` and `é`, then the two rules' words.
+        assert_eq!(model.parts(Char(1).word()), Ok(CharOrRule::Char(Char(1))));
+        assert_eq!(
+            model.parts(model.word_of_rule(Rule(1))),
+            Ok(CharOrRule::Rule(Rule(1)))
+        );
+        assert!(model.parts(Word(4)).is_err());
+        assert!(model.children(Rule(2)).is_err());
+        assert!(model.char_at(Char(2)).is_err());
+        // The fixture's rules are `(a,é)` and `(a, (a,é))`, in that order.
+        assert_eq!(model.rule_for(Word(0), Word(1)), Some(Rule(0)));
+        assert_eq!(model.rule_for(Word(1), Word(0)), None);
+        // One right cluster, so its word list is every word in id order.
+        let first_rule_word = model.word_of_rule(Rule(0));
+        assert_eq!(model.right(first_rule_word), Ok(Right(0)));
+        assert_eq!(model.position(first_rule_word), Ok(RightLeaf(2)));
+        assert_eq!(model.left_of(Right(0)), Ok(Left(0)));
+    }
+
+    #[test]
+    fn a_left_leaf_is_a_right_cluster_plus_one() {
+        assert_eq!(LeftLeaf::STOP.right(), None);
+        assert_eq!(LeftLeaf::from(Right(7)), LeftLeaf(8));
+        assert_eq!(LeftLeaf::from(Right(7)).right(), Some(Right(7)));
     }
 
     #[test]
@@ -625,7 +834,7 @@ mod tests {
         buf.extend_from_slice(&[0]); // bottom depths: two leaves at depth 1
         buf.extend_from_slice(&[0]); // top depths: STOP and one right cluster
         let model = Model::from_bytes(&buf).expect("v == nchars is legal");
-        assert_eq!(model.rules().len(), 0);
+        assert_eq!(model.num_rules(), 0);
         let codec = Codec::new(model);
         let code = codec.encode("aé").expect("an encodable name");
         assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");

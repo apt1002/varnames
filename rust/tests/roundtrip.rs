@@ -20,9 +20,12 @@ fn rows() -> impl Iterator<Item = (&'static str, Option<u128>, usize)> {
 fn standard_tables_are_the_published_ones() {
     let codec = standard().expect("the embedded tables");
     let model = codec.model();
-    assert_eq!((model.v(), model.k(), model.q()), (8_191, 32, 1));
-    assert_eq!(model.nchars(), 63);
-    assert_eq!(model.rules().len(), 8_128);
+    assert_eq!(
+        (model.num_words(), model.num_lefts(), model.num_rights_per_left()),
+        (8_191, 32, 1)
+    );
+    assert_eq!(model.num_chars(), 63);
+    assert_eq!(model.num_rules(), 8_128);
 }
 
 #[test]
