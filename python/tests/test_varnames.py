@@ -16,7 +16,7 @@ from varnames.codec import _MergePairs, _spell
 from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
                              read_varint, varint)
-from varnames.model import DEPTH_BITS, MAGIC, _canonical_codes
+from varnames.model import DEPTH_BITS, MAGIC, Tree, _canonical_codes
 from varnames.standard import STANDARD_SHA256, standard
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -164,6 +164,62 @@ class TestModel(unittest.TestCase):
 
     def test_custom_model_by_path(self):
         self.assertEqual(Model.from_path(MODEL).info(), self.model.info())
+
+
+class TestEmptyCluster(unittest.TestCase):
+    """`V = 4`, `k = 1`, `q = 2` with every word in cluster 0.
+
+    Right cluster 1 then has no words.  The top tree still names it -- its
+    `kq + 1` leaves are fixed whatever the clusters contain -- so a code can
+    point at it; the bottom stage has no word to name, and says so.
+    """
+
+    @staticmethod
+    def fixture():
+        bw = BitWriter()
+        for i, (a, b) in enumerate(((0, 1), (0, 2))):
+            N = 2 + i
+            ladder_put(bw, a, N)
+            ladder_put(bw, b, N)
+        rules = bw.finish()
+        out = bytearray(b"NVM1")
+        out += varint(4) + varint(1) + varint(2) + varint(2)
+        out += varint(len(rules)) + rules
+        out += "a\u00e9".encode("utf-8")
+        bw = BitWriter()
+        for _ in range(4):              # memberships: one bit a word, all 0
+            bw.put(0, 1)
+        out += bw.finish()
+        bw = BitWriter()
+        for _ in range(4):              # word depths: cluster 0's four words
+            bw.put(0, 4)
+        out += bw.finish()              # cluster 1 contributes no bits
+        bw = BitWriter()
+        for depth in (2, 1, 2):         # STOP, cluster 0, cluster 1
+            bw.put(depth, 4)
+        out += bw.finish()
+        return bytes(out)
+
+    def test_the_empty_cluster_has_a_tree_with_no_leaves(self):
+        m = Model.from_bytes(self.fixture())
+        self.assertEqual((m.V, m.kq), (4, 2))
+        self.assertEqual([len(t) for t in m.bottom_trees], [4, 0])
+        with self.assertRaisesRegex(ModelError, "empty tree"):
+            m.bottom_trees[1].read(BitReader(b"\xff"))
+
+    def test_a_code_that_names_it_fails(self):
+        codec = Codec(Model.from_bytes(self.fixture()))
+        value, _bits = codec.encode("a\u00e9")
+        self.assertEqual(codec.decode(value), "a\u00e9")
+        # The top tree's codeword `01` names the empty cluster.
+        with self.assertRaisesRegex(ModelError, "empty tree"):
+            codec.decode(2)
+
+    def test_an_empty_tree_is_a_tree(self):
+        tree = Tree([])
+        self.assertEqual(len(tree), 0)
+        with self.assertRaisesRegex(ModelError, "empty tree"):
+            tree.read(BitReader(b"\x00"))
 
 
 class TestUtf8Alphabet(unittest.TestCase):

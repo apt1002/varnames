@@ -50,9 +50,13 @@ def _read_alphabet(buf, pos, nchars):
 class Tree:
     """One canonical Huffman tree: ``codes[position] = (value, length)``.
 
-    Position is the leaf's place in the stored depth sequence, which is the
-    word id for a word tree and ``0 = STOP, 1 + J = right cluster J`` for a
-    top tree.
+    Position is the leaf's place in the stored depth sequence: a word's
+    position in its right cluster for a bottom tree, and ``0 = STOP,
+    1 + J = right cluster J`` for a top tree.
+
+    A right cluster with no words has an empty tree.  It is a tree like any
+    other -- no leaves, no codewords -- so reading from it fails and writing
+    any position fails.
     """
 
     __slots__ = ("codes", "book", "maxlen")
@@ -74,6 +78,8 @@ class Tree:
 
     def read(self, reader):
         """Read one codeword; returns the leaf position."""
+        if not self.codes:
+            raise ModelError("an empty tree has no codewords")
         if (0, 0) in self.book:          # a one-leaf tree codes in zero bits
             return self.book[(0, 0)]
         value = 0
@@ -143,13 +149,11 @@ class Model:
             if self.word_ids[cluster] is None:
                 self.word_ids[cluster] = []
             self.word_ids[cluster].append(word)
-        self.bottom_trees = {}
         self.cluster_ids = [ids or [] for ids in self.word_ids]
         self.pos_in_cluster = [0] * self.V
-        for cluster, ids in enumerate(self.cluster_ids):
-            if not ids:
-                continue
-            self.bottom_trees[cluster] = Tree([self.bottom[i] for i in ids])
+        self.bottom_trees = []
+        for ids in self.cluster_ids:
+            self.bottom_trees.append(Tree([self.bottom[i] for i in ids]))
             for pos, word in enumerate(ids):
                 self.pos_in_cluster[word] = pos
         self.top_trees = [Tree(row) for row in self.top]

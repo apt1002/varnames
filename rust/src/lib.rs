@@ -59,8 +59,8 @@ pub enum Error {
         /// The length that was needed.
         bits: usize,
     },
-    /// The bits name a right cluster that has no words.
-    EmptyCluster(Right),
+    /// The bits name a tree with no leaves: a right cluster with no words.
+    EmptyTree,
     /// The bits do not reach the STOP leaf within the word budget.
     DoesNotTerminate,
     /// The embedded standard model is not the one this crate was built with.
@@ -85,9 +85,7 @@ impl fmt::Display for Error {
                 f,
                 "the code needs {bits} bits, more than the 128 this call accepts"
             ),
-            Error::EmptyCluster(right) => {
-                write!(f, "right cluster {} is empty", right.0)
-            }
+            Error::EmptyTree => write!(f, "an empty tree has no codewords"),
             Error::DoesNotTerminate => write!(f, "the identifier does not terminate"),
             Error::Checksum { expected, found } => write!(
                 f,

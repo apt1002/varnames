@@ -164,6 +164,9 @@ impl Codes {
 
     /// Read one codeword and return the leaf position.
     fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
+        if self.codes.is_empty() {
+            return Err(Error::EmptyTree);
+        }
         if let Some(pos) = self.single {
             return Ok(pos); // a one-leaf tree codes in zero bits
         }
@@ -209,7 +212,9 @@ impl TopTree {
 /// The tree that codes the words of one right cluster (`STANDARD.md` §4).
 ///
 /// Its leaves are [`RightLeaf`]s: positions in the cluster's ascending word
-/// list.
+/// list.  A cluster with no words has an empty tree: there is no leaf to name,
+/// so [`read`](BottomTree::read) fails and every write names a leaf that does
+/// not exist.  The model format allows such a cluster (§2 invariant 7).
 #[derive(Clone, Debug)]
 pub struct BottomTree(Codes);
 
@@ -350,7 +355,7 @@ pub struct Model {
     char_id: HashMap<char, Char>,
     cluster_ids: Vec<Vec<Word>>,
     pos_in_cluster: Vec<RightLeaf>,
-    bottom_trees: Vec<Option<BottomTree>>,
+    bottom_trees: Vec<BottomTree>,
     top_trees: Vec<TopTree>,
     /// The rules indexed by the pair they merge: word pair -> its rule.
     rule_index: HashMap<(Word, Word), Rule>,
@@ -428,21 +433,17 @@ impl Model {
             cluster_ids[right as usize].push(Word(word as u32));
         }
         let mut pos_in_cluster = vec![RightLeaf(0); v as usize];
-        let mut bottom_trees: Vec<Option<BottomTree>> = vec![None; kq as usize];
-        for right in 0..kq {
-            let ids = &cluster_ids[right as usize];
+        let mut bottom_trees = Vec::with_capacity(kq as usize);
+        for ids in cluster_ids.iter() {
             let depths: Vec<u32> = ids
                 .iter()
                 .map(|&Word(word)| bottom_depths[word as usize])
                 .collect();
-            if depths.is_empty() {
-                continue;
-            }
             require_kraft(&depths)?;
             for (position, &word) in ids.iter().enumerate() {
                 pos_in_cluster[word.0 as usize] = RightLeaf(position as u32);
             }
-            bottom_trees[right as usize] = Some(BottomTree::from_depths(&depths));
+            bottom_trees.push(BottomTree::from_depths(&depths));
         }
 
         let top_trees: Vec<TopTree> = top_depths
@@ -690,13 +691,14 @@ impl Model {
             .get(left.0 as usize)
             .ok_or(Error::Model("a left cluster is outside the model"))
     }
-    /// The tree of a right cluster; an empty cluster has no tree.
+    /// The tree of a right cluster.
+    ///
+    /// A cluster with no words has an empty tree, whose leaves are none: it is
+    /// returned like any other, and reading from it fails.
     pub fn bottom_tree(&self, right: Right) -> Result<&BottomTree, Error> {
-        match self.bottom_trees.get(right.0 as usize) {
-            Some(Some(tree)) => Ok(tree),
-            Some(None) => Err(Error::EmptyCluster(right)),
-            None => Err(Error::Model("a right cluster is outside the model")),
-        }
+        self.bottom_trees
+            .get(right.0 as usize)
+            .ok_or(Error::Model("a right cluster is outside the model"))
     }
 
     /// One line describing the model, for logs and the CLI.
@@ -820,6 +822,58 @@ mod tests {
         assert_eq!(LeftLeaf::STOP.right(), None);
         assert_eq!(LeftLeaf::from(Right(7)), LeftLeaf(8));
         assert_eq!(LeftLeaf::from(Right(7)).right(), Some(Right(7)));
+    }
+
+    /// `V = 4`, `k = 1`, `q = 2`, alphabet `aé`: every word is in right
+    /// cluster 0, so cluster 1 is empty.  The top tree still names both,
+    /// because its `kq + 1` leaves are fixed whatever the clusters contain.
+    fn a_model_with_an_empty_cluster() -> Vec<u8> {
+        let mut rules = BitWriter::new();
+        for (i, &(a, b)) in [(0u32, 1u32), (0, 2)].iter().enumerate() {
+            let n = 2 + i as u32;
+            ladder_put(&mut rules, a, n);
+            ladder_put(&mut rules, b, n);
+        }
+        let rules = rules.finish();
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"NVM1");
+        put_varint(4, &mut buf); // V
+        put_varint(1, &mut buf); // k
+        put_varint(2, &mut buf); // q
+        put_varint(2, &mut buf); // nchars
+        put_varint(rules.as_bytes().len() as u64, &mut buf);
+        buf.extend_from_slice(rules.as_bytes());
+        buf.extend_from_slice("aé".as_bytes());
+        // memberships: one bit a word, and all four say cluster 0
+        buf.extend_from_slice(&[0]);
+        // Word depths: cluster 0's four words, four bits each, deltas all 0;
+        // cluster 1 has no words and so contributes no bits at all.
+        buf.extend_from_slice(&[0, 0]);
+        // Cluster depths: STOP and two right clusters, deltas 2,1,2 --
+        // nibbles 2,1,2 packed low first, STOP the deepest.
+        buf.extend_from_slice(&[0x12, 0x02]);
+        buf
+    }
+
+    #[test]
+    fn a_cluster_with_no_words_has_an_empty_tree() {
+        let model = Model::from_bytes(&a_model_with_an_empty_cluster()).expect("a valid model");
+        assert_eq!((model.num_words(), model.num_rights()), (4, 2));
+        assert_eq!(model.right(Word(0)), Ok(Right(0)));
+        assert_eq!(model.bottom_tree(Right(0)).unwrap().num_leaves(), 4);
+        // The empty cluster is a tree like any other: no leaves, no codewords.
+        let empty = model.bottom_tree(Right(1)).expect("a tree, though empty");
+        assert_eq!(empty.num_leaves(), 0);
+        assert!(matches!(
+            empty.read(&mut BitReader::new(&[0xff])),
+            Err(Error::EmptyTree)
+        ));
+        // Encoding never reaches it, and the round trip is unaffected.
+        let codec = Codec::new(model);
+        let code = codec.encode("aé").expect("an encodable name");
+        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+        // The top tree's codeword `01` names the empty cluster.
+        assert!(matches!(codec.decode(2), Err(Error::EmptyTree)));
     }
 
     #[test]

@@ -82,10 +82,8 @@ class Codec:
             if slot == 0:
                 return _spell(model, out)
             cluster = slot - 1
-            tree = model.bottom_trees.get(cluster)
-            if tree is None:
-                raise DecodeError(f"right cluster {cluster} is empty")
-            word = model.cluster_ids[cluster][tree.read(reader)]
+            word = model.cluster_ids[cluster][
+                model.bottom_trees[cluster].read(reader)]
             out.append(word)
             left = model.left[word]
         raise DecodeError("the identifier does not terminate")
@@ -103,10 +101,8 @@ class Codec:
             if slot == 0:
                 break
             cluster = slot - 1
-            tree = model.bottom_trees.get(cluster)
-            if tree is None:
-                raise DecodeError(f"right cluster {cluster} is empty")
-            word = model.cluster_ids[cluster][tree.read(reader)]
+            word = model.cluster_ids[cluster][
+                model.bottom_trees[cluster].read(reader)]
             out.append(word)
             left = model.left[word]
         else:
