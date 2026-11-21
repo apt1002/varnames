@@ -117,13 +117,28 @@ class Codec:
 
 
 def _spell(model, symbols):
-    """Word ids back to characters, by replaying the rule list."""
-    text = {}
-    for i, c in enumerate(model.alphabet):
-        text[i] = c
-    for rank, (a, b) in enumerate(model.rules):
-        text[model.nchars + rank] = text[a] + text[b]
-    return "".join(text[s] for s in symbols)
+    """Word ids back to characters, expanding only the tokens that are present.
+
+    A rule names children whose ids are smaller than its own, so expansion is a
+    walk down a finite tree of the tokens this identifier actually contains.
+    Spelling one identifier never replays the rule list, so the cost follows
+    the output, not the model.
+    """
+    first_rule = model.nchars
+    limit = first_rule + len(model.rules)
+    out = []
+    stack = list(reversed(symbols))
+    while stack:
+        symbol = stack.pop()
+        if not 0 <= symbol < limit:
+            raise DecodeError("a token is outside the model")
+        if symbol < first_rule:
+            out.append(model.alphabet[symbol])
+        else:
+            a, b = model.rules[symbol - first_rule]
+            stack.append(b)               # the left operand comes off first
+            stack.append(a)
+    return "".join(out)
 
 
 def bits_length_of(value):

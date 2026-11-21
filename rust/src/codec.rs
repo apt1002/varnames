@@ -127,24 +127,32 @@ impl Codec {
         self.decode_bits(&Bits::from_u128(value))
     }
 
-    /// Word ids back to characters, by replaying the rule list.
+    /// Word ids back to characters, expanding only the tokens that are present.
+    ///
+    /// A rule names children whose ids are smaller than its own — [`Model`]
+    /// rejects any other rule — so expansion is a walk down a finite tree, and
+    /// the tokens of one identifier are all it needs.  The rule list is never
+    /// replayed, so the cost follows the output, not the model.
     fn spell(&self, tokens: &[u32]) -> Result<String, Error> {
         let model = &self.model;
-        let v = model.v() as usize;
-        let mut text: Vec<Option<String>> = vec![None; v];
-        for (i, c) in model.alphabet().iter().enumerate() {
-            text[i] = Some(c.to_string());
-        }
-        for (rank, &(a, b)) in model.rules().iter().enumerate() {
-            let left = text[a as usize].as_deref().unwrap_or("");
-            let right = text[b as usize].as_deref().unwrap_or("");
-            text[model.nchars() as usize + rank] = Some(format!("{left}{right}"));
-        }
-        let mut out = String::new();
-        for &symbol in tokens {
-            match text.get(symbol as usize).and_then(|t| t.as_ref()) {
-                Some(s) => out.push_str(s),
-                None => return Err(Error::Model("a token is outside the model")),
+        let first_rule = model.nchars() as usize;
+        let mut out = String::with_capacity(tokens.len());
+        let mut stack: Vec<u32> = tokens.iter().rev().copied().collect();
+        while let Some(symbol) = stack.pop() {
+            let symbol = symbol as usize;
+            if symbol < first_rule {
+                let c = *model
+                    .alphabet()
+                    .get(symbol)
+                    .ok_or(Error::Model("a token is outside the model"))?;
+                out.push(c);
+            } else {
+                let &(a, b) = model
+                    .rules()
+                    .get(symbol - first_rule)
+                    .ok_or(Error::Model("a token is outside the model"))?;
+                stack.push(b); // the left operand comes off the stack first
+                stack.push(a);
             }
         }
         Ok(out)
@@ -255,4 +263,35 @@ pub fn merge_pairs(tokens: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> 
         i = next[i];
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::standard;
+
+    #[test]
+    fn spelling_is_the_expansion_of_the_tokens_alone() {
+        let codec = standard().expect("the embedded tables");
+        let model = codec.model();
+        let first_rule = model.nchars() as usize;
+        assert_eq!(codec.spell(&[]).unwrap(), "");
+        assert_eq!(codec.spell(&[0]).unwrap(), model.alphabet()[0].to_string());
+        // The first rule is the first pair of the rule list, in order.
+        let (a, b) = model.rules()[0];
+        let expected: String = [a, b]
+            .iter()
+            .map(|&t| model.alphabet()[t as usize])
+            .collect();
+        assert_eq!(codec.spell(&[first_rule as u32]).unwrap(), expected);
+    }
+
+    #[test]
+    fn a_token_outside_the_model_is_an_error() {
+        let codec = standard().expect("the embedded tables");
+        assert!(matches!(
+            codec.spell(&[u32::MAX]),
+            Err(Error::Model("a token is outside the model"))
+        ));
+    }
 }

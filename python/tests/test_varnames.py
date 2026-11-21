@@ -12,7 +12,7 @@ import unittest
 from varnames import Codec, DecodeError, EncodeError, Model, ModelError
 from varnames.bitio import BitReader, BitWriter, bits_length, bits_to_int
 from varnames.case import cased, classify, from_camel, is_upper, to_camel
-from varnames.codec import _merge_pairs
+from varnames.codec import _merge_pairs, _spell
 from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
                              read_varint, varint)
@@ -308,6 +308,26 @@ class TestCodec(unittest.TestCase):
         for a, b in list(m.rules)[:200]:
             tokens = [a, b]
             self.assertEqual(len(_merge_pairs(tokens, plan)), 1)
+
+    def test_spelling_expands_only_the_tokens_present(self):
+        # The second rule names children that do not exist.  Replaying the rule
+        # list would trip over it; expanding the tokens present cannot, because
+        # no token here is that rule.
+        class _Stub:
+            nchars = 1
+            alphabet = ["a"]
+            rules = [(0, 0), (7, 7)]
+
+        self.assertEqual(_spell(_Stub, []), "")
+        self.assertEqual(_spell(_Stub, [0]), "a")
+        self.assertEqual(_spell(_Stub, [1]), "aa")
+        self.assertEqual(_spell(_Stub, [1, 0, 1]), "aaaaa")
+
+    def test_a_token_outside_the_model_is_an_error(self):
+        with self.assertRaises(DecodeError):
+            _spell(self.codec.model, [10 ** 6])
+        with self.assertRaises(DecodeError):
+            _spell(self.codec.model, [-1])
 
     def test_custom_tables_are_used(self):
         codec = Codec(Model.from_path(MODEL))
