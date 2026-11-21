@@ -36,7 +36,7 @@ class Codec:
         except KeyError as exc:
             raise EncodeError(f"character {exc.args[0]!r} is not in the "
                               "model's alphabet") from None
-        return _MergePairs(words, model._plan).run()
+        return _MergePairs(words, model._rule_index).run()
 
     def encode_bits(self, identifier):
         """The codeword as a list of bits, stream order, trailing zeros cut."""
@@ -199,8 +199,8 @@ class _Candidate:
     """A queued merge: the rank of the rule, and the position it applies at.
 
     Only the rank orders the heap.  Two occurrences of one rule cannot overlap
-    — a rule's two children differ, and the plan holds one entry per pair — so
-    merges of equal rank are independent, and the order among them cannot
+    — a rule's two children differ, and the rule index has one entry per pair
+    — so merges of equal rank are independent, and the order among them cannot
     matter.  That is why nothing here has to implement "the leftmost of a tie".
     """
 
@@ -223,19 +223,19 @@ class _MergePairs:
     model defines.
 
     The pair at a position can change after it has been queued, so the rank is
-    read from the plan again when an entry surfaces, and an entry that no longer
+    read from the rule index when an entry surfaces, and one that no longer
     matches is dropped.
     """
 
-    __slots__ = ("nodes", "plan", "heap")
+    __slots__ = ("nodes", "rule_index", "heap")
 
-    def __init__(self, words, plan):
+    def __init__(self, words, rule_index):
         n = len(words)
         self.nodes = [
             _Node(word, i + 1 if i + 1 < n else None, i - 1 if i > 0 else None)
             for i, word in enumerate(words)
         ]
-        self.plan = plan
+        self.rule_index = rule_index
         self.heap = []
 
     def push(self, i):
@@ -246,7 +246,7 @@ class _MergePairs:
         right = self.nodes[node.next]
         if right is None:
             return
-        found = self.plan.get((node.word, right.word))
+        found = self.rule_index.get((node.word, right.word))
         if found is not None:
             heapq.heappush(self.heap, _Candidate(found[0], i))
 
@@ -265,7 +265,7 @@ class _MergePairs:
             right = self.nodes[j]
             if right is None:
                 continue
-            found = self.plan.get((node.word, right.word))
+            found = self.rule_index.get((node.word, right.word))
             if found is None or found[0] != rank:
                 continue                    # not the pair we queued: stale
             following = right.next

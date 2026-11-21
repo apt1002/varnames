@@ -154,8 +154,8 @@ class Model:
                 self.pos_in_cluster[word] = pos
         self.top_trees = [Tree(row) for row in self.top]
         self._char_id = {c: i for i, c in enumerate(alphabet)}
-        self._plan = {(a, b): (rank, self.nchars + rank)
-                      for rank, (a, b) in enumerate(self.rules)}
+        self._rule_index = {(a, b): (rank, self.nchars + rank)
+                            for rank, (a, b) in enumerate(self.rules)}
 
     # ---------------------------------------------------------------- loading
 
