@@ -179,75 +179,101 @@ class _IntReader:
         return out
 
 
-def _merge_pairs(tokens, plan):
-    """The production tokeniser of `ENCODING.md` §1, in one pass.
+class _Token:
+    """One word of the identifier, with the neighbours it can merge with.
+
+    A merge keeps the left token and removes the right one, so the head of the
+    list is always token 0 and the last token has no ``next``.  A token that has
+    been merged away is replaced by ``None``.
+    """
+
+    __slots__ = ("word", "next", "prev")
+
+    def __init__(self, word, next=None, prev=None):
+        self.word = word
+        self.next = next
+        self.prev = prev
+
+
+class _MergePairs:
+    """One sweep over the adjacent pairs of an identifier (``ENCODING.md`` §1).
 
     Ranks are nested — a merge's rank exceeds the ranks that built its operands
-    — so sweeping ranks in ascending order and merging every still-valid pair
-    performs the same merges as repeatedly taking the lowest rank.  A linked
-    list over positions makes it O(n); the heap holds ranks, never positions, so
-    it stays small.  A rank can be exhausted and later seen again, so the heap
-    may hold duplicates and the bucket table is the authority.
+    — so any pair a merge creates has a rank above the one just used, and a
+    sweep that always takes the lowest rank performs the merges in the order the
+    model defines.  The heap holds ``(rank, position)``, so "lowest rank first"
+    comes out of the ordering and "leftmost of a rank" out of the second field.
+
+    The pair at a position can change after it has been queued, so the rank is
+    read from the plan again when an entry surfaces, and an entry that no longer
+    matches is dropped.
     """
-    n = len(tokens)
-    if n < 2 or not plan:
+
+    __slots__ = ("tokens", "plan", "heap")
+
+    def __init__(self, tokens, plan):
+        n = len(tokens)
+        self.tokens = [
+            _Token(word, i + 1 if i + 1 < n else None, i - 1 if i > 0 else None)
+            for i, word in enumerate(tokens)
+        ]
+        self.plan = plan
+        self.heap = []
+
+    def push(self, i):
+        """Offer the pair that starts at ``i``, if the model has a rule for it."""
+        token = self.tokens[i]
+        if token is None or token.next is None:
+            return
+        other = self.tokens[token.next]
+        if other is None:
+            return
+        found = self.plan.get((token.word, other.word))
+        if found is not None:
+            heapq.heappush(self.heap, (found[0], i))
+
+    def run(self):
+        """Merge until no adjacent pair has a rule; return the words that remain."""
+        for i in range(len(self.tokens) - 1):
+            self.push(i)
+        while self.heap:
+            rank, i = heapq.heappop(self.heap)
+            # The pair at `i` may have gone, or changed, since it was queued.
+            token = self.tokens[i]
+            if token is None or token.next is None:
+                continue
+            j = token.next
+            other = self.tokens[j]
+            if other is None:
+                continue
+            found = self.plan.get((token.word, other.word))
+            if found is None or found[0] != rank:
+                continue                    # not the pair we queued: stale
+            following = other.next
+            token.word = found[1]
+            token.next = following
+            self.tokens[j] = None
+            if following is not None:
+                self.tokens[following].prev = i
+            # The pair before `i` is new, because `i`'s word has changed.
+            if token.prev is not None:
+                self.push(token.prev)
+            self.push(i)
+        out = []
+        i = 0
+        while i is not None:
+            token = self.tokens[i]
+            out.append(token.word)
+            i = token.next
+        return out
+
+
+def _merge_pairs(tokens, plan):
+    """The production tokeniser of ``ENCODING.md`` §1, in one pass.
+
+    See :class:`_MergePairs` for the sweep; this only keeps the empty cases out
+    of it.
+    """
+    if len(tokens) < 2 or not plan:
         return tokens
-    nxt = list(range(1, n + 1))
-    prv = list(range(-1, n - 1))
-    dead = [False] * n
-    value = tokens[:]
-    buckets = {}
-    ranks = []
-    get = plan.get
-
-    def push(i):
-        j = nxt[i]
-        if j >= n or dead[j]:
-            return
-        found = get((value[i], value[j]))
-        if found is None:
-            return
-        rank = found[0]
-        bucket = buckets.get(rank)
-        if bucket is None:
-            buckets[rank] = [i]
-            heapq.heappush(ranks, rank)
-        else:
-            bucket.append(i)
-
-    for i in range(n - 1):
-        push(i)
-    while ranks:
-        rank = ranks[0]                  # peek: drain a rank fully first
-        bucket = buckets.get(rank)
-        if bucket is None:               # a stale entry for an empty rank
-            heapq.heappop(ranks)
-            continue
-        if not bucket:
-            heapq.heappop(ranks)
-            del buckets[rank]
-            continue
-        i = bucket.pop()
-        if dead[i]:
-            continue
-        j = nxt[i]
-        if j >= n or dead[j]:
-            continue
-        found = get((value[i], value[j]))
-        if found is None or found[0] != rank:
-            continue
-        value[i] = found[1]
-        dead[j] = True
-        nxt[i] = nxt[j]
-        following = nxt[j]
-        if following < n:
-            prv[following] = i
-        for k in (prv[i], i):
-            if k >= 0 and not dead[k]:
-                push(k)
-    out = []
-    i = 0
-    while i < n:
-        out.append(value[i])
-        i = nxt[i]
-    return out
+    return _MergePairs(tokens, plan).run()

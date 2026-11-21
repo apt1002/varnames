@@ -309,6 +309,62 @@ class TestCodec(unittest.TestCase):
             tokens = [a, b]
             self.assertEqual(len(_merge_pairs(tokens, plan)), 1)
 
+    def test_the_sweep_agrees_with_the_definition(self):
+        # The definition of ENCODING.md section 1, written the slow obvious
+        # way: repeatedly merge the lowest-rank adjacent pair, the leftmost of
+        # a tie.  The sweep in _merge_pairs is the fast form of this.
+        model = self.codec.model
+        plan = model._plan
+        n_words = model.nchars + len(model.rules)
+
+        def naive(tokens):
+            words = list(tokens)
+            while True:
+                best = None
+                for i in range(len(words) - 1):
+                    found = plan.get((words[i], words[i + 1]))
+                    if found is not None and (best is None or found[0] < best[0]):
+                        best = (found[0], i, found[1])
+                if best is None:
+                    return words
+                _, i, new_word = best
+                words[i] = new_word
+                del words[i + 1]
+
+        state = 0x2545F4914F6CDD1D
+        mask = (1 << 64) - 1
+
+        def roll():
+            nonlocal state
+            state ^= (state << 13) & mask
+            state ^= state >> 7
+            state ^= (state << 17) & mask
+            return state
+
+        for _ in range(20000):
+            tokens = []
+            for _ in range(roll() % 10):
+                r = roll()
+                wide = (r // 4) % n_words
+                # Mostly characters, sometimes a longer word, so that the same
+                # pair can turn up in several places at once.
+                tokens.append(wide if r % 4 == 0 else (r // 4) % 64)
+            self.assertEqual(_merge_pairs(tokens, plan), naive(tokens), tokens)
+
+    def test_a_stale_heap_entry_does_not_merge_early(self):
+        # "Find".  The pairs are (F,i) rank 92, (i,n) rank 4 and (n,d) rank
+        # 998, so the sweep merges (i,n) first.  That changes the pair at
+        # position 0 to (F,in) rank 978, but the entry queued there at rank 92
+        # is still in the heap; taken at face value it would merge (F,in) long
+        # before rank 978, and the (in,d) rule at rank 125 -- the merge that
+        # leads to the answer -- could never then fire.  Reading the rank back
+        # out of the plan when an entry surfaces is what prevents this; the
+        # random test above only stumbles on such a case by luck of the draw.
+        model = self.codec.model
+        plan = model._plan
+        tokens = [model._char_id[c] for c in "Find"]
+        self.assertEqual(len(_merge_pairs(tokens, plan)), 1)
+
     def test_spelling_expands_only_the_tokens_present(self):
         # The second rule names children that do not exist.  Replaying the rule
         # list would trip over it; expanding the tokens present cannot, because

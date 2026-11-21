@@ -159,110 +159,120 @@ impl Codec {
     }
 }
 
-/// The production tokeniser of `ENCODING.md` §1, in one pass.
+/// A live token: a word id and its neighbours in the identifier.
+///
+/// A merge keeps the left token and removes the right one, so the head of the
+/// list is always token 0 and the tail has no `next`.
+#[derive(Clone, Copy)]
+struct Token {
+    word: u32,
+    next: Option<usize>,
+    prev: Option<usize>,
+}
+
+/// The state of one `merge_pairs` call: the sweep of `ENCODING.md` §1.
 ///
 /// Ranks are nested — a merge's rank exceeds the ranks that built its operands
-/// — so sweeping ranks in ascending order and merging every still-valid pair
-/// performs the same merges as repeatedly taking the lowest rank.  A linked
-/// list over positions makes it linear; the heap holds ranks, never positions.
-/// A rank can be exhausted and later seen again, so the heap may hold
-/// duplicates and the bucket table is the authority.
-pub fn merge_pairs(tokens: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
-    let n = tokens.len();
-    if n < 2 || plan.is_empty() {
-        return tokens;
-    }
-    let mut next: Vec<usize> = (1..=n).collect();
-    let mut prev: Vec<isize> = (0..n).map(|i| i as isize - 1).collect();
-    let mut dead = vec![false; n];
-    let mut value = tokens;
-    let mut buckets: HashMap<u32, Vec<usize>> = HashMap::new();
-    let mut heap: BinaryHeap<Reverse<u32>> = BinaryHeap::new();
+/// — so any pair a merge creates has a rank above the one just used, and a
+/// sweep that always takes the lowest rank performs the merges in the order
+/// the model defines.  `(rank, position)` in the heap gives the lowest rank
+/// first and the leftmost of a rank, which is exactly the tie-break.
+struct MergePairs<'a> {
+    /// `None` where a token has been merged away.
+    tokens: Vec<Option<Token>>,
+    plan: &'a HashMap<(u32, u32), (u32, u32)>,
+    heap: BinaryHeap<Reverse<(u32, usize)>>,
+}
 
-    fn push(
-        i: usize,
-        n: usize,
-        next: &[usize],
-        dead: &[bool],
-        value: &[u32],
-        plan: &HashMap<(u32, u32), (u32, u32)>,
-        buckets: &mut HashMap<u32, Vec<usize>>,
-        heap: &mut BinaryHeap<Reverse<u32>>,
-    ) {
-        let j = next[i];
-        if j >= n || dead[j] {
-            return;
+impl<'a> MergePairs<'a> {
+    /// A sweep over `tokens`, whose adjacent pairs are looked up in `plan`.
+    fn new(tokens: Vec<u32>, plan: &'a HashMap<(u32, u32), (u32, u32)>) -> Self {
+        let n = tokens.len();
+        let tokens = tokens
+            .into_iter()
+            .enumerate()
+            .map(|(i, word)| {
+                Some(Token {
+                    word,
+                    next: (i + 1 < n).then_some(i + 1),
+                    prev: i.checked_sub(1),
+                })
+            })
+            .collect();
+        MergePairs {
+            tokens,
+            plan,
+            heap: BinaryHeap::new(),
         }
-        if let Some(&(rank, _)) = plan.get(&(value[i], value[j])) {
-            match buckets.get_mut(&rank) {
-                Some(bucket) => bucket.push(i),
-                None => {
-                    buckets.insert(rank, vec![i]);
-                    heap.push(Reverse(rank));
+    }
+
+    /// Offer the pair that starts at `i`, if the model has a rule for it.
+    fn push(&mut self, i: usize) {
+        let Some(Token { word, next: Some(j), .. }) = self.tokens[i] else {
+            return;
+        };
+        let Some(right) = self.tokens[j] else { return };
+        if let Some(&(rank, _)) = self.plan.get(&(word, right.word)) {
+            self.heap.push(Reverse((rank, i)));
+        }
+    }
+
+    /// Merge until no adjacent pair has a rule; return the surviving words.
+    fn run(mut self) -> Vec<u32> {
+        for i in 0..self.tokens.len().saturating_sub(1) {
+            self.push(i);
+        }
+        while let Some(Reverse((rank, i))) = self.heap.pop() {
+            // The pair at `i` may have gone, or changed, since it was queued.
+            let Some(Token { word, next: Some(j), prev }) = self.tokens[i] else {
+                continue;
+            };
+            let Some(right) = self.tokens[j] else { continue };
+            let Some(&(found, new_word)) = self.plan.get(&(word, right.word)) else {
+                continue;
+            };
+            if found != rank {
+                continue; // stale: the pair at `i` is not the one we queued
+            }
+            let following = right.next;
+            self.tokens[i] = Some(Token {
+                word: new_word,
+                next: following,
+                prev,
+            });
+            self.tokens[j] = None;
+            if let Some(f) = following {
+                if let Some(after) = self.tokens[f].as_mut() {
+                    after.prev = Some(i);
                 }
             }
-        }
-    }
-
-    for i in 0..n - 1 {
-        push(
-            i, n, &next, &dead, &value, plan, &mut buckets, &mut heap,
-        );
-    }
-    while let Some(&Reverse(rank)) = heap.peek() {
-        if !buckets.contains_key(&rank) {
-            heap.pop(); // a stale entry for a rank whose bucket is gone
-            continue;
-        }
-        if buckets[&rank].is_empty() {
-            heap.pop();
-            buckets.remove(&rank);
-            continue;
-        }
-        let i = buckets.get_mut(&rank).unwrap().pop().unwrap();
-        if dead[i] {
-            continue;
-        }
-        let j = next[i];
-        if j >= n || dead[j] {
-            continue;
-        }
-        let Some(&(found, new_id)) = plan.get(&(value[i], value[j])) else {
-            continue;
-        };
-        if found != rank {
-            continue;
-        }
-        value[i] = new_id;
-        dead[j] = true;
-        next[i] = next[j];
-        let following = next[j];
-        if following < n {
-            prev[following] = i as isize;
-        }
-        for k in [prev[i], i as isize] {
-            if k >= 0 && !dead[k as usize] {
-                push(
-                    k as usize,
-                    n,
-                    &next,
-                    &dead,
-                    &value,
-                    plan,
-                    &mut buckets,
-                    &mut heap,
-                );
+            // The pair before `i` is new too, because `i`'s word has changed.
+            if let Some(p) = prev {
+                self.push(p);
             }
+            self.push(i);
         }
+        let mut out = Vec::with_capacity(self.tokens.len());
+        let mut cursor = Some(0);
+        while let Some(i) = cursor {
+            let Some(token) = self.tokens[i] else { break };
+            out.push(token.word);
+            cursor = token.next;
+        }
+        out
     }
+}
 
-    let mut out = Vec::with_capacity(n);
-    let mut i = 0;
-    while i < n {
-        out.push(value[i]);
-        i = next[i];
+/// The production tokeniser of `ENCODING.md` §1, in one pass.
+///
+/// A linked list over the positions makes each merge a constant amount of work
+/// besides the heap; the heap holds one entry per candidate pair, and entries
+/// whose pair has since changed are skipped when they surface.
+pub fn merge_pairs(tokens: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
+    if tokens.len() < 2 || plan.is_empty() {
+        return tokens;
     }
-    out
+    MergePairs::new(tokens, plan).run()
 }
 
 #[cfg(test)]
@@ -293,5 +303,73 @@ mod tests {
             codec.spell(&[u32::MAX]),
             Err(Error::Model("a token is outside the model"))
         ));
+    }
+
+    /// The definition of `ENCODING.md` §1, written the slow obvious way:
+    /// repeatedly merge the lowest-rank adjacent pair, the leftmost of a tie.
+    fn naive(tokens: &[u32], plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
+        let mut words = tokens.to_vec();
+        while let Some((i, new_word)) = words
+            .windows(2)
+            .enumerate()
+            .filter_map(|(i, pair)| plan.get(&(pair[0], pair[1])).map(|&(r, w)| (r, i, w)))
+            .min_by_key(|&(rank, i, _)| (rank, i))
+            .map(|(_, i, w)| (i, w))
+        {
+            words[i] = new_word;
+            words.remove(i + 1);
+        }
+        words
+    }
+
+    #[test]
+    fn the_sweep_agrees_with_the_definition() {
+        let codec = standard().expect("the embedded tables");
+        let model = codec.model();
+        let plan = model.plan();
+        let n_words = model.alphabet().len() as u32 + model.rules().len() as u32;
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let mut roll = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..20_000 {
+            let len = (roll() % 10) as usize;
+            let tokens: Vec<u32> = (0..len)
+                .map(|_| {
+                    let r = roll();
+                    let wide = (r / 4) as u32;
+                    // Mostly characters, sometimes a longer word, so that the
+                    // same pair can turn up in several places at once.
+                    if r % 4 == 0 { wide % n_words } else { wide % 64 }
+                })
+                .collect();
+            assert_eq!(
+                merge_pairs(tokens.clone(), plan),
+                naive(&tokens, plan),
+                "{tokens:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stale_heap_entry_does_not_merge_early() {
+        // "Find".  The pairs are (F,i) rank 92, (i,n) rank 4 and (n,d) rank
+        // 998, so the sweep merges (i,n) first.  That changes the pair at
+        // position 0 to (F,in) rank 978, but the entry queued there at rank 92
+        // is still in the heap; taken at face value it would merge (F,in) long
+        // before rank 978, and the (in,d) rule at rank 125 — the merge that
+        // leads to the answer — could never then fire.  Reading the rank back
+        // out of the plan when an entry surfaces is what prevents this; the
+        // random test above only stumbles on such a case by luck of the draw.
+        let codec = standard().expect("the embedded tables");
+        let model = codec.model();
+        let tokens: Vec<u32> = "Find"
+            .chars()
+            .map(|c| model.char_id(c).expect("a character of the alphabet"))
+            .collect();
+        assert_eq!(merge_pairs(tokens, model.plan()).len(), 1);
     }
 }
