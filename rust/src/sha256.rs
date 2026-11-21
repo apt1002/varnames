@@ -99,5 +99,16 @@ mod tests {
             super::hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+        // 56 bytes is the padding edge: `1` + `56` + `8` does not fit in the
+        // block, so the padding spills into a second one.  A message of any
+        // other length would not exercise that branch.
+        assert_eq!(
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".len(),
+            56
+        );
+        assert_eq!(
+            super::hex(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
     }
 }
