@@ -121,26 +121,82 @@ pub enum CharOrRule {
     Rule(Rule),
 }
 
-/// A canonical Huffman tree: `codes[position] = (value, length)`.
+/// One depth of a canonical tree, as the decoder sees it.
+///
+/// Canonical codes give the leaves at one depth a contiguous range of values,
+/// so decoding is a range test per depth rather than a table lookup.
+#[derive(Clone, Copy, Debug)]
+struct Level {
+    /// The smallest value that is a leaf at this depth.
+    first: u32,
+    /// How many leaves there are at this depth.
+    count: u32,
+    /// Where those leaves start in [`Codes::book`].
+    index: u32,
+}
+
+/// A canonical Huffman tree, in both directions.
+///
+/// The encoder's view is `codes[position] = (value, length)`.  The decoder's
+/// is [`Level`] plus [`book`](Codes::book): the leaves in the order
+/// `canonical_codes` allocates them — all the deepest leaves first, then the
+/// next depth, and so on, ascending by position within a depth.
 #[derive(Clone, Debug)]
 struct Codes {
     codes: Vec<(u32, u32)>,
-    book: HashMap<(u32, u32), u32>,
-    max_len: u32,
+    book: Vec<u32>,
+    levels: Vec<Level>,
 }
 
 impl Codes {
     /// Build a tree from its leaf depths, in stored order.
     fn new(depths: &[u32]) -> Codes {
         let codes = canonical_codes(depths);
-        let mut book = HashMap::with_capacity(codes.len());
-        for (pos, &(value, length)) in codes.iter().enumerate() {
-            book.insert((length, value), pos as u32);
+        if depths.is_empty() {
+            return Codes {
+                codes,
+                book: Vec::new(),
+                levels: Vec::new(),
+            };
+        }
+        let maxd = depths.iter().copied().max().unwrap() as usize;
+        let mut levels = vec![
+            Level {
+                first: 0,
+                count: 0,
+                index: 0,
+            };
+            maxd + 1
+        ];
+        // Within a depth the values ascend with position, so the first leaf
+        // seen there has the smallest value.  Reading `first` off the codes
+        // rather than recomputing it also keeps the decoder right for an
+        // incomplete tree, where a depth boundary rounds up and cannot be
+        // recovered by doubling the level above.
+        for &(value, length) in codes.iter() {
+            let level = &mut levels[length as usize];
+            if level.count == 0 {
+                level.first = value;
+            }
+            level.count += 1;
+        }
+        // The allocation order: deepest first.  A level's block starts where
+        // the deeper levels' blocks end.
+        let mut at = 0;
+        for level in levels.iter_mut().rev() {
+            level.index = at;
+            at += level.count;
+        }
+        let mut next: Vec<u32> = levels.iter().map(|level| level.index).collect();
+        let mut book = vec![0u32; depths.len()];
+        for (pos, &d) in depths.iter().enumerate() {
+            book[next[d as usize] as usize] = pos as u32;
+            next[d as usize] += 1;
         }
         Codes {
-            max_len: depths.iter().copied().max().unwrap_or(0),
             codes,
             book,
+            levels,
         }
     }
 
@@ -166,17 +222,17 @@ impl Codes {
     /// when there is a single leaf, which sits at depth 0 and is position 0;
     /// that is the one case that spends no bits.
     fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
-        if self.codes.is_empty() {
+        if self.book.is_empty() {
             return Err(Error::EmptyTree);
         }
-        if self.codes.len() == 1 {
-            return Ok(0);
+        if self.book.len() == 1 {
+            return Ok(self.book[0]);
         }
         let mut value = 0;
-        for length in 1..=self.max_len {
+        for level in &self.levels[1..] {
             value = (value << 1) | reader.get_bit();
-            if let Some(&pos) = self.book.get(&(length, value)) {
-                return Ok(pos);
+            if value >= level.first && value - level.first < level.count {
+                return Ok(self.book[(level.index + value - level.first) as usize]);
             }
         }
         Err(Error::Model("no codeword within the tree's maximum depth"))
@@ -876,6 +932,68 @@ mod tests {
         assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
         // The top tree's codeword `01` names the empty cluster.
         assert!(matches!(codec.decode(2), Err(Error::EmptyTree)));
+    }
+
+    /// Every leaf of `depths` must survive a write/read round trip, and a
+    /// value that is nobody's leaf must be refused.
+    fn round_trip_depths(depths: &[u32]) {
+        let tree = BottomTree::from_depths(depths);
+        assert_eq!(tree.num_leaves(), depths.len() as u32);
+        for pos in 0..depths.len() as u32 {
+            let mut writer = BitWriter::new();
+            tree.write(&mut writer, RightLeaf(pos)).expect("a leaf");
+            let bits = writer.finish();
+            let mut reader = BitReader::new(bits.as_bytes());
+            assert_eq!(
+                tree.read(&mut reader),
+                Ok(RightLeaf(pos)),
+                "depths {depths:?}, position {pos}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_range_decoder_finds_every_leaf() {
+        // Complete trees, built by splitting leaves, and the incomplete ones a
+        // truncated build can leave behind.  The second kind matters: its
+        // Kraft sum is below 1, so the depth boundaries cannot be recovered by
+        // doubling alone, and the stored `first` has to carry the rounding.
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut roll = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for _ in 0..300 {
+            let mut depths = vec![0u32];
+            for _ in 0..roll() % 24 {
+                let at = (roll() as usize) % depths.len();
+                if depths[at] < 20 {
+                    depths[at] += 1;
+                    let deeper = depths[at];
+                    depths.push(deeper);
+                }
+            }
+            if depths.len() > 1 && roll() % 4 == 0 {
+                depths.pop(); // incomplete: allowed for a bottom tree
+            }
+            round_trip_depths(&depths);
+        }
+        round_trip_depths(&[0]);
+        round_trip_depths(&[2, 2, 2]);
+        round_trip_depths(&[2, 1, 2]);
+    }
+
+    #[test]
+    fn a_hole_in_an_incomplete_tree_is_not_a_leaf() {
+        // Depths 2,2,2 have values 0, 1 and 2; value 3 is unassigned.
+        let tree = BottomTree::from_depths(&[2, 2, 2]);
+        let mut reader = BitReader::new(&[0b11]);
+        assert!(matches!(
+            tree.read(&mut reader),
+            Err(Error::Model("no codeword within the tree's maximum depth"))
+        ));
     }
 
     #[test]
