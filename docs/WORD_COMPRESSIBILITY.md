@@ -178,7 +178,7 @@ Two caveats on the grid builds:
 `work/tw<V>ns/` holds the dictionary and matrix: `dict.txt` starts with the
 character set on its first line, then records each rule on its own line — `P a b`
 for a pair merge (the only rule type since the run rule was removed); `sym.npy`
-is the symbol table; `adj.npz` holds the adjacency triplets (`rows`, `cols`,
+is the word table; `adj.npz` holds the adjacency triplets (`rows`, `cols`,
 `data`), the unigram counts (`uni`) and `nvoc`; `meta.json` records the corpus,
 `num_pairs`, `sample` and the dictionary-sample line count.  The `s0` twins are
 the same build with `--sample 0`.  The directory key is in `PLAN.md`.

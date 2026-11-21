@@ -66,7 +66,7 @@ record the merge as a rule. Every word is therefore two earlier words, and a
 decoder can replay the rules ([`TREE_WORDS.md`](TREE_WORDS.md) §2,
 [`DICTIONARY_RULES.md`](DICTIONARY_RULES.md)).
 
-Two features of the adopted rule are deliberate. It **never merges a symbol
+Two features of the adopted rule are deliberate. It **never merges a word
 with itself**, so there are no run words and no `k`-ary nodes; and it is greedy
 **by frequency**, not by the exact change in code length, because the exact
 score's edge on real identifiers is a fraction of a percent for eight times the
@@ -80,11 +80,14 @@ always the better way to spend a byte.
 
 ## 5. Tokenisation
 
-A word list applied to a string is a *replay*: apply the merges in creation
-order, and at each step merge the lowest-ranked applicable adjacent pair, ties
-leftmost. The result is deterministic. The decoder never re-tokenises: it reads
-words out of the code, which is why the tokenisation has to be specified even
-though only the encoder runs it ([`TREE_WORDS.md`](TREE_WORDS.md) §3).
+A word list applied to a string is a *replay*: for each rank in creation
+order, merge every adjacent pair that is that rule. The result is
+deterministic, and the order within one rank does not matter — two occurrences
+of a rule cannot overlap, because the rule's two children differ — so any sweep
+that visits each rank once gives the same words. The decoder never
+re-tokenises: it reads words out of the code, which is why the tokenisation
+has to be specified even though only the encoder runs it
+([`TREE_WORDS.md`](TREE_WORDS.md) §3).
 
 The implementation is the hot loop of every pass. A naive operator-precedence
 parser is faster but wrong on nested ranks; the production path is an
@@ -93,8 +96,8 @@ ranks, which is exactly equivalent to the reference replay and about 1.4×
 faster ([`TOKENISATION.md`](TOKENISATION.md)).
 
 At the operating point an identifier is **4.06 words** on average. That number
-is the multiplier on every per-token cost, including the rounding a Huffman
-code pays per symbol ([`CODING_OVERHEAD.md`](CODING_OVERHEAD.md)).
+is the multiplier on every per-word cost, including the rounding a Huffman
+code pays per word ([`CODING_OVERHEAD.md`](CODING_OVERHEAD.md)).
 
 ## 6. The matrix
 
@@ -142,9 +145,9 @@ Start in left cluster 0. For each token:
 
 1. code its **right cluster**, given the current left cluster, in that left
    cluster's *top* tree;
-2. code the **symbol** within its right cluster, in that right cluster's
+2. code the **word** within its right cluster, in that right cluster's
    *bottom* tree;
-3. the symbol's left cluster becomes the current left cluster.
+3. the word's left cluster becomes the current left cluster.
 
 The top tree of each left cluster has `k + 1` leaves: the `k` right clusters
 and a **zero-weight STOP leaf**. Finishing means writing the stop; because the
@@ -171,11 +174,11 @@ Decoding is the same loop read back. Start in left cluster 0 and walk a top
 tree. If the walk lands on the STOP leaf, the identifier ends — and since the
 padding is zeros, a decoder that runs out of bits reads the terminator and
 stops. Otherwise the leaf names a right cluster; walk its bottom tree for the
-symbol; append it; the symbol's left cluster becomes the current one; repeat.
+word; append it; the word's left cluster becomes the current one; repeat.
 
 There is nothing to check and nothing to back-track: the code is prefix-free
 within each tree, and the canonical form makes the map injective. A decoder
-that ignores bits above the last symbol it read is correct, which is why the
+that ignores bits above the last word it read is correct, which is why the
 standard puts the "write zeros" rule on the encoder
 ([`STANDARD.md`](../standard/STANDARD.md) §4).
 

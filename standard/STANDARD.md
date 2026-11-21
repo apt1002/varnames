@@ -52,13 +52,13 @@ A model is a file of five tables.  Their byte layout is normative in
 |---|---|
 | alphabet | the characters, ids `0 … C − 1` |
 | rules | `V − C` child-id pairs; rule *i* defines word id `C + i` |
-| memberships | one *right cluster* label per symbol id, `0 … k·q − 1` |
-| word depths | one depth per symbol: the codeword length in its right cluster's tree |
+| memberships | one *right cluster* label per word id, `0 … k·q − 1` |
+| word depths | one depth per word: the codeword length in its right cluster's tree |
 | cluster depths | `k` trees of `k·q + 1` depths; leaf 0 of each is the terminator |
 
 `V = C + (V − C)` is the vocabulary size, `k` the number of **left clusters**
 and `q` the **number of right clusters per left cluster**.  Right clusters
-`c·q … c·q + q − 1` belong to left cluster `c`; a symbol's left cluster is
+`c·q … c·q + q − 1` belong to left cluster `c`; a word's left cluster is
 therefore its right cluster divided by `q`.  The one shipped model has `V = 8,191`,
 `k = 32`, `q = 1`, 63 characters and 8,128 rules.
 
@@ -77,13 +77,13 @@ An identifier is coded as a sequence of steps that alternate between the
 cluster level and the word level:
 
 1. Start in **left cluster 0**.
-2. Tokenise the identifier into symbols (§5).
-3. For each symbol in turn, write
+2. Tokenise the identifier into words (§5).
+3. For each word in turn, write
    (a) its **right cluster** in the current left cluster's tree, at leaf
        position `1 + cluster` (leaf 0 is the terminator), then
-   (b) the **symbol itself** in that right cluster's tree, at its position in
+   (b) the **word itself** in that right cluster's tree, at its position in
        the cluster's ascending-id word list;
-   then the current left cluster becomes the symbol's left cluster.
+   then the current left cluster becomes the word's left cluster.
 4. Write the **terminator**, leaf 0 of the final left cluster's tree.
 
 The terminator is never stored.  Its codeword is all zeros, and so is the
@@ -126,15 +126,18 @@ The rules are applied in ascending rank order, merging every adjacent pair
 whose ids match a rule, repeatedly, until no rule applies:
 
 ```
-tokens := the character ids of the identifier, in order
+words := the character ids of the identifier, in order
 for rank from 0 upwards:
-    scan left to right, merging every adjacent pair that is rule `rank`
+    merge every adjacent pair that is rule `rank`, in any order
     (a merge of rank r never creates a pair of rank below r, so one sweep
     per rank suffices; the result equals always merging the lowest rank first)
 ```
 
-The result is the symbol sequence of §3.  Ranks are nested — a rule's children
+The result is the word sequence of §3.  Ranks are nested — a rule's children
 were created by lower ranks — and that is what makes the single sweep correct.
+The order within one rank does not matter: two occurrences of a rule cannot
+overlap, because the rule's two children differ and no pair appears twice in
+the rule list, so such merges are independent of one another.
 
 ## 6. The integer
 
@@ -183,7 +186,7 @@ A conforming **decoder** must:
 * reproduce the canonical assignment of §4 exactly, or it will mis-decode.
 
 A conforming **model file** must satisfy the invariants of `MODEL_FORMAT.md`
-§3: the rules topological and run-free, one membership and one depth per symbol,
+§3: the rules topological and run-free, one membership and one depth per word,
 each cluster tree complete with leaf 0 deepest, each word tree within the Kraft
 bound, `V = C + len(rules)`.  A reader that finds a violation must reject the
 file rather than guess.

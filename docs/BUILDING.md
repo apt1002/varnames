@@ -33,9 +33,10 @@ It needs Python 3 and `numpy`, nothing else. Outputs, all under `--out`:
 | `model.yaml` | the same model, human-readable and diffable |
 | `build.json` | every knob, the digest, the section sizes and the measured rate |
 
-`--V` counts the file's symbols, characters and the stop included, so the number
-of pair-merge words is `V − 1 − (characters in the corpus)`; `--words 8128` sets
-the word count directly. Both are printed at the start of the build.
+`--V` counts the vocabulary — the characters, the stop and the pair-merge
+words — so the number of pair-merge words is `V − 1 − (characters in the
+corpus)`; `--words 8128` sets the word count directly.  Both are printed at the
+start of the build.
 
 ## The stages
 
@@ -108,7 +109,7 @@ Memory peaks in the model stage, which holds the prior-added matrix densely:
 Two things that look like knobs and are not: the **word list order** (creation
 order, and it cannot be permuted — the tokeniser replays the rules in rank
 order, [`MODEL_BUDGET.md`](MODEL_BUDGET.md) §5.4) and the **stop token** (it is
-the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
+the padding, not a word, [`ENCODING.md`](ENCODING.md) §3).
 
 ## What is not packaged
 
@@ -117,8 +118,8 @@ the padding, not a symbol, [`ENCODING.md`](ENCODING.md) §3).
   it stays in `scripts/` as such ([`CORPUS.md`](CORPUS.md) §"Reproducing").
   `build_tables.py` takes any file with one identifier per line, so a corpus of
   your own needs nothing from that section.
-* **Changing the format.** The file is the standard; adding a section or a
-  symbol is a new version of it, not a build option
+* **Changing the format.** The file is the standard; adding a section or a new
+  kind of rule is a new version of it, not a build option
   ([`STANDARD.md`](../standard/STANDARD.md) §9).
 * **Non-ASCII identifiers.** The tool reads UTF-8 and takes its alphabet from
   every character in the corpus, so a corpus of your own may contain accented

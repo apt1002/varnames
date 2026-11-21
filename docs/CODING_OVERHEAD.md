@@ -126,12 +126,12 @@ the two shapes' bytes.
 
 ## The zero-weight stop changes the verdict
 
-Every number above charges the stop token like any other symbol.  That is the
+Every number above charges the stop token like any other word.  That is the
 right convention for an *arithmetic* code, which cannot end an identifier for
 free ([`ENCODING.md`](ENCODING.md) §2).  It is the wrong one for the Huffman
 code: the all-zeros codeword is never written, so the padded zeros *are* the
 terminator and the stop's bits are never spent.  Building each tree with the
-stop's weight driven to zero gives the other symbols the lengths of the
+stop's weight driven to zero gives the other words the lengths of the
 renormalised distribution, and that changes what the code costs.
 
 `words_per_identifier.py --zero-stop`, stride 10 (`n = 42,268`), `kappa = 300`:

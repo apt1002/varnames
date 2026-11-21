@@ -181,7 +181,7 @@ across the digit boundary produces the same token twice (`2`,`0`,`2`,`0` →
 `20`,`20`).
 
 The current dictionaries contain **no run words at all**: every rule in
-`work/tw4096ns/dict.txt` is a `P` (pair-merge) rule over two stored symbols, so
+`work/tw4096ns/dict.txt` is a `P` (pair-merge) rule over two stored words, so
 the `(u^k)` machinery of the run-aware rule is absent and a doubled token is
 always coded as two pair words.  The measurement above says that is close to
 free — the loss is bounded by 853 merge opportunities in 422,671 identifiers —

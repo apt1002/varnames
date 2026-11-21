@@ -30,7 +30,7 @@ Working into a *fixed budget* changes what "bijection" means:
   the standard defines is a bijection between identifiers and a *subset* of the
   integers, not the whole range.
 * **Canonical means "high bits zero".**  The decoder ignores every bit above the
-  last symbol it read — they carry no information, and a decoder that rejected
+  last word it read — they carry no information, and a decoder that rejected
   non-zero ones would be rejecting valid words.  But the *encoder* is required
   to write zeros there, and that requirement is what makes the map from
   identifiers to integers injective.  It belongs in the standard as a rule about
@@ -55,7 +55,7 @@ weight**, which makes it the deepest.  Then:
 1. **Termination is unambiguous.**  No other codeword starts with the stop's
    codeword `0^l` (the code is prefix-free), so `l` zeros can only mean "stop".
 2. **The padding *is* the stop.**  Write the code into the low bits of the word
-   and leave the high bits zero.  The decoder reads symbols until it has read
+   and leave the high bits zero.  The decoder reads words until it has read
    `0^l`, which it finds in the padding; a word whose code ends exactly at bit
    63 reads zeros "beyond the budget", which is the same thing.
 3. **The stop's bits are never spent.**  The identifier's length is
@@ -67,7 +67,7 @@ The factorised code has two stages, and the padding meets the top one first.  So
 the termination has to happen there: a top tree's alphabet is the right clusters
 plus a zero-weight **STOP** leaf, and the padding decodes as that leaf.  The
 word stage is then not reached at all, which is why the stop's own bottom leaf
-is only there to keep symbol 0 in the alphabet (`MODEL_FORMAT.md` §1, §2).
+is only there to keep word 0 in the alphabet (`MODEL_FORMAT.md` §1, §2).
 
 Point 3 is worth stating carefully because it affects how the numbers compare.
 `CODING_OVERHEAD.md` measures Huffman and arithmetic lengths *including* the
@@ -93,7 +93,7 @@ that matters is the 64/128-bit **fit rate**, and the factorisation comparison
 Since the stop's bits are never spent, its *probability* should not be allowed
 to shape the other codes either.  Build the tree with the stop's weight set to
 zero (or just below the smallest real weight), keeping it as a leaf so the
-all-zeros path still exists.  Huffman then gives every other symbol the lengths
+all-zeros path still exists.  Huffman then gives every other word the lengths
 optimal for the **renormalised** distribution:
 
     len(b) ≈ log₂(1/p̂_b) = log₂(1/p_b) − log₂(1/(1 − p))
@@ -104,7 +104,7 @@ identifier** — an order of magnitude more than the whole Huffman penalty
 `CODING_OVERHEAD.md` measured.  Without the zero weight, the tree is optimal for
 a quantity we never charge.
 
-The cost is one bit on the least probable symbol (the zero-weight leaf has to
+The cost is one bit on the least probable word (the zero-weight leaf has to
 pair with something at the bottom of the tree), so the trade is overwhelmingly
 favourable.  Two things to check in measurement: Huffman's tie-breaking must not
 strand the zero-weight leaf at a shallow depth (force `depth ≥ 1`), and the
@@ -114,7 +114,7 @@ specified.
 
 A zero-weight leaf is exactly the classic "escape" symbol, and this is the
 cleanest way to describe the design: **the stop is an escape to end-of-budget,
-coded for free, and the other symbols are coded as if the identifier continued.**
+coded for free, and the other words are coded as if the identifier continued.**
 Measured at `V = 2104, k = 52` this is worth 1.74 bits/identifier, and it is
 enough to make the flat Huffman code cheaper than the arithmetic reference
 (1.04 bits/identifier) — see `CODING_OVERHEAD.md`.  The all-zeros codeword
@@ -154,17 +154,17 @@ Two consequences:
 
 ### The arithmetic case: why it does not transfer
 
-Arithmetic coding replaces the per-symbol code by one number: a point in the
+Arithmetic coding replaces the per-word code by one number: a point in the
 message's interval.  After encoding `t₁ … tₙ`, the encoder's interval is
 `[L, L+P)`, and the stop occupies the sub-interval
 
     [L, L + P·pₙ),        pₙ = P(\n | tₙ)
 
 For "all zeros works" we would need the value `0` (the all-zeros fraction) to
-lie in that sub-interval — i.e. `L = 0`, which is true only for the first symbol
+lie in that sub-interval — i.e. `L = 0`, which is true only for the first word
 of the first identifier.  So the terminator must be **encoded**, at a cost of
 `−log₂ pₙ` bits per identifier, and the zero padding carries no information: it
-is precision, not a symbol.
+is precision, not a word of the identifier.
 
 Equivalently: with a prefix code, "0^l means stop" is a statement about the
 *code tree*, which is fixed and context-local; with an arithmetic code there is
@@ -181,7 +181,7 @@ the whole history.
 * *Disk the stop at the top of every interval.*  That is just encoding it
   normally, since the top of the interval has a well-defined width `P·pₙ`.
 
-**Conclusion.**  The zero-padding terminator is a property of per-symbol prefix
+**Conclusion.**  The zero-padding terminator is a property of per-word prefix
 codes.  The arithmetic coder pays `−log₂ pₙ` (typically 1–3 bits) for a
 terminator that Huffman gets for free.  This is a second argument for a Huffman
 standard (§3), independent of portability, and it should be measured: the
@@ -204,7 +204,7 @@ Two ways to ship the model:
 The first is better on every axis that matters here.
 
 * **It costs the same bytes.**  A Huffman code length is an integer ≤ 255, i.e.
-  one byte per symbol — exactly what a 1-byte probability costs.  Publishing
+  one byte per word — exactly what a 1-byte probability costs.  Publishing
   the code is not a bigger table; it is the same table with the redundancy
   removed.
 * **It removes the arithmetic-coder specification entirely.**  Option 2 does
@@ -214,17 +214,17 @@ The first is better on every axis that matters here.
   disagree about the encoding, which is precisely the interoperability risk a
   standard exists to remove.
 * **It makes the decoder trivial and exact.**  Canonical Huffman decoding is
-  integer arithmetic: sort symbols by `(length, id)`, count codes per length,
+  integer arithmetic: sort words by `(length, id)`, count codes per length,
   walk the prefix table.  It is thirty lines in any language, needs no floating
   point, and is already standard practice (DEFLATE, JPEG, Brotli).
 * **It fixes what would otherwise be unspecified.**  Option 2 leaves open the
   tie-breaking when two subtrees have equal weight, the treatment of zero-
-  probability symbols, the direction of the canonical assignment, and the exact
+  probability words, the direction of the canonical assignment, and the exact
   quantisation of `p`.  All four change the emitted bits.
 
 What the standard must pin, in order of how easily it goes wrong:
 
-* the canonical assignment (lengths → codewords) and the symbol numbering — with
+* the canonical assignment (lengths → codewords) and the word numbering — with
   its direction, since the mirror image of the DEFLATE convention is what puts
   the all-zeros code on the terminator (`MODEL_FORMAT.md` §2);
 * the zero weight on each stage's terminator leaf (the stop in a word tree, the
@@ -237,7 +237,7 @@ What the standard must pin, in order of how easily it goes wrong:
 * for the clustered model: the word list, both cluster assignments and `D`, with
   the *decoder's* arithmetic (integer) spelled out — `P(b | a)` must be
   evaluated identically in every implementation, or the encoder and decoder
-  disagree about the codewords of the next symbol.
+  disagree about the codewords of the next word.
 
 That last point is the one place where floating point would otherwise creep into
 a standard.  If the code is published, the decoder never computes `P(b | a)` at

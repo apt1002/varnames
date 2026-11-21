@@ -13,8 +13,8 @@ model and is the one `scripts/hfactor_words.py` reports.
 
 ## The matrix
 
-For a dictionary with `NUM_PAIRS` words and `V = 63 + 1 + NUM_PAIRS` symbols,
-`M[a, b]` counts the cyclic bigrams `a → b` over the tokenised corpus
+For a dictionary with `NUM_PAIRS` pair-merge words and `V = 63 + 1 + NUM_PAIRS`
+words, `M[a, b]` counts the cyclic bigrams `a → b` over the tokenised corpus
 (`Σ_v M[u, v] = N(u)`, `T = Σ M` the token total).  Three dictionaries are used,
 sized to match the character thresholds of [`CODE_LENGTHS.md`](CODE_LENGTHS.md):
 

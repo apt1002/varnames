@@ -140,7 +140,7 @@ sits **0.34 points above** the asymmetric frontier at matched bytes when
 `k = 32`, exactly on it when `k = 64`. Shared ships at `q = 1`
 ([`SHARED_CLUSTERS.md`](SHARED_CLUSTERS.md)).
 
-**A cluster reserved for the stop token.** The stop is the odd symbol, and
+**A cluster reserved for the stop token.** The stop is the odd word, and
 reserving clusters for it is nearly free in bits once the clustering profile is
 held fixed (**0.007–0.19**), but it buys nothing: the zero-weight terminator
 already removes the stop's cost. Rejected
@@ -155,11 +155,11 @@ alike. Parked, negative ([`CODESIGN.md`](CODESIGN.md)).
 ## The code
 
 **Arithmetic coding.** The obvious way to beat a prefix code: fractional bits
-per symbol, and the arithmetic bound is the reference in
+per word, and the arithmetic bound is the reference in
 [`CODING_OVERHEAD.md`](CODING_OVERHEAD.md). It loses on the terminator. With a
 prefix code the all-zeros codeword *is* the stop, so the padding is the
 terminator and costs nothing; with an arithmetic code the value `0` lies in the
-stop's sub-interval only for the first symbol of the first identifier, so the
+stop's sub-interval only for the first word of the first identifier, so the
 stop must be encoded at `−log₂ pₙ`, typically 1–3 bits. Add the ~1 bit of
 trailing zeros the integer form gives away for free against a summed code
 length, and Huffman is about **a bit per identifier ahead**, lifting the 64-bit

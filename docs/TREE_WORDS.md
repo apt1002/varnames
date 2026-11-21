@@ -360,7 +360,7 @@ that the `α`/`β` that enter the Jensen corrections are exactly the marginals o
 regression test for the algebra — the checkable Jensen bound of §9.0,
 `Δ ≤ R[H(p) − H(α) − H(β)] ≤ 0`, holds with no violation over 126 578 random
 merges).  Only the doubled word remains outside the proof.  Enumerating every
-cyclic corpus over `≤ 4` symbols (all sizes up to `20 000` sequences) with every
+cyclic corpus over `≤ 4` words (all sizes up to `20 000` sequences) with every
 merge pair:
 
 * `u ≠ v`: `0` positive `Δ` out of `447 384` merges;
@@ -435,7 +435,7 @@ a single run of `u` has `CS = 0` before and after, hence `Δ = 0` too.)
 **Verified.**  Enumerating small cyclic corpora and applying up to four
 run-aware steps to each: `0` positive `Δ` out of `41 167` steps (run steps
 `19 839`, pair steps `21 328`).  A heavier cross-check (all corpora over `≤ 3`
-symbols up to length `12`, up to `40` steps each — `118 597` corpora — and
+words up to length `12`, up to `40` steps each — `118 597` corpora — and
 `4 000` random run-heavy corpora up to `60` steps each) also finds `0`
 positives, and confirms "no two adjacent `u` tokens after collapsing runs of
 `u`" every time.  The remaining choice — run word `(uᵏ)` versus boundary `(uv)`

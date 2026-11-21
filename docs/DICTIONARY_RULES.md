@@ -2,7 +2,7 @@
 
 Status: **the adopted rule, then the alternatives that were measured and
 rejected.**  The dictionary is plain most-frequent-pair merge with **merges of a
-symbol with itself forbidden**; the sections after the first record what was
+word with itself forbidden**; the sections after the first record what was
 tried against that rule and why it stayed.
 
 ## The adopted rule
@@ -11,7 +11,7 @@ Start from the character alphabet plus `\n` and repeatedly merge the most common
 adjacent pair of words (`docs/TREE_WORDS.md` §2).  Two things the rule does
 **not** do, decided by the experiments below:
 
-* **It never merges a symbol with itself.**  A word `(uu)` is never created, and
+* **It never merges a word with itself.**  A word `(uu)` is never created, and
   there is no flat run word `(u^k)`.  So every dictionary entry is a rule
   `P a b` with `a ≠ b`, and a doubled letter can only enter the vocabulary
   inside a word that also contains a neighbour (`sse`, `ess`, `tte`, `__i`).
@@ -54,7 +54,7 @@ pairs each step for the `Δ` rule.
 | 3.0 | 0.9 | 17 328 | 16 309 | **+5.9 %** |
 
 **Real** (`merged_training.txt`, stride-500 sample, 3 804 train / 3 805 test,
-63 symbols):
+63 words):
 
 | NUM_PAIRS | freq | delta | better |
 |---:|---:|---:|---|

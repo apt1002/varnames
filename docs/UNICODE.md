@@ -182,7 +182,7 @@ question of whether it is possible.  The cost is not uniform across scripts:
 * **Accented Latin, Greek, Cyrillic** — on the order of a few hundred
   characters (about 60 in Latin-1's letter range, 128 in Latin Ext.-A, 144
   Greek, 256 Cyrillic).  Two bytes each in the alphabet, plus the membership
-  label and the depth that every symbol carries — about 1.1 bytes at the
+  label and the depth that every word carries — about 1.1 bytes at the
   operating point — so a few hundred characters is 1–2 kB, taken from the
   word list because `V` is fixed.  A 30 kB model absorbs it.
 * **Han, kana, Hangul** — 20,992 code points in the base CJK block plus 6,592

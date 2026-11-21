@@ -179,7 +179,7 @@ replaces them with 80 words the greedy-512 build never reached.
 
 > An earlier revision of this section reported "14 kept words are new".  That
 > was a bug in the diagnostic: `remap_rules` renumbers the kept words, but the
-> overlap count indexed the *original* oversize symbol table with the *new* ids,
+> overlap count indexed the *original* oversize word table with the *new* ids,
 > so the kept-word names were read from the wrong slots.  The correct count is
 > 80, which is the only value consistent with the 80/256 greedy deletions
 > recorded in `work/prune_512_removed.txt`.

@@ -14,14 +14,15 @@ exactly equivalent, ~1.4× faster, and is now the production path.**
 A dictionary is a list of rules in creation order: pair merges `(a,b) -> c`. A
 *pair block* is a run of consecutive pair rules (with run collapses no longer
 built, one block covers the whole list); tokenising applies a block by
-repeatedly merging the **lowest-ranked** applicable adjacent pair (ties
-leftmost), then the next block, and so on. The production code
-(`_apply_pair_block`) does this with a doubly linked list of positions plus a
-binary heap of candidate pairs — `O(n log n)`.
+repeatedly merging the **lowest-ranked** applicable adjacent pair (the order
+within one rank does not matter — such merges are independent), then the next
+block, and so on. The production code (`_apply_pair_block`) does this with a
+doubly linked list of positions plus a binary heap of candidate pairs —
+`O(n log n)`.
 
 ## The precedence parser (faster, but wrong)
 
-The natural stack formulation: push each symbol; before pushing the next, keep
+The natural stack formulation: push each word; before pushing the next, keep
 reducing the top pair while its rank is `<=` the rank of the pair it would form
 with the lookahead. This is the classic shift/reduce comparison, and it is
 2.3–2.5× faster (`tokenize_stack`, `_apply_pair_block_stack`).

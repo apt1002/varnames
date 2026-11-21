@@ -64,7 +64,7 @@ over words with no table compression, and it is what the four-kilobyte tables
 are up against.
 
 The top stage costs `V·(V + 1)/2` bytes at four bits a depth, so matching the
-shipped file's size pins the vocabulary at about 240 symbols — 176 pair-merge
+shipped file's size pins the vocabulary at about 240 words — 176 pair-merge
 words. The flat model comes out slightly **smaller** than the one that ships:
 
 | model | `V` | `k` | bytes | mean bits | fit ≤64 | fit ≤128 |
@@ -75,7 +75,7 @@ words. The flat model comes out slightly **smaller** than the one that ships:
 At a matched byte budget the factorisation is worth **16.2 bits and 19.4 fit
 points**, and even the 128-bit set moves by 3.3. The comparison is not
 clustering alone: the flat model's bytes are all table, so its vocabulary
-collapses to 239 symbols, while the shipped model spends 4 kB on depths and the
+collapses to 239 words, while the shipped model spends 4 kB on depths and the
 rest on 8,191. That is the trade the frontier
 ([`MODEL_BUDGET.md`](MODEL_BUDGET.md) §6) is about — table resolution against
 vocabulary — and at this size the vocabulary wins by a mile.

@@ -44,7 +44,7 @@ M[a, b]  =  the number of occurrences of the word b immediately after the word a
 
 That is the whole construction.  It is the **dictionary split**: a context is a
 whole word, and the characters inside a word are not looked at.  Both sides
-range over the same `V` symbols — the `63` characters, `\n`, and the
+range over the same `V` words — the `63` characters, `\n`, and the
 `NUM_PAIRS` words — which is why the matrix is square; it is not a claim that
 the two sides are independent.
 
@@ -104,7 +104,7 @@ prior of §6 is the whole backoff.
 
 ## 4. Row and column marginals are equal
 
-For every symbol `a`,
+For every word `a`,
 
 ```
 Σ_b M[a, b]  =  Σ_b M[b, a]  =  N(a),

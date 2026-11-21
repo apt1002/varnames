@@ -16,7 +16,7 @@ are kept in "Pre-grid record" at the end.
 
 The model is a word list and three tables.  The design is nearly settled:
 
-* **The word list.**  A pair-merge dictionary: `V` symbols in total, of which the
+* **The word list.**  A pair-merge dictionary: `V` words in total, of which the
   63 characters are implicit and the other `V − 63` (`4,032` / `6,080` /
   `8,128`) are merge rules.  A rule is `P a b`: two integers defined earlier in
   the list than the rule itself.  The decoder replays the rules, so the word
@@ -32,7 +32,7 @@ The model is a word list and three tables.  The design is nearly settled:
 
 Nothing else is published.  The 63 characters are implicit in the identifier
 syntax; the cluster → list-of-words index, the tree walks and the canonical code
-assignment are derived at load time.  There is no stop symbol in the file: an
+assignment are derived at load time.  There is no stop word in the file: an
 identifier ends when the top stage says so, so the corpus tokeniser's stop
 token has no leaf of its own (`MODEL_FORMAT.md` §1).
 
@@ -65,7 +65,7 @@ why a Huffman code is affordable at all; it is not a size, so nothing in this
 note is priced with it — every table below is a byte count from a packed file.
 
 What has to be published is the **lengths**, not the codewords.  Given one length
-per symbol, the code is assigned canonically, in the one direction that leaves
+per word, the code is assigned canonically, in the one direction that leaves
 the all-zeros codeword on the terminator: the first leaf at the maximum depth
 takes it and the rest follow from the far end of the code space
 (`MODEL_FORMAT.md` §2).  Every implementation then derives the same codes from
@@ -272,7 +272,7 @@ and the free trailing zeros.  Three consequences for every fit rate quoted here:
 ### 5.4 The word list is in creation order, and cannot be permuted
 
 **The word list is in *creation* order, and that is not frequency order.**  The
-greedy rule selects the most frequent *pair* of adjacent symbols, so the sequence
+greedy rule selects the most frequent *pair* of adjacent words, so the sequence
 of **selection counts** is monotone non-increasing — but a word's count in the
 **final** segmentation is not, because an early word keeps being absorbed into
 longer words later.  Measured on the three sample-20 builds: 49.6 / 49.0 / 48.9 %
@@ -537,7 +537,7 @@ shown:
   the all-zeros path on the stop's right cluster without recoding the top stage,
   so each top tree gets a zero-weight STOP leaf instead.  Cost: one depth per top
   tree; saving: the whole terminator.
-* **The corpus's stop token is not a symbol of the file.**  Its row of the
+* **The corpus's stop token is not a word of the file.**  Its row of the
   adjacency matrix is the **start state** (the first token's distribution) and
   its column does not exist, because nothing is coded after the end.  So the
   matrix is `V0 × (V0−1)`, the bottom trees carry no terminator, and the

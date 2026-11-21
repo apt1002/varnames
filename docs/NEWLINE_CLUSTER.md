@@ -10,7 +10,7 @@ above it.
 
 ## The question
 
-The stop token `\n` is the odd symbol in the vocabulary: `N(\n)` is the number of
+The stop token `\n` is the odd word in the vocabulary: `N(\n)` is the number of
 identifiers, its **row** is the distribution of *first* tokens and its
 **column** the distribution of *last* tokens.  It is also the heaviest point in
 the Hellinger `k`-means (weights are occurrence counts), so it currently drags a

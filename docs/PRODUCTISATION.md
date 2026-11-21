@@ -16,7 +16,7 @@ published lookup tables.
 ## Encoding (settled intent)
 
 - **Little-endian** bit/byte order.
-- **Stop token coded as zeros, beyond the target length.** The stop symbol's
+- **Stop token coded as zeros, beyond the target length.** The stop's
   codeword is all-zero bits, and it may sit *beyond* the target compressed
   length (64 or 128 bits): a target-length code is zero-padded, so an identifier
   shorter than the budget never reaches the stop. (Exact framing/termination

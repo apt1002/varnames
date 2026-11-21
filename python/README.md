@@ -23,7 +23,7 @@ first time they are loaded.
 | `codec.encode(name)` | `(value, bits)`; bit *i* of `value` is the *i*-th bit of the code |
 | `codec.encode_bits(name)` | the code as a list of bits, first bit first, trailing zeros cut |
 | `codec.decode(value)` | the identifier; bits past the top read as zeros |
-| `codec.tokenise(name)` | the model's symbols, before coding |
+| `codec.tokenise(name)` | the model's words, before coding |
 | `codec.model` | the loaded `Model` |
 | `varnames.Codec(varnames.Model.from_path(path))` | any `NVM1` model file instead of the standard one |
 | `varnames.case.classify(name)` | `'lower'`, `'upper'` or `'camel'` |
