@@ -79,6 +79,11 @@ against the heap reference; `check_tree_words.py` (synthetic + `--real`) still
 passes. The precedence-parser experiment is kept in the code
 (`_apply_pair_block_stack`) as the documented negative result.
 
+The Rust crate's tokeniser (`rust/src/codec.rs`, `MergePairs`) is the heap form.
+The bucket queue is a Python-level trick: its gain comes from doing fewer
+interpreter operations per merge, not from the `log n` factor, which native code
+does not notice.
+
 Reproduce:
 
 ```sh

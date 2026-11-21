@@ -513,12 +513,15 @@ def _apply_pair_block_stack(tokens, rank_map):
     """Tokenise one pair block with a precedence (operator) parser.
 
     `rank_map[(a, b)] = (rank, new_id)`, lower rank binds tighter.  Keep a
-    stack; before pushing the next symbol reduce the top pair while its rank is
+    stack; before pushing the next word reduce the top pair while its rank is
     `<=` the rank of the pair it would form with the lookahead (left wins on
-    ties) -- i.e. reduce exactly the *local minima*.  Equivalent to the heap
-    version because the ranks are nested (a merge always outranks the merges
-    that built its operands), so the lowest-rank-first rule reduces local minima
-    only.  O(n) with plain list ops instead of a heap.
+    ties) -- i.e. reduce exactly the *local minima*.
+
+    This is *not* equivalent to the heap, even though the ranks are nested: the
+    stack only ever sees the top pair, and once an unmergeable pair has been
+    pushed the true lowest rank can be buried below it.  About 5% of identifiers
+    tokenise differently.  Kept as the documented negative result of
+    `docs/TOKENISATION.md`, not as a reference.
     """
     if len(tokens) < 2:
         return tokens
@@ -636,7 +639,8 @@ def tokenize_heap(s, char_id, plan, nchars):
 
 
 def tokenize_stack(s, char_id, plan, nchars):
-    """Same as `tokenize` but with the precedence-parser pair blocks."""
+    """The precedence-parser pair blocks: faster than the heap, *not* equivalent
+    (see `_apply_pair_block_stack`).  Kept to reproduce the negative result."""
     toks = [char_id[c] for c in s]
     for _, rank_map in plan:
         toks = _apply_pair_block_stack(toks, rank_map)
