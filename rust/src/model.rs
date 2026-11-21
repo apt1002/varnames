@@ -352,7 +352,8 @@ pub struct Model {
     pos_in_cluster: Vec<RightLeaf>,
     bottom_trees: Vec<Option<BottomTree>>,
     top_trees: Vec<TopTree>,
-    plan: HashMap<(Word, Word), Rule>,
+    /// The rules indexed by the pair they merge: word pair -> its rule.
+    rule_index: HashMap<(Word, Word), Rule>,
 }
 
 impl Model {
@@ -454,9 +455,9 @@ impl Model {
             .map(|(a, b)| (Word(a), Word(b)))
             .collect();
         let memberships: Vec<Right> = memberships.into_iter().map(Right).collect();
-        let mut plan = HashMap::with_capacity(rules.len());
+        let mut rule_index = HashMap::with_capacity(rules.len());
         for (rank, &(a, b)) in rules.iter().enumerate() {
-            plan.insert((a, b), Rule(rank as u32));
+            rule_index.insert((a, b), Rule(rank as u32));
         }
 
         Ok(Model {
@@ -470,7 +471,7 @@ impl Model {
             pos_in_cluster,
             bottom_trees,
             top_trees,
-            plan,
+            rule_index,
         })
     }
 
@@ -646,7 +647,7 @@ impl Model {
     }
     /// The rule that merges an adjacent pair of words, if the model has one.
     pub fn rule_for(&self, a: Word, b: Word) -> Option<Rule> {
-        self.plan.get(&(a, b)).copied()
+        self.rule_index.get(&(a, b)).copied()
     }
     /// The right cluster a word belongs to.
     pub fn right(&self, word: Word) -> Result<Right, Error> {
