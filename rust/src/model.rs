@@ -127,7 +127,6 @@ struct Codes {
     codes: Vec<(u32, u32)>,
     book: HashMap<(u32, u32), u32>,
     max_len: u32,
-    single: Option<u32>,
 }
 
 impl Codes {
@@ -140,7 +139,6 @@ impl Codes {
         }
         Codes {
             max_len: depths.iter().copied().max().unwrap_or(0),
-            single: (depths.len() == 1).then_some(0),
             codes,
             book,
         }
@@ -163,12 +161,16 @@ impl Codes {
     }
 
     /// Read one codeword and return the leaf position.
+    ///
+    /// A codeword is a prefix of the stream.  The empty prefix is one exactly
+    /// when there is a single leaf, which sits at depth 0 and is position 0;
+    /// that is the one case that spends no bits.
     fn read(&self, reader: &mut BitReader<'_>) -> Result<u32, Error> {
         if self.codes.is_empty() {
             return Err(Error::EmptyTree);
         }
-        if let Some(pos) = self.single {
-            return Ok(pos); // a one-leaf tree codes in zero bits
+        if self.codes.len() == 1 {
+            return Ok(0);
         }
         let mut value = 0;
         for length in 1..=self.max_len {

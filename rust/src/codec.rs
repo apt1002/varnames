@@ -284,7 +284,8 @@ impl<'a> MergePairs<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Char;
+    use crate::bitio::{BitReader, BitWriter};
+    use crate::model::{Char, RightLeaf};
     use crate::standard;
 
     #[test]
@@ -300,6 +301,28 @@ mod tests {
         let expected = codec.spell(&[a, b]).expect("two characters");
         let rule_word = model.word_of_rule(Rule(0));
         assert_eq!(codec.spell(&[rule_word]).unwrap(), expected);
+    }
+
+    #[test]
+    fn a_one_word_cluster_codes_in_zero_bits() {
+        // A bottom tree with a single leaf has the empty codeword: encoding
+        // spends nothing and decoding returns the leaf without touching the
+        // stream.  The standard model has such clusters, so this is not a
+        // hypothetical shape.
+        let codec = standard().expect("the embedded tables");
+        let model = codec.model();
+        let (word, right) = (0..model.num_words())
+            .map(|w| (Word(w), model.right(Word(w)).expect("a word")))
+            .find(|&(_, right)| model.bottom_tree(right).unwrap().num_leaves() == 1)
+            .expect("the standard model has a cluster with one word");
+        let tree = model.bottom_tree(right).expect("a tree");
+        let mut writer = BitWriter::new();
+        tree.write(&mut writer, RightLeaf(0)).expect("the only leaf");
+        assert_eq!(writer.len(), 0);
+        let mut reader = BitReader::new(&[]);
+        assert_eq!(tree.read(&mut reader), Ok(RightLeaf(0)));
+        assert_eq!(reader.position(), 0);
+        assert_eq!(model.word_at(right, RightLeaf(0)), Ok(word));
     }
 
     #[test]
