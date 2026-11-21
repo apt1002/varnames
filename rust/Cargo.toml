@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://example.invalid/varnames"
 keywords = ["identifier", "compression", "huffman", "bijection"]
-categories = ["compression", "encoding", "no-std"]
+categories = ["compression", "encoding"]
 
 [lib]
 name = "varnames"
