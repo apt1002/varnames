@@ -61,7 +61,7 @@ impl Codec {
                     .ok_or(Error::UnknownCharacter(c))?,
             );
         }
-        Ok(merge_pairs(words, self.model.plan()))
+        Ok(MergePairs::new(words, self.model.plan()).run())
     }
 
     /// The codeword as a bit string, stream order, trailing zeros cut.
@@ -206,7 +206,11 @@ impl Ord for Candidate {
     }
 }
 
-/// The state of one `merge_pairs` call: the sweep of `ENCODING.md` §1.
+/// The tokeniser of `ENCODING.md` §1, in one pass.
+///
+/// A linked list over the positions makes each merge a constant amount of work
+/// besides the heap; the heap holds one entry per candidate pair, and entries
+/// whose pair has since changed are skipped when they surface.
 ///
 /// Ranks are nested — a merge's rank exceeds the ranks that built its operands
 /// — so any pair a merge creates has a rank above the one just used, and a
@@ -292,15 +296,6 @@ impl<'a> MergePairs<'a> {
     }
 }
 
-/// The production tokeniser of `ENCODING.md` §1, in one pass.
-///
-/// A linked list over the positions makes each merge a constant amount of work
-/// besides the heap; the heap holds one entry per candidate pair, and entries
-/// whose pair has since changed are skipped when they surface.
-pub fn merge_pairs(words: Vec<u32>, plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
-    MergePairs::new(words, plan).run()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,7 +327,8 @@ mod tests {
     }
 
     /// The definition of `ENCODING.md` §1, written the slow obvious way:
-    /// repeatedly merge the lowest-rank adjacent pair, the leftmost of a tie.
+    /// repeatedly merge the lowest-rank adjacent pair.  The position is used
+    /// only to break a tie, which cannot change the result (§5 of `STANDARD.md`).
     fn naive(words: &[u32], plan: &HashMap<(u32, u32), (u32, u32)>) -> Vec<u32> {
         let mut out = words.to_vec();
         while let Some((i, new_word)) = out
@@ -373,7 +369,7 @@ mod tests {
                 })
                 .collect();
             assert_eq!(
-                merge_pairs(words.clone(), plan),
+                MergePairs::new(words.clone(), plan).run(),
                 naive(&words, plan),
                 "{words:?}"
             );
@@ -396,6 +392,6 @@ mod tests {
             .chars()
             .map(|c| model.char_id(c).expect("a character of the alphabet"))
             .collect();
-        assert_eq!(merge_pairs(words, model.plan()).len(), 1);
+        assert_eq!(MergePairs::new(words, model.plan()).run().len(), 1);
     }
 }

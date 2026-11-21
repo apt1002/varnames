@@ -12,7 +12,7 @@ import unittest
 from varnames import Codec, DecodeError, EncodeError, Model, ModelError
 from varnames.bitio import BitReader, BitWriter, bits_length, bits_to_int
 from varnames.case import cased, classify, from_camel, is_upper, to_camel
-from varnames.codec import _merge_pairs, _spell
+from varnames.codec import _MergePairs, _spell
 from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
                              read_varint, varint)
@@ -301,17 +301,18 @@ class TestCodec(unittest.TestCase):
         value, bits = self.codec.encode("foo")
         self.assertEqual(self.codec.decode(value, bits), "foo")
 
-    def test_merge_pairs_is_the_reference_tokeniser(self):
+    def test_every_rule_pair_is_one_word(self):
         m = self.codec.model
         plan = m._plan
-        # every rule rank survives a round trip through the tokeniser
+        # a rule's own two children tokenise to the word the rule defines
         for a, b in list(m.rules)[:200]:
-            self.assertEqual(len(_merge_pairs([a, b], plan)), 1)
+            self.assertEqual(len(_MergePairs([a, b], plan).run()), 1)
 
     def test_the_sweep_agrees_with_the_definition(self):
         # The definition of ENCODING.md section 1, written the slow obvious
-        # way: repeatedly merge the lowest-rank adjacent pair, the leftmost of
-        # a tie.  The sweep in _merge_pairs is the fast form of this.
+        # way: repeatedly merge the lowest-rank adjacent pair.  The leftmost of
+        # a tie is taken here, but the choice cannot matter (STANDARD.md §5);
+        # the sweep in _MergePairs is the fast form of the definition.
         model = self.codec.model
         plan = model._plan
         n_words = model.nchars + len(model.rules)
@@ -348,7 +349,7 @@ class TestCodec(unittest.TestCase):
                 # Mostly characters, sometimes a longer word, so that the same
                 # pair can turn up in several places at once.
                 words.append(wide if r % 4 == 0 else (r // 4) % 64)
-            self.assertEqual(_merge_pairs(words, plan), naive(words), words)
+            self.assertEqual(_MergePairs(words, plan).run(), naive(words), words)
 
     def test_a_stale_heap_entry_does_not_merge_early(self):
         # "Find".  The pairs are (F,i) rank 92, (i,n) rank 4 and (n,d) rank
@@ -362,7 +363,7 @@ class TestCodec(unittest.TestCase):
         model = self.codec.model
         plan = model._plan
         words = [model._char_id[c] for c in "Find"]
-        self.assertEqual(len(_merge_pairs(words, plan)), 1)
+        self.assertEqual(len(_MergePairs(words, plan).run()), 1)
 
     def test_spelling_expands_only_the_words_present(self):
         # The second rule names children that do not exist.  Replaying the rule

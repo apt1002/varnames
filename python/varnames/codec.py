@@ -36,7 +36,7 @@ class Codec:
         except KeyError as exc:
             raise EncodeError(f"character {exc.args[0]!r} is not in the "
                               "model's alphabet") from None
-        return _merge_pairs(words, model._plan)
+        return _MergePairs(words, model._plan).run()
 
     def encode_bits(self, identifier):
         """The codeword as a list of bits, stream order, trailing zeros cut."""
@@ -215,7 +215,7 @@ class _Candidate:
 
 
 class _MergePairs:
-    """One sweep over the adjacent pairs of an identifier (``ENCODING.md`` §1).
+    """The tokeniser of ``ENCODING.md`` §1: one sweep over the adjacent pairs.
 
     Ranks are nested — a merge's rank exceeds the ranks that built its operands
     — so any pair a merge creates has a rank above the one just used, and a
@@ -280,11 +280,3 @@ class _MergePairs:
             self.push(i)
         # A merge keeps the left node, so the survivors are still in order.
         return [node.word for node in self.nodes if node is not None]
-
-
-def _merge_pairs(words, plan):
-    """The production tokeniser of ``ENCODING.md`` §1, in one pass.
-
-    See :class:`_MergePairs` for the sweep.
-    """
-    return _MergePairs(words, plan).run()
