@@ -1,10 +1,11 @@
 //! The codec: identifier ↔ bit string ↔ integer (`ENCODING.md` §2).
 //!
-//! The code alternates two steps: *which right cluster comes next, given the
-//! left cluster we are in*, then *which word in that right cluster*.  An
-//! identifier starts in left cluster 0 by convention and ends when the top
-//! stage reaches its STOP leaf, whose codeword is all zeros — also the padding
-//! above the integer, so the end costs nothing and is not stored.
+//! To encode an identifier, it is first tokenised into words. The words are
+//! then mapped to clusters, which are encoded using a Markov model. Reading in
+//! little-endian order, the encoded bits break into an alternating sequence of
+//! a codeword that selects a cluster given its predecessor, and a codeword that
+//! selects a word given its cluster. The sequence ends with a long string of
+//! zeros, which cost nothing to store.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -19,11 +20,6 @@ use crate::Error;
 const MAX_WORDS: usize = 1_000_000;
 
 /// A [`Model`] tied to the encoding loop, shared behind an [`Arc`].
-///
-/// The field is public because there is nothing to protect: a codec is
-/// exactly a shared model, and the tables inside the model are already
-/// private.  Cloning a codec costs an `Arc` increment, so the standard tables
-/// are parsed once and every codec points at the same copy.
 ///
 /// [`Codec::default`] returns [`standard::standard()`](crate::standard::standard),
 /// the standard codec.

@@ -264,8 +264,11 @@ Shortening the depths from five bits to four is a small but significant saving.
 ## 4. The rule table and how it is coded
 
 The rules are the largest object in the file: 20,926 of 30,745 B, two thirds of
-the model.  Rule *i* is a pair `(u, v)` of child ids, both below
-`N = len(alphabet) + i`, and the decoder knows `N` for each rule.
+the model. We make an effort to store this table compactly.
+
+Rule *i* defines the word with id `N = len(alphabet) + i`. It is a pair `(u, v)`
+of child words, with distinct ids smaller than `N`. The decoder knows `N` for
+each rule.
 
 The file stores `u` and `v` separately, each using a **static geometric
 ladder**, base 2, `b = 3`:

@@ -3,8 +3,8 @@
 Status: **proposal, version 0.1.**  A language-neutral definition of a
 bijection between identifiers and integers, and of the two identifier sets that
 follow from it: those whose code fits in 64 bits and those whose code fits in
-128.  It reuses the byte layout already specified and measured in
-[`MODEL_FORMAT.md`](MODEL_FORMAT.md); this document states what a conforming
+128.  It uses the byte layout specified and measured in
+[`MODEL_FORMAT.md`](MODEL_FORMAT.md). This document states what a conforming
 implementation must *do*, in terms that do not mention any language, corpus or
 build script.
 
@@ -39,61 +39,51 @@ conforming implementation, and no other file may override one of these.
 | `case-pairs.txt` | the 266 cased characters of §11 | normative for the mapping |
 | `golden.txt` | 250 conformance vectors: name, code, bits | informative (§12) |
 
-Both implementations ship byte-for-byte copies of the model and of the pairs,
-check the model's digest before using it, and test that their copy of the pairs
-is the published file (§9).
+This repository contains two implementations of the standard. Both ship
+byte-for-byte copies of the `model.nvm1` and of `case-pairs.txt`. They check the
+model's digest before using it, and test that their copy of the pairs is the
+published file (§9). Their unit tests test conformance with `golden.txt`. We
+recommend that other implementations of the standard do the same.
 
 ## 2. The model
 
-A model is a file of five tables.  Their byte layout is normative in
-`MODEL_FORMAT.md` §3; their meaning is:
+A model is a file of five tables:
 
-| table | meaning |
-|---|---|
-| alphabet | the characters, ids `0 … C − 1` |
-| rules | `V − C` child-id pairs; rule *i* defines word id `C + i` |
-| memberships | one *right cluster* label per word id, `0 … k·q − 1` |
-| word depths | one depth per word: the codeword length in its right cluster's tree |
-| cluster depths | `k` trees of `k·q + 1` depths; leaf 0 of each is the terminator |
+- an alphabet of characters, of length `C`,
+- a list of tokenisation rules, of length `V - C`,
+- a partition of the words (characters and rules) into clusters,
+- a Huffman tree that encodes a word given its cluster, and
+- a Huffman tree that encodes a cluster given its predecessor.
 
-`V = C + (V − C)` is the vocabulary size, `k` the number of **left clusters**
-and `q` the **number of right clusters per left cluster**.  Right clusters
-`c·q … c·q + q − 1` belong to left cluster `c`; a word's left cluster is
-therefore its right cluster divided by `q`.  The one shipped model has `V = 8,191`,
-`k = 32`, `q = 1`, 63 characters and 8,128 rules.
-
-The rules are a pair-merge dictionary: word id `C + i` is the concatenation of
-its two children, which are strictly smaller ids.  Decoding a word therefore
-means replaying the rule list once at load time; there is no other spelling
-information in the file.
-
-Each tree is a complete prefix code given by its depths alone.  No codeword is
-stored: §4 derives them, and a decoder that does not reproduce the derivation
-exactly will not interoperate.
+Two equivalent standard representations are defined: a readable `.yaml` textual
+format, and a compact `.nvm1` binary format. See `MODEL_FORMAT.md` for an
+explanation of how they are stored. In particular, §2 defines the `.yaml` form,
+and §3 defines the `.nvm1` form. These sections are normative.
 
 ## 3. The two stages
 
 An identifier is coded as a sequence of steps that alternate between the
 cluster level and the word level:
 
-1. Start in **left cluster 0**.
-2. Tokenise the identifier into words (§5).
+1. Tokenise the identifier into words (§5).
+2. Start in **left cluster 0**.
 3. For each word in turn, write
    (a) its **right cluster** in the current left cluster's tree, at leaf
        position `1 + cluster` (leaf 0 is the terminator), then
    (b) the **word itself** in that right cluster's tree, at its position in
        the cluster's ascending-id word list;
-   then the current left cluster becomes the word's left cluster.
+   then the word's left cluster becomes the new current left cluster.
 4. Write the **terminator**, leaf 0 of the final left cluster's tree.
 
-The terminator is never stored.  Its codeword is all zeros, and so is the
-padding above the integer (§6), which is what makes the end of an identifier
-free.
+The terminator's codeword is all zeros. Some additional trailing bits may be
+zero by chance.
 
 ## 4. Codewords
 
-Given a tree's depths `d₀ … dₙ₋₁` in stored order, the codewords are
-assigned canonically, filling the space from the deepest leaves down:
+Each Huffman tree is represented as a list of the depths of its leaves, i.e.
+the lengths of its codewords. Given a tree's depths `d₀ … dₙ₋₁` in stored order,
+the codewords are assigned canonically, filling the space from the deepest
+leaves down:
 
 ```
 max  := the largest depth
@@ -111,33 +101,25 @@ The first leaf at the maximum depth therefore receives the all-zeros codeword.
 Two consequences are load-bearing and must not be "fixed" by a reimplementation:
 
 * the terminator leaf (position 0 of every cluster tree) is the deepest leaf,
-  because its weight is zero, so its codeword is the all-zeros one;
+  because its weight is zero, so its codeword is all zeros;
 * word trees have no terminator leaf, and their deepest leaf is an ordinary
   word.
 
-Codewords travel most-significant bit first.  Bits are packed into bytes
-least-significant bit first: the first bit of the stream is bit 0 of byte 0
-(§3 of `MODEL_FORMAT.md`).  These two orders are opposite on purpose and are the
-most common source of incompatibility.
+The above pseudo-code generates big-endian codewords, which must therefore be
+reversed to form a little-endian integer (see §6).
 
 ## 5. Tokenisation
 
-The rules are applied in ascending rank order, merging every adjacent pair
-whose ids match a rule, repeatedly, until no rule applies:
+§3 says "Tokenise the identifier into words"; this section defines how to do
+that.
 
-```
-words := the character ids of the identifier, in order
-for rank from 0 upwards:
-    merge every adjacent pair that is rule `rank`, in any order
-    (a merge of rank r never creates a pair of rank below r, so one sweep
-    per rank suffices; the result equals always merging the lowest rank first)
-```
+The model's tokenisation rules are applied to the identifier in ascending rank
+order (the order they appear in the model file). Each rule is a
+search-and-replace operation that merges every occurrence of a particular 2-gram
+(two adjacent words) into a 1-gram (a single word).
 
-The result is the word sequence of §3.  Ranks are nested — a rule's children
-were created by lower ranks — and that is what makes the single sweep correct.
-The order within one rank does not matter: two occurrences of a rule cannot
-overlap, because the rule's two children differ and no pair appears twice in
-the rule list, so such merges are independent of one another.
+The replacement order within one rank does not matter: two occurrences of a
+2-gram cannot overlap, because the rule's two children differ.
 
 ## 6. The integer
 
@@ -148,27 +130,36 @@ integer is
 value = Σ b_i · 2^i        (b₀ is the least significant bit)
 ```
 
-with trailing zeros removed: a code is stored with no trailing zero bit, and
-the integer's bit length is `L`.  The decoder reads zeros past the end of the
-integer, which is what lets the all-zeros terminator finish the identifier;
-equivalently, in a fixed-width word the terminator is "the code continues as
-zeros".  In 64- and 128-bit words the value is little-endian.
+I.e. the encoding is little-endian. Trailing zeros of the bit string, including
+the all-zeros terminator codeword, become leading zeros of the integer. Leading
+zeros are implicitly endless, and are therefore stored for free. The decoder
+reads as many zeros as it needs to finish the identifier; when reading a 64-bit
+or 128-bit integer, it can continue beyond the first 64 or 128 bits.
 
 Consequently every bit string is a code of exactly one identifier, and every
 integer is the code of exactly one identifier.  There are no reserved values.
 
 ## 7. The two sets
 
-The sets are read off the encoder rather than tabulated:
+A contribution of this standard is two useful sets of identifiers. The sets are
+read off the encoder rather than tabulated:
 
-* the **64-bit set** is the identifiers whose canonical code has `L ≤ 64`;
-* the **128-bit set** is the identifiers whose canonical code has `L ≤ 128`.
+* The **64-bit set** is the identifiers whose canonical integer has no ones
+beyond bit 63. This includes 85% of unique identifiers in a validation corpus.
+* The **128-bit set** is the identifiers whose canonical integer has no ones
+beyond bit 127. This includes 99% of unique identifiers in the corpus.
+
+Measuring the sets as a fraction of *unique* identifiers undersells them,
+because a typical word in the set is used more frequently than a typical word
+outside it. As a fraction of occurrences, the 64-bit set covers about 92% of
+identifiers. Words excluded by the sets tend to be long and odd in some way,
+e.g. they contain an unusual number of underscores, or use unconventional
+capitalisation. There is often an easy fix.
 
 Membership is a property of the identifier and the model, not of a second
-table. Codes longer than 128 bits exist — the corpus contains them — and they
-are outside both sets, not errors: the code is a bit string of any length, and
-the two sets are the subset that fits a machine word.  The measured fit rates
-are in [`BUDGET64_STUDY.md`](../docs/BUDGET64_STUDY.md).
+table. Codes longer than 128 bits exist, and they are outside both sets. The
+code generalises to bit strings of any length, and the two sets are merely the
+subset that fits a machine word.
 
 ## 8. Conformance
 
@@ -255,47 +246,59 @@ different files will not agree; the digest is how they find out.
 ## 11. Case conversion
 
 An implementation **may** convert between the three conventions `foo_bar`,
-`FOO_BAR` and `fooBar`; one that does not offer the conversion conforms.  The
-model is trained on one convention — the standard model on CamelCase — so the
-conversion is what lets a caller meet the model with names written another way.
-Nothing in encoding or decoding depends on it, and no class label is carried in
-a code.
+`FOO_BAR` and `fooBar`; one that does not offer the conversion conforms. Both
+the implementations in this repository do provide case convention conversions.
 
-A character is **cased** when its upper-case and lower-case forms are each a
-single character, differ from it, and are inverses of each other; every other
-character is **inert**, copied unchanged and never mapped.  The cased set is the
+The standard model is trained on CamelCase identifiers. Converting an identifier
+to camel case therefore allows the model to encode it better, but nothing in the
+encoding or decoding process depends on it. To convert an identifier back to its
+original case convention, you must record the convention out-of-band, as it is
+not part of the encoded data. `from_camel(to_camel(x), class(x)) = x` for every
+identifier.
+
+### Converting single characters
+
+For the purpose of converting between case conventions, it is necessary to
+define how single characters are converted to upper- and lower-case forms.
+Although the standard model has an ASCII-only alphabet, non-standard models are
+allowed, so the definition covers non-ASCII characters too. For interoperability
+between implementations, we encourage you to use the definition given here. Note
+that the unicode character properties table shipped with your programming
+language might not match the definition given here, which is fixed so that a
+Unicode upgrade cannot change what it does.
+
+A character is said to be **cased** when its upper-case and lower-case forms are
+different, and are inverses of each other. Every other character is **inert**,
+i.e. it is unchanged by case conversions. The cased set is defined to be the
 letters in `U+0041–U+005A`, `U+0061–U+007A`, `U+00C0–U+017F` and
 `U+0400–U+052F`.  In those ranges exactly six letters are inert: `ß`, `İ`, `ı`,
-`ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper case at all.  The 266 pairs
-are published in `standard/case-pairs.txt` (§9), which is normative for the
-mapping.  The rule above is what the table must satisfy; an implementation
-reads the pairs and never asks the host for a case mapping, so a Unicode
-upgrade cannot change what it does.
+`ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper case at all.  The 266 cased
+pairs are published in `standard/case-pairs.txt` (§9), which is normative. They
+cover the majority of characters actually used in identifiers.
 
-A cased character is **upper** when it equals its own upper-case form, and
-**lower** otherwise; inert characters vote for neither.  An identifier is
-`lower` when it has cased characters and no upper one, `upper` when it has
-upper ones and no lower one, and `camel` when it has both — or when it has
-neither: a name with no cased characters has nothing to convert, so it is
-already in the normal form.  To convert a `lower` or `upper` identifier:
+### Detecting the case convention
+
+A character is **upper** when it differs from its own lower-case form, and
+**lower** when it differs from its upper-case form. Inert characters are neither
+upper nor lower. An identifier is `lower` if it has lower but not upper
+characters, `upper` if it has upper but not lower characters, and `camel` if it
+has both or neither. A name with no cased characters has nothing to convert, so
+it is already in the normal form.
+
+### Converting to camel case
+
+To convert a `lower` or `upper` identifier to camel case:
 
 * every cased character becomes lower case, **except** one immediately
-  preceded by an underscore, which becomes upper case: `a` stays `a`, and `_a`
-  becomes `A` — upper-cased, and its separator dropped by the next rule —
-  while `__3a` is unchanged, because the digit is what precedes the `a`;
-* a run of underscores that precedes a cased character gives up exactly one
-  underscore, the word separator, and keeps the rest: `a_b` → `aB`,
-  `a__b` → `a_B`; a run not followed by a cased character — before a digit,
-  before an inert character, or at the end — is kept as it is.
+  preceded by an underscore, which becomes upper case. The underscore is
+  swallowed: `a` stays `a`, `_a` becomes `A`, and `A_B` becomes `aB`.
+* an underscore that precedes an uncased character, such as a digit or another
+  underscore, is not swallowed: `__3a` is therefore unchanged.
 
-A `camel` identifier is returned unchanged.  The inverse takes the class as an
-argument, because the class is the only thing the normal form drops:
-`from_camel(to_camel(x), class(x)) = x` for every identifier.  Every mapping is
-one character to one character, so conversion shortens an identifier by exactly
-the separators it swallows and by nothing else.
+### Other alphabets
 
-Two choices are worth stating, because they are what stops the set from
-growing.
+Two design choices are worth stating, because they are what stops the set of
+cased characters from growing.
 
 **Scripts without case are inert, and that is not a gap.**  The transform's only
 channel for a word boundary is a capital letter; Han, kana, Hangul, Arabic,

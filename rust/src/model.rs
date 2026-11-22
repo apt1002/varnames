@@ -1,19 +1,16 @@
 //! Reading the `NVM1` model file of `MODEL_FORMAT.md`.
 //!
-//! A model is a word list (a pair-merge dictionary), one depth table for the
-//! word trees and one for the cluster trees, plus the membership map.
-//! Everything else — leaf lists, the cluster of a word, which tree codes what —
-//! is derived here, once, at load time; the depth tables become codewords in
-//! the crate's `huffman` module.
-//!
-//! Every index has its own type — [`Char`], [`Rule`], [`Word`], [`Left`],
-//! [`Right`], [`RightLeaf`], [`LeftLeaf`] — so a right cluster cannot be passed
-//! where a left cluster is meant.  The accessors below validate what they are
-//! given and return the derived information; the tables themselves stay
-//! private.
-//!
 //! The reader is strict: every invariant the format states is checked, so a
 //! corrupt or truncated file fails at load rather than at decode.
+//!
+//! A model is a word list (a pair-merge dictionary), one depth table for the
+//! word trees and one for the cluster trees, plus the membership map.
+//! A [`Model`] represents data loaded or derived from a model, including leaf
+//! lists, the cluster of a word, which tree codes what.
+//!
+//! Every array index has its own type — [`Char`], [`Rule`], [`Word`], [`Left`],
+//! [`Right`], [`RightLeaf`], [`LeftLeaf`] — so a right cluster cannot be passed
+//! where a left cluster is meant.
 
 use std::collections::{HashMap, HashSet};
 

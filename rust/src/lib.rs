@@ -1,10 +1,7 @@
 //! Encode programming-language identifiers as 64- or 128-bit integers.
 //!
-//! A name becomes an integer by a bijection: the code is a Huffman-coded walk
-//! over a pair-merge word list, and because the terminator is the all-zeros
-//! codeword it costs nothing and the integer needs no length.  The map is
-//! reversible — `decode(encode(name)) == name` — and short, common names land
-//! in the low bits.
+//! The encoding is reversible — `decode(encode(name)) == name`.
+//! The encoding is little-endian — short, common names land in the low bits.
 //!
 //! ```
 //! use varnames::Codec;
@@ -16,15 +13,11 @@
 //! assert_eq!(codec.encode("getUserName").unwrap(), 124_101_637);
 //! ```
 //!
-//! The standard tables ship inside the crate ([`mod@standard`]): [`Codec::default`]
-//! and [`standard::standard`] are the standard codec, and a project that prefers
-//! its own model can load any `NVM1` file with [`Model::from_bytes`] and hand it
-//! to [`Codec::new`].
+//! The standard model ships inside the crate ([`mod@standard`]):
+//! [`Codec::default`] and [`standard::standard`] are the standard codec.
 //!
-//! The tables are read through typed indices — [`model::Word`], [`model::Rule`],
-//! [`model::Char`], [`model::Left`], [`model::Right`], [`model::LeftLeaf`],
-//! [`model::RightLeaf`] — so a right cluster cannot be passed where a left
-//! cluster is meant, and no table is indexed by hand.
+//! Non-standard models are allowed. A project can load any `NVM1` file with
+//! [`Model::from_bytes`] and hand it to [`Codec::new`].
 
 #![warn(missing_docs)]
 
