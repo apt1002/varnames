@@ -251,13 +251,14 @@ impl<'a> MergePairs<'a> {
                 continue;
             };
             let Some(right) = self.nodes[j] else { continue };
-            let Some(found) = self.model.rule_for(word, right.word) else {
-                continue;
-            };
-            if found != rank {
+            // The entry is still good if the rule we queued still has the
+            // words now at `i`.  `rank` came from the model, so the rule
+            // exists; comparing its children is one array read, where asking
+            // `rule_for` again would hash the pair a second time.
+            if self.model.children(rank).ok() != Some((word, right.word)) {
                 continue; // stale: the pair at `i` is not the one we queued
             }
-            let merged = self.model.word_of_rule(found);
+            let merged = self.model.word_of_rule(rank);
             let followed = right.next;
             self.nodes[i] = Some(Node {
                 word: merged,
@@ -394,9 +395,10 @@ mod tests {
         // position 0 to (F,in) rank 978, but the entry queued there at rank 92
         // is still in the heap; taken at face value it would merge (F,in) long
         // before rank 978, and the (in,d) rule at rank 125 — the merge that
-        // leads to the answer — could never then fire.  Reading the rank back
-        // out of the model when an entry surfaces is what prevents this; the
-        // random test above only stumbles on such a case by luck of the draw.
+        // leads to the answer — could never then fire.  Comparing the queued
+        // rank's children with the words now at the position, when the entry
+        // surfaces, is what prevents this; the random test above only stumbles
+        // on such a case by luck of the draw.
         let codec = standard().expect("the embedded tables");
         let model = codec.model();
         let words: Vec<Word> = "Find"
