@@ -36,7 +36,7 @@ class Codec:
         except KeyError as exc:
             raise EncodeError(f"character {exc.args[0]!r} is not in the "
                               "model's alphabet") from None
-        return _MergePairs(words, model._rule_index).run()
+        return _MergePairs(words, model).run()
 
     def encode_bits(self, identifier):
         """The codeword as a list of bits, stream order, trailing zeros cut."""
@@ -192,18 +192,20 @@ class _Node:
 
 
 class _Candidate:
-    """A queued merge: the rank of the rule, and the position it applies at.
+    """A queued merge: the rule, the word it defines, and the position.
 
-    Only the rank orders the heap.  Two occurrences of one rule cannot overlap
-    — a rule's two children differ, and the rule index has one entry per pair
-    — so merges of equal rank are independent, and the order among them cannot
-    matter.  That is why nothing here has to implement "the leftmost of a tie".
+    Only the rule's rank orders the heap.  Two occurrences of one rule cannot
+    overlap — a rule's two children differ, and the rule index has one entry
+    per pair — so merges of equal rank are independent, and the order among
+    them cannot matter.  That is why nothing here has to implement "the
+    leftmost of a tie".
     """
 
-    __slots__ = ("rank", "position")
+    __slots__ = ("rank", "word", "position")
 
-    def __init__(self, rank, position):
+    def __init__(self, rank, word, position):
         self.rank = rank
+        self.word = word
         self.position = position
 
     def __lt__(self, other):
@@ -218,20 +220,21 @@ class _MergePairs:
     sweep that always takes the lowest rank performs the merges in the order the
     model defines.
 
-    The pair at a position can change after it has been queued, so the rank is
-    read from the rule index when an entry surfaces, and one that no longer
-    matches is dropped.
+    The pair at a position can change after it has been queued, so when an
+    entry surfaces the rule's children are compared with the words now at the
+    position; an entry whose pair has gone is dropped.  The children are a
+    list index, where asking the rule index again would hash the pair.
     """
 
-    __slots__ = ("nodes", "rule_index", "heap")
+    __slots__ = ("nodes", "model", "heap")
 
-    def __init__(self, words, rule_index):
+    def __init__(self, words, model):
         n = len(words)
         self.nodes = [
             _Node(word, i + 1 if i + 1 < n else None, i - 1 if i > 0 else None)
             for i, word in enumerate(words)
         ]
-        self.rule_index = rule_index
+        self.model = model
         self.heap = []
 
     def push(self, i):
@@ -242,9 +245,9 @@ class _MergePairs:
         right = self.nodes[node.next]
         if right is None:
             return
-        found = self.rule_index.get((node.word, right.word))
+        found = self.model._rule_index.get((node.word, right.word))
         if found is not None:
-            heapq.heappush(self.heap, _Candidate(found[0], i))
+            heapq.heappush(self.heap, _Candidate(found[0], found[1], i))
 
     def run(self):
         """Merge until no adjacent pair has a rule; return the words that remain."""
@@ -252,7 +255,7 @@ class _MergePairs:
             self.push(i)
         while self.heap:
             candidate = heapq.heappop(self.heap)
-            rank, i = candidate.rank, candidate.position
+            rank, merged, i = candidate.rank, candidate.word, candidate.position
             # The pair at `i` may have gone, or changed, since it was queued.
             node = self.nodes[i]
             if node is None or node.next is None:
@@ -261,11 +264,12 @@ class _MergePairs:
             right = self.nodes[j]
             if right is None:
                 continue
-            found = self.rule_index.get((node.word, right.word))
-            if found is None or found[0] != rank:
+            # The rank says which rule was queued; its children say whether
+            # the rule still applies here, without hashing the pair again.
+            if self.model.rules[rank] != (node.word, right.word):
                 continue                    # not the pair we queued: stale
             following = right.next
-            node.word = found[1]
+            node.word = merged
             node.next = following
             self.nodes[j] = None
             if following is not None:

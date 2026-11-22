@@ -359,10 +359,9 @@ class TestCodec(unittest.TestCase):
 
     def test_every_rule_pair_is_one_word(self):
         m = self.codec.model
-        rule_index = m._rule_index
         # a rule's own two children tokenise to the word the rule defines
         for a, b in list(m.rules)[:200]:
-            self.assertEqual(len(_MergePairs([a, b], rule_index).run()), 1)
+            self.assertEqual(len(_MergePairs([a, b], m).run()), 1)
 
     def test_the_sweep_agrees_with_the_definition(self):
         # The definition of ENCODING.md section 1, written the slow obvious
@@ -405,7 +404,7 @@ class TestCodec(unittest.TestCase):
                 # Mostly characters, sometimes a longer word, so that the same
                 # pair can turn up in several places at once.
                 words.append(wide if r % 4 == 0 else (r // 4) % 64)
-            self.assertEqual(_MergePairs(words, rule_index).run(), naive(words), words)
+            self.assertEqual(_MergePairs(words, model).run(), naive(words), words)
 
     def test_a_stale_heap_entry_does_not_merge_early(self):
         # "Find".  The pairs are (F,i) rank 92, (i,n) rank 4 and (n,d) rank
@@ -413,13 +412,13 @@ class TestCodec(unittest.TestCase):
         # position 0 to (F,in) rank 978, but the entry queued there at rank 92
         # is still in the heap; taken at face value it would merge (F,in) long
         # before rank 978, and the (in,d) rule at rank 125 -- the merge that
-        # leads to the answer -- could never then fire.  Reading the rank back
-        # out of the rule index when an entry surfaces is what prevents this; the
-        # random test above only stumbles on such a case by luck of the draw.
+        # leads to the answer -- could never then fire.  Comparing the queued
+        # rank's children with the words now at the position, when the entry
+        # surfaces, is what prevents this; the random test above only stumbles
+        # on such a case by luck of the draw.
         model = self.codec.model
-        rule_index = model._rule_index
         words = [model._char_id[c] for c in "Find"]
-        self.assertEqual(len(_MergePairs(words, rule_index).run()), 1)
+        self.assertEqual(len(_MergePairs(words, model).run()), 1)
 
     def test_spelling_expands_only_the_words_present(self):
         # The second rule names children that do not exist.  Replaying the rule
