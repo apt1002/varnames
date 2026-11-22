@@ -17,10 +17,9 @@
 //! ```
 //!
 //! The standard tables ship inside the crate ([`mod@standard`]): [`Codec::default`]
-//! and [`Model::default`] are the standard codec and model, and
-//! [`standard::standard`] hands out the tables themselves.  A project that prefers
-//! its own can load any `NVM1` file with [`Model::from_bytes`] and hand it to
-//! [`Codec::new`].
+//! and [`standard::standard`] are the standard codec, and a project that prefers
+//! its own model can load any `NVM1` file with [`Model::from_bytes`] and hand it
+//! to [`Codec::new`].
 //!
 //! The tables are read through typed indices — [`model::Word`], [`model::Rule`],
 //! [`model::Char`], [`model::Left`], [`model::Right`], [`model::LeftLeaf`],
@@ -64,13 +63,6 @@ pub enum Error {
     EmptyTree,
     /// The bits do not reach the STOP leaf within the word budget.
     DoesNotTerminate,
-    /// The embedded standard model is not the one this crate was built with.
-    Checksum {
-        /// The digest the crate expects.
-        expected: &'static str,
-        /// The digest of the bytes it found.
-        found: String,
-    },
 }
 
 impl fmt::Display for Error {
@@ -88,10 +80,6 @@ impl fmt::Display for Error {
             ),
             Error::EmptyTree => write!(f, "an empty tree has no codewords"),
             Error::DoesNotTerminate => write!(f, "the identifier does not terminate"),
-            Error::Checksum { expected, found } => write!(
-                f,
-                "the standard model does not match its checksum: {found} != {expected}"
-            ),
         }
     }
 }

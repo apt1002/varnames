@@ -8,6 +8,8 @@
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::fmt;
+use std::sync::Arc;
 
 use crate::bitio::{Bits, BitReader, BitWriter};
 use crate::model::{CharOrRule, Left, LeftLeaf, Model, Rule, Word};
@@ -17,15 +19,20 @@ use crate::Error;
 const MAX_WORDS: usize = 1_000_000;
 
 /// Ties a [`Model`] to the encoding loop.
+///
+/// The model sits behind an [`Arc`], so a codec is cheap to clone and the
+/// standard tables are parsed once for the whole program.
 #[derive(Clone)]
 pub struct Codec {
-    model: Model,
+    model: Arc<Model>,
 }
 
 impl Codec {
     /// Tie a model to the encoding loop.
     pub fn new(model: Model) -> Self {
-        Codec { model }
+        Codec {
+            model: Arc::new(model),
+        }
     }
 
     /// The model this codec encodes with.
@@ -123,6 +130,14 @@ impl Codec {
             }
         }
         Ok(out)
+    }
+}
+
+/// The codec's shape, not its tables: `Model::info()` describes the model
+/// without printing eight thousand words.
+impl fmt::Debug for Codec {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Codec({})", self.model.info())
     }
 }
 

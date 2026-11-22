@@ -15,8 +15,8 @@ assert_eq!(codec.decode(code)?, "getUserName");
 
 `encode` returns the code as a `u128`; `encode_bits` returns the exact bit
 string when the code does not fit in 128 bits.  `Codec::default()` is the
-standard codec; `Model::default()` and `standard::standard()` are the standard
-tables under it.
+standard codec and `standard::standard()` hands out the same one; a codec holds
+an `Arc<Model>`, so cloning it is cheap and the tables are parsed once.
 
 ## What is in the box
 
@@ -42,13 +42,12 @@ A model is a set of tables indexed by small integers of several different
 kinds, so `model` gives each kind its own one-field struct: `Word`, `Rule`,
 `Char`, `Left`, `Right`, `LeftLeaf` and `RightLeaf`.  They live in
 `varnames::model`; only `Model` itself is reexported at the crate root.
-`Model`'s accessors take
-one kind and return the next — `model.right(word)`, `model.left_of(right)`,
-`model.top_tree(left)`, `model.position(word)` — so a right cluster cannot be
-passed where a left cluster is meant, and no caller ever indexes a table
-directly.  The tables themselves are private; the sizes are methods
-(`num_words()`, `num_lefts()`, …), each docstring naming its letter in
-`STANDARD.md`.
+`Model`'s accessors take one kind and return the next — `model.right(word)`,
+`model.left_of(right)`, `model.top_tree(left)`, `model.position(word)` — so a
+right cluster cannot be passed where a left cluster is meant, and no caller
+ever indexes a table directly.  The tables themselves are private; the sizes
+are methods (`num_words()`, `num_lefts()`, …), each docstring naming its letter
+in `STANDARD.md`.
 
 ## Case conversion
 
