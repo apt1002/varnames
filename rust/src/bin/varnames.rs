@@ -25,9 +25,7 @@ fn load(path: Option<&str>) -> Result<Codec, String> {
                 .map(Codec::new)
                 .map_err(|err| format!("{path}: {err}"))
         }
-        None => varnames::standard::standard()
-            .cloned()
-            .map_err(|err| err.to_string()),
+        None => Ok(Codec::default()),
     }
 }
 

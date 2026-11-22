@@ -6,15 +6,17 @@ bit.  The standard tables are compiled into the library, so a program needs no
 data files at run time.
 
 ```rust
-use varnames::standard::standard;
+use varnames::Codec;
 
-let codec = standard()?;
+let codec = Codec::default();
 let code = codec.encode("getUserName")?;   // 124101637, 27 bits
 assert_eq!(codec.decode(code)?, "getUserName");
 ```
 
 `encode` returns the code as a `u128`; `encode_bits` returns the exact bit
-string when the code does not fit in 128 bits.
+string when the code does not fit in 128 bits.  `Codec::default()` is the
+standard codec; `Model::default()` and `standard::standard()` are the standard
+tables under it.
 
 ## What is in the box
 
@@ -22,14 +24,15 @@ string when the code does not fit in 128 bits.
 |---|---|
 | `Bits` | a bit string of exact length, packed least-significant-bit first |
 | `Codec` | the tokeniser, the encoding loop, decoding |
+| `Model` | the parsed tables: the typed index tables and the derived trees |
 | `case` | `classify`, `to_camel`, `from_camel` over the 266 cased pairs (`STANDARD.md` §11) |
-| `model` | the `NVM1` reader: strict invariant checks, the typed index tables, the derived trees |
+| `model` | the `NVM1` reader: strict invariant checks, and the index types `Word`, `Rule`, `Char`, `Left`, `Right`, `LeftLeaf`, `RightLeaf` |
 | `sha256` | forty lines of SHA-256, so identifying the tables needs no dependency |
 | `standard` | the embedded standard tables and their SHA-256 |
 
-`bitio`, `codec`, `huffman` and `ladder` are private: `Bits` and `Codec` are
-reexported at the crate root, and the bit reader, the trees and the ladder are
-crate-internal.
+`bitio`, `codec`, `huffman` and `ladder` are private: `Bits`, `Codec` and
+`Model` are reexported at the crate root, and the bit reader, the trees and the
+ladder are crate-internal.
 
 The crate has no dependencies and no build script.
 
@@ -37,7 +40,9 @@ The crate has no dependencies and no build script.
 
 A model is a set of tables indexed by small integers of several different
 kinds, so `model` gives each kind its own one-field struct: `Word`, `Rule`,
-`Char`, `Left`, `Right`, `LeftLeaf` and `RightLeaf`.  `Model`'s accessors take
+`Char`, `Left`, `Right`, `LeftLeaf` and `RightLeaf`.  They live in
+`varnames::model`; only `Model` itself is reexported at the crate root.
+`Model`'s accessors take
 one kind and return the next — `model.right(word)`, `model.left_of(right)`,
 `model.top_tree(left)`, `model.position(word)` — so a right cluster cannot be
 passed where a left cluster is meant, and no caller ever indexes a table

@@ -7,22 +7,25 @@
 //! in the low bits.
 //!
 //! ```
-//! use varnames::standard::standard;
+//! use varnames::Codec;
 //!
-//! let codec = standard().expect("the embedded tables");
+//! let codec = Codec::default();
 //! let bits = codec.encode_bits("getUserName").unwrap();
 //! assert_eq!(bits.len(), 27);
 //! assert_eq!(codec.decode_bits(&bits).unwrap(), "getUserName");
 //! assert_eq!(codec.encode("getUserName").unwrap(), 124_101_637);
 //! ```
 //!
-//! The tables ship inside the crate ([`mod@standard`]); a project that prefers its
-//! own can load any `NVM1` file with [`Model::from_bytes`] and hand it to
+//! The standard tables ship inside the crate ([`mod@standard`]): [`Codec::default`]
+//! and [`Model::default`] are the standard codec and model, and
+//! [`standard::standard`] hands out the tables themselves.  A project that prefers
+//! its own can load any `NVM1` file with [`Model::from_bytes`] and hand it to
 //! [`Codec::new`].
 //!
-//! The tables are read through typed indices — [`Word`], [`Rule`], [`Char`],
-//! [`Left`], [`Right`], [`LeftLeaf`], [`RightLeaf`] — so a right cluster cannot
-//! be passed where a left cluster is meant, and no table is indexed by hand.
+//! The tables are read through typed indices — [`model::Word`], [`model::Rule`],
+//! [`model::Char`], [`model::Left`], [`model::Right`], [`model::LeftLeaf`],
+//! [`model::RightLeaf`] — so a right cluster cannot be passed where a left
+//! cluster is meant, and no table is indexed by hand.
 
 #![warn(missing_docs)]
 
@@ -39,9 +42,7 @@ pub mod standard;
 
 pub use bitio::Bits;
 pub use codec::Codec;
-pub use model::{
-    BottomTree, Char, CharOrRule, Left, LeftLeaf, Model, Right, RightLeaf, Rule, TopTree, Word,
-};
+pub use model::Model;
 
 /// Everything that can go wrong encoding or decoding.
 #[derive(Clone, Debug, PartialEq, Eq)]

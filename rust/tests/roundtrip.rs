@@ -1,7 +1,6 @@
 //! End-to-end tests against a golden file that the Python reference
 //! implementation also reads: the two must agree code for code.
 
-use varnames::standard::standard;
 use varnames::{Codec, Error, Model};
 
 /// `name value bits`, one per line, produced by the reference implementation.
@@ -19,7 +18,7 @@ fn rows() -> impl Iterator<Item = (&'static str, Option<u128>, usize)> {
 
 #[test]
 fn standard_tables_are_the_published_ones() {
-    let codec = standard().expect("the embedded tables");
+    let codec = Codec::default();
     let model = codec.model();
     assert_eq!(
         (model.num_words(), model.num_lefts(), model.num_rights_per_left()),
@@ -31,7 +30,7 @@ fn standard_tables_are_the_published_ones() {
 
 #[test]
 fn every_golden_code_agrees() {
-    let codec = standard().expect("the embedded tables");
+    let codec = Codec::default();
     let mut short = 0;
     for (name, value, bits) in rows() {
         let bits_value = codec.encode_bits(name).expect("an encodable name");
@@ -53,14 +52,14 @@ fn every_golden_code_agrees() {
 
 #[test]
 fn short_names_are_small() {
-    let codec = standard().expect("the embedded tables");
+    let codec = Codec::default();
     assert!(codec.encode("a").unwrap() < 1 << 8);
     assert!(codec.encode_bits("foo").unwrap().len() < 16);
 }
 
 #[test]
 fn unknown_characters_are_refused() {
-    let codec = standard().expect("the embedded tables");
+    let codec = Codec::default();
     assert_eq!(codec.encode("hello world"), Err(Error::UnknownCharacter(' ')));
 }
 

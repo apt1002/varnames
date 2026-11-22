@@ -269,11 +269,10 @@ mod tests {
     use super::*;
     use crate::bitio::{BitReader, BitWriter};
     use crate::model::{Char, RightLeaf};
-    use crate::standard::standard;
 
     #[test]
     fn spelling_is_the_expansion_of_the_words_alone() {
-        let codec = standard().expect("the embedded tables");
+        let codec = Codec::default();
         let model = codec.model();
         assert_eq!(codec.spell(&[]).unwrap(), "");
         let c = model.char_at(Char(0)).expect("the first character");
@@ -292,7 +291,7 @@ mod tests {
         // spends nothing and decoding returns the leaf without touching the
         // stream.  The standard model has such clusters, so this is not a
         // hypothetical shape.
-        let codec = standard().expect("the embedded tables");
+        let codec = Codec::default();
         let model = codec.model();
         let (word, right) = (0..model.num_words())
             .map(|w| (Word(w), model.right(Word(w)).expect("a word")))
@@ -310,7 +309,7 @@ mod tests {
 
     #[test]
     fn a_word_outside_the_model_is_an_error() {
-        let codec = standard().expect("the embedded tables");
+        let codec = Codec::default();
         assert!(matches!(
             codec.spell(&[Word(u32::MAX)]),
             Err(Error::Model("a word is outside the model"))
@@ -341,7 +340,7 @@ mod tests {
 
     #[test]
     fn the_sweep_agrees_with_the_definition() {
-        let codec = standard().expect("the embedded tables");
+        let codec = Codec::default();
         let model = codec.model();
         let n_words = model.num_words();
         let mut seed = 0x2545_f491_4f6c_dd1du64;
@@ -381,7 +380,7 @@ mod tests {
         // rank's children with the words now at the position, when the entry
         // surfaces, is what prevents this; the random test above only stumbles
         // on such a case by luck of the draw.
-        let codec = standard().expect("the embedded tables");
+        let codec = Codec::default();
         let model = codec.model();
         let words: Vec<Word> = "Find"
             .chars()
