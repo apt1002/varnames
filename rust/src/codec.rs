@@ -155,24 +155,24 @@ struct Node {
     prev: Option<usize>,
 }
 
-/// A queued merge: the rank of the rule, and the position it applies at.
+/// A queued merge: the rule and the position it applies at.
 ///
-/// Only the rank orders the heap.  Two occurrences of one rule cannot overlap —
+/// Only the rule orders the heap.  Two occurrences of one rule cannot overlap —
 /// a rule's children differ, and the model holds one rule per pair — so merges
 /// of equal rank are independent, and the order among them cannot matter.
 /// That is why nothing here has to implement "the leftmost of a tie".
 ///
 /// The order is *reversed*: a low rank is the higher priority, and the heap is
-/// a max-heap, so `cmp` puts the smaller rank first.
+/// a max-heap, so `cmp` puts the smaller rule first.
 #[derive(Clone, Copy)]
 struct Candidate {
-    rank: Rule,
+    rule: Rule,
     position: usize,
 }
 
 impl PartialEq for Candidate {
     fn eq(&self, other: &Self) -> bool {
-        self.rank == other.rank
+        self.rule == other.rule
     }
 }
 
@@ -186,7 +186,7 @@ impl PartialOrd for Candidate {
 
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.rank.cmp(&self.rank)
+        other.rule.cmp(&self.rule)
     }
 }
 
@@ -235,8 +235,8 @@ impl<'a> MergePairs<'a> {
             return;
         };
         let Some(right) = self.nodes[j] else { return };
-        if let Some(rank) = self.model.rule_for(word, right.word) {
-            self.heap.push(Candidate { rank, position: i });
+        if let Some(rule) = self.model.rule_for(word, right.word) {
+            self.heap.push(Candidate { rule, position: i });
         }
     }
 
@@ -245,20 +245,20 @@ impl<'a> MergePairs<'a> {
         for i in 0..self.nodes.len().saturating_sub(1) {
             self.push(i);
         }
-        while let Some(Candidate { rank, position: i }) = self.heap.pop() {
+        while let Some(Candidate { rule, position: i }) = self.heap.pop() {
             // The pair at `i` may have gone, or changed, since it was queued.
             let Some(Node { word, next: Some(j), prev }) = self.nodes[i] else {
                 continue;
             };
             let Some(right) = self.nodes[j] else { continue };
             // The entry is still good if the rule we queued still has the
-            // words now at `i`.  `rank` came from the model, so the rule
-            // exists; comparing its children is one array read, where asking
+            // words now at `i`.  `rule` came out of `rule_for`, so it exists;
+            // comparing its children is one array read, where asking
             // `rule_for` again would hash the pair a second time.
-            if self.model.children(rank).ok() != Some((word, right.word)) {
+            if self.model.children(rule).ok() != Some((word, right.word)) {
                 continue; // stale: the pair at `i` is not the one we queued
             }
-            let merged = self.model.word_of_rule(rank);
+            let merged = self.model.word_of_rule(rule);
             let followed = right.next;
             self.nodes[i] = Some(Node {
                 word: merged,
