@@ -38,7 +38,7 @@ fn load() -> Codec {
 ///
 /// The returned codec holds an [`Arc`](std::sync::Arc) to the cached model, so
 /// calling this again is cheap and every codec shares the one copy of the
-/// tables.
+/// tables.  Equivalent to [`Codec::default`].
 ///
 /// # Panics
 ///
@@ -59,6 +59,7 @@ impl Default for Codec {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn digest_matches() {
@@ -68,7 +69,7 @@ mod tests {
     #[test]
     fn dimensions() {
         let codec = standard();
-        let m = codec.model();
+        let m = &codec.0;
         assert_eq!(
             (m.num_words(), m.num_lefts(), m.num_rights_per_left()),
             (8_191, 32, 1)
@@ -80,7 +81,7 @@ mod tests {
     #[test]
     fn the_default_is_the_standard_codec() {
         let codec = standard();
-        assert!(std::ptr::eq(codec.model(), Codec::default().model()));
+        assert!(Arc::ptr_eq(&codec.0, &Codec::default().0));
         assert_eq!(
             Codec::default().encode("getUserName").unwrap(),
             124_101_637

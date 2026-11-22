@@ -18,26 +18,25 @@ use crate::Error;
 /// The identifier terminates after this many words, whatever the bits say.
 const MAX_WORDS: usize = 1_000_000;
 
-/// Ties a [`Model`] to the encoding loop.
+/// A [`Model`] tied to the encoding loop, shared behind an [`Arc`].
 ///
-/// The model sits behind an [`Arc`], so a codec is cheap to clone and the
-/// standard tables are parsed once for the whole program.
+/// The field is public because there is nothing to protect: a codec is
+/// exactly a shared model, and the tables inside the model are already
+/// private.  Cloning a codec costs an `Arc` increment, so the standard tables
+/// are parsed once and every codec points at the same copy.
+///
+/// [`Codec::default`] returns [`standard::standard()`](crate::standard::standard),
+/// the standard codec.
 #[derive(Clone)]
-pub struct Codec {
-    model: Arc<Model>,
-}
+pub struct Codec(
+    /// The model, shared with every codec cloned from this one.
+    pub Arc<Model>,
+);
 
 impl Codec {
-    /// Tie a model to the encoding loop.
+    /// Wrap a model in an [`Arc`] and tie it to the encoding loop.
     pub fn new(model: Model) -> Self {
-        Codec {
-            model: Arc::new(model),
-        }
-    }
-
-    /// The model this codec encodes with.
-    pub fn model(&self) -> &Model {
-        &self.model
+        Codec(Arc::new(model))
     }
 
     // ------------------------------------------------------------- encoding
@@ -47,13 +46,13 @@ impl Codec {
         let mut words = Vec::with_capacity(identifier.len());
         for c in identifier.chars() {
             words.push(
-                self.model
+                self.0
                     .char_id(c)
                     .ok_or(Error::UnknownCharacter(c))?
                     .word(),
             );
         }
-        Ok(MergePairs::new(&self.model, words).run())
+        Ok(MergePairs::new(&self.0, words).run())
     }
 
     /// The codeword as a bit string, stream order, trailing zeros cut.
@@ -62,16 +61,16 @@ impl Codec {
         let mut writer = BitWriter::new();
         let mut left = Left(0);
         for word in words {
-            let right = self.model.right(word)?;
-            self.model
+            let right = self.0.right(word)?;
+            self.0
                 .top_tree(left)?
                 .write(&mut writer, LeftLeaf::from(right))?;
-            self.model
+            self.0
                 .bottom_tree(right)?
-                .write(&mut writer, self.model.position(word)?)?;
-            left = self.model.left(word)?;
+                .write(&mut writer, self.0.position(word)?)?;
+            left = self.0.left(word)?;
         }
-        self.model.top_tree(left)?.write(&mut writer, LeftLeaf::STOP)?;
+        self.0.top_tree(left)?.write(&mut writer, LeftLeaf::STOP)?;
         Ok(writer.finish())
     }
 
@@ -94,13 +93,13 @@ impl Codec {
         let mut words = Vec::new();
         let mut left = Left(0);
         for _ in 0..MAX_WORDS {
-            let Some(right) = self.model.top_tree(left)?.read(&mut reader)?.right() else {
+            let Some(right) = self.0.top_tree(left)?.read(&mut reader)?.right() else {
                 return self.spell(&words);
             };
-            let position = self.model.bottom_tree(right)?.read(&mut reader)?;
-            let word = self.model.word_at(right, position)?;
+            let position = self.0.bottom_tree(right)?.read(&mut reader)?;
+            let word = self.0.word_at(right, position)?;
             words.push(word);
-            left = self.model.left(word)?;
+            left = self.0.left(word)?;
         }
         Err(Error::DoesNotTerminate)
     }
@@ -120,10 +119,10 @@ impl Codec {
         let mut out = String::with_capacity(words.len());
         let mut stack: Vec<Word> = words.iter().rev().copied().collect();
         while let Some(word) = stack.pop() {
-            match self.model.parts(word)? {
-                CharOrRule::Char(c) => out.push(self.model.char_at(c)?),
+            match self.0.parts(word)? {
+                CharOrRule::Char(c) => out.push(self.0.char_at(c)?),
                 CharOrRule::Rule(rule) => {
-                    let (a, b) = self.model.children(rule)?;
+                    let (a, b) = self.0.children(rule)?;
                     stack.push(b); // the left operand comes off the stack first
                     stack.push(a);
                 }
@@ -137,7 +136,7 @@ impl Codec {
 /// without printing eight thousand words.
 impl fmt::Debug for Codec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Codec({})", self.model.info())
+        write!(f, "Codec({})", self.0.info())
     }
 }
 
@@ -288,7 +287,7 @@ mod tests {
     #[test]
     fn spelling_is_the_expansion_of_the_words_alone() {
         let codec = Codec::default();
-        let model = codec.model();
+        let model = &codec.0;
         assert_eq!(codec.spell(&[]).unwrap(), "");
         let c = model.char_at(Char(0)).expect("the first character");
         assert_eq!(codec.spell(&[Char(0).word()]).unwrap(), c.to_string());
@@ -307,7 +306,7 @@ mod tests {
         // stream.  The standard model has such clusters, so this is not a
         // hypothetical shape.
         let codec = Codec::default();
-        let model = codec.model();
+        let model = &codec.0;
         let (word, right) = (0..model.num_words())
             .map(|w| (Word(w), model.right(Word(w)).expect("a word")))
             .find(|&(_, right)| model.bottom_tree(right).unwrap().num_leaves() == 1)
@@ -356,7 +355,7 @@ mod tests {
     #[test]
     fn the_sweep_agrees_with_the_definition() {
         let codec = Codec::default();
-        let model = codec.model();
+        let model = &codec.0;
         let n_words = model.num_words();
         let mut seed = 0x2545_f491_4f6c_dd1du64;
         let mut roll = || {
@@ -396,7 +395,7 @@ mod tests {
         // surfaces, is what prevents this; the random test above only stumbles
         // on such a case by luck of the draw.
         let codec = Codec::default();
-        let model = codec.model();
+        let model = &codec.0;
         let words: Vec<Word> = "Find"
             .chars()
             .map(|c| model.char_id(c).expect("a character of the alphabet").word())

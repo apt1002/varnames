@@ -23,7 +23,7 @@ an `Arc<Model>`, so cloning it is cheap and the tables are parsed once.
 | module | contents |
 |---|---|
 | `Bits` | a bit string of exact length, packed least-significant-bit first |
-| `Codec` | the tokeniser, the encoding loop, decoding |
+| `Codec` | a shared `Arc<Model>` with the tokeniser, the encoding loop and decoding |
 | `Model` | the parsed tables: the typed index tables and the derived trees |
 | `case` | `classify`, `to_camel`, `from_camel` over the 266 cased pairs (`STANDARD.md` §11) |
 | `model` | the `NVM1` reader: strict invariant checks, and the index types `Word`, `Rule`, `Char`, `Left`, `Right`, `LeftLeaf`, `RightLeaf` |
@@ -33,6 +33,11 @@ an `Arc<Model>`, so cloning it is cheap and the tables are parsed once.
 `bitio`, `codec`, `huffman` and `ladder` are private: `Bits`, `Codec` and
 `Model` are reexported at the crate root, and the bit reader, the trees and the
 ladder are crate-internal.
+
+`Codec` is a one-field tuple struct, `Codec(pub Arc<Model>)`.  The field is
+public because there is nothing to protect: a codec *is* a shared model, and
+the tables inside the model are already private.  The model is reachable as
+`codec.0`; cloning a codec costs an `Arc` increment.
 
 The crate has no dependencies and no build script.
 

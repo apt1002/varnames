@@ -19,7 +19,7 @@ fn rows() -> impl Iterator<Item = (&'static str, Option<u128>, usize)> {
 #[test]
 fn standard_tables_are_the_published_ones() {
     let codec = Codec::default();
-    let model = codec.model();
+    let model = &codec.0;
     assert_eq!(
         (model.num_words(), model.num_lefts(), model.num_rights_per_left()),
         (8_191, 32, 1)

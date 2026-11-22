@@ -933,7 +933,7 @@ mod tests {
     #[test]
     fn the_pair_index_agrees_with_a_map_of_the_rules() {
         let codec = crate::standard::standard();
-        let model = codec.model();
+        let model = &codec.0;
         let mut map = HashMap::with_capacity(model.num_rules() as usize);
         for rank in 0..model.num_rules() {
             let rule = Rule(rank);

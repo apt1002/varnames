@@ -85,7 +85,7 @@ fn main() -> ExitCode {
             } else {
                 "standard"
             };
-            println!("{which} model  {}", codec.model().info());
+            println!("{which} model  {}", codec.0.info());
             ExitCode::SUCCESS
         }
         "encode" if !rest.is_empty() => encode(&codec, rest),
