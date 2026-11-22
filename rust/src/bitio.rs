@@ -31,17 +31,6 @@ impl BitWriter {
         }
     }
 
-    /// The number of bits written, including trailing zeros.
-    /// The exact number of bits.
-    pub fn len(&self) -> usize {
-        self.bits
-    }
-
-    /// Whether the bit string is empty.
-    pub fn is_empty(&self) -> bool {
-        self.bits == 0
-    }
-
     /// Drop the trailing zeros — they are the padding and the stop — and
     /// return the exact bit string.
     pub fn finish(mut self) -> Bits {
@@ -152,22 +141,51 @@ impl Bits {
         &self.bytes
     }
 
-    /// The value as a `u128`, or `None` if the code is longer than 128 bits.
+    /// The value as a `u128`, or `None` if a bit at index 128 or above is set.
+    ///
+    /// Being longer than 128 bits does not disqualify a code by itself: the
+    /// trailing zeros of a codeword are not stored, so a long code whose top
+    /// bits are zero still names an integer.  Only a set bit does not fit.
     pub fn to_u128(&self) -> Option<u128> {
-        if self.len > 128 {
-            return None;
-        }
         let mut value = 0u128;
         for i in 0..self.len {
             if (self.bytes[i / 8] >> (i % 8)) & 1 == 1 {
+                if i >= 128 {
+                    return None;
+                }
                 value |= 1 << i;
             }
         }
         Some(value)
     }
+}
 
-    /// A reader positioned at the first bit.
-    pub fn reader(&self) -> BitReader<'_> {
-        BitReader::new(&self.bytes)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_u128_survives_the_round_trip() {
+        for value in [0, 1, 27, 1 << 26, u128::MAX] {
+            assert_eq!(Bits::from_u128(value).to_u128(), Some(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn a_long_code_whose_top_bits_are_zero_still_fits() {
+        // 130 bits: the widest u128, with two zero bits above it.
+        let mut bytes = [0u8; 17];
+        bytes[..16].copy_from_slice(&u128::MAX.to_le_bytes());
+        let bits = Bits::from_bytes(&bytes, 130);
+        assert_eq!(bits.len(), 130);
+        assert_eq!(bits.to_u128(), Some(u128::MAX));
+    }
+
+    #[test]
+    fn a_set_bit_above_the_128th_does_not_fit() {
+        let mut bytes = [0u8; 17];
+        bytes[16] = 1; // bit 128
+        let bits = Bits::from_bytes(&bytes, 130);
+        assert_eq!(bits.to_u128(), None);
     }
 }

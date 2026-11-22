@@ -6,25 +6,30 @@ bit.  The standard tables are compiled into the library, so a program needs no
 data files at run time.
 
 ```rust
-use varnames::standard;
+use varnames::standard::standard;
 
 let codec = standard()?;
-let code = codec.encode("getUserName")?;   // Code { value: 124101637, bits: 27 }
-assert_eq!(codec.decode(code.value)?, "getUserName");
+let code = codec.encode("getUserName")?;   // 124101637, 27 bits
+assert_eq!(codec.decode(code)?, "getUserName");
 ```
+
+`encode` returns the code as a `u128`; `encode_bits` returns the exact bit
+string when the code does not fit in 128 bits.
 
 ## What is in the box
 
 | module | contents |
 |---|---|
-| `bitio` | bits packed least-significant-bit first, and a reader that reads zeros past the end |
-| `ladder` | the static rule-pair ladder and the variable-width integer (`MODEL_FORMAT.md` §4) |
-| `huffman` | canonical Huffman trees, crate-internal: depth tables in, codewords and the decoding walk out (`MODEL_FORMAT.md` §2) |
-| `model` | the `NVM1` reader: strict invariant checks, the typed index tables, the derived trees |
-| `codec` | the tokeniser, the encoding loop, decoding |
-| `standard` | the embedded standard tables and their SHA-256 |
+| `Bits` | a bit string of exact length, packed least-significant-bit first |
+| `Codec` | the tokeniser, the encoding loop, decoding |
 | `case` | `classify`, `to_camel`, `from_camel` over the 266 cased pairs (`STANDARD.md` §11) |
+| `model` | the `NVM1` reader: strict invariant checks, the typed index tables, the derived trees |
 | `sha256` | forty lines of SHA-256, so identifying the tables needs no dependency |
+| `standard` | the embedded standard tables and their SHA-256 |
+
+`bitio`, `codec`, `huffman` and `ladder` are private: `Bits` and `Codec` are
+reexported at the crate root, and the bit reader, the trees and the ladder are
+crate-internal.
 
 The crate has no dependencies and no build script.
 

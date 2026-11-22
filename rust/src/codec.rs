@@ -9,28 +9,12 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use crate::bitio::{Bits, BitWriter};
+use crate::bitio::{Bits, BitReader, BitWriter};
 use crate::model::{CharOrRule, Left, LeftLeaf, Model, Rule, Word};
 use crate::Error;
 
 /// The identifier terminates after this many words, whatever the bits say.
 const MAX_WORDS: usize = 1_000_000;
-
-/// An integer code and its exact bit length.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Code {
-    /// The integer; bit *i* is the *i*-th bit of the codeword.
-    pub value: u128,
-    /// The number of bits the code occupies.
-    pub bits: u32,
-}
-
-impl Code {
-    /// The codeword as a bit string, trailing zeros stripped.
-    pub fn to_bits(self) -> Bits {
-        Bits::from_u128(self.value)
-    }
-}
 
 /// Ties a [`Model`] to the encoding loop.
 #[derive(Clone)]
@@ -86,22 +70,20 @@ impl Codec {
 
     /// The integer code for an identifier.
     ///
-    /// Fails with [`Error::CodeTooLong`] if the code needs more than 128 bits;
-    /// use [`Codec::encode_bits`] for those.
-    pub fn encode(&self, identifier: &str) -> Result<Code, Error> {
+    /// The code is the value of the bit string [`Codec::encode_bits`] returns,
+    /// so this is the encoding's integer form; use that method when the code
+    /// needs more than 128 bits.  Fails with [`Error::CodeTooLong`] when a set
+    /// bit lies at index 128 or above.
+    pub fn encode(&self, identifier: &str) -> Result<u128, Error> {
         let bits = self.encode_bits(identifier)?;
-        let value = bits.to_u128().ok_or(Error::CodeTooLong { bits: bits.len() })?;
-        Ok(Code {
-            value,
-            bits: bits.len() as u32,
-        })
+        bits.to_u128().ok_or(Error::CodeTooLong { bits: bits.len() })
     }
 
     // ------------------------------------------------------------- decoding
 
     /// Decode a bit string; bits past the end read as zeros.
     pub fn decode_bits(&self, bits: &Bits) -> Result<String, Error> {
-        let mut reader = bits.reader();
+        let mut reader = BitReader::new(bits.as_bytes());
         let mut words = Vec::new();
         let mut left = Left(0);
         for _ in 0..MAX_WORDS {
@@ -287,7 +269,7 @@ mod tests {
     use super::*;
     use crate::bitio::{BitReader, BitWriter};
     use crate::model::{Char, RightLeaf};
-    use crate::standard;
+    use crate::standard::standard;
 
     #[test]
     fn spelling_is_the_expansion_of_the_words_alone() {
@@ -319,7 +301,7 @@ mod tests {
         let tree = model.bottom_tree(right).expect("a tree");
         let mut writer = BitWriter::new();
         tree.write(&mut writer, RightLeaf(0)).expect("the only leaf");
-        assert_eq!(writer.len(), 0);
+        assert!(writer.finish().is_empty());
         let mut reader = BitReader::new(&[]);
         assert_eq!(tree.read(&mut reader), Ok(RightLeaf(0)));
         assert_eq!(reader.position(), 0);

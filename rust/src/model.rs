@@ -141,12 +141,12 @@ impl TopTree {
     }
 
     /// Append the codeword of `leaf`, most significant bit first.
-    pub fn write(&self, writer: &mut BitWriter, leaf: LeftLeaf) -> Result<(), Error> {
+    pub(crate) fn write(&self, writer: &mut BitWriter, leaf: LeftLeaf) -> Result<(), Error> {
         self.0.write(writer, leaf.0)
     }
 
     /// Read one codeword and return its leaf.
-    pub fn read(&self, reader: &mut BitReader<'_>) -> Result<LeftLeaf, Error> {
+    pub(crate) fn read(&self, reader: &mut BitReader<'_>) -> Result<LeftLeaf, Error> {
         self.0.read(reader).map(LeftLeaf)
     }
 }
@@ -155,8 +155,7 @@ impl TopTree {
 ///
 /// Its leaves are [`RightLeaf`]s: positions in the cluster's ascending word
 /// list.  A cluster with no words has an empty tree: there is no leaf to name,
-/// so [`read`](BottomTree::read) fails and every write names a leaf that does
-/// not exist.  The model format allows such a cluster (§2 invariant 7).
+/// so reading it fails and every write names a leaf that does not exist.  The model format allows such a cluster (§2 invariant 7).
 #[derive(Clone, Debug)]
 pub struct BottomTree(Tree);
 
@@ -171,12 +170,12 @@ impl BottomTree {
     }
 
     /// Append the codeword of `leaf`, most significant bit first.
-    pub fn write(&self, writer: &mut BitWriter, leaf: RightLeaf) -> Result<(), Error> {
+    pub(crate) fn write(&self, writer: &mut BitWriter, leaf: RightLeaf) -> Result<(), Error> {
         self.0.write(writer, leaf.0)
     }
 
     /// Read one codeword and return its leaf.
-    pub fn read(&self, reader: &mut BitReader<'_>) -> Result<RightLeaf, Error> {
+    pub(crate) fn read(&self, reader: &mut BitReader<'_>) -> Result<RightLeaf, Error> {
         self.0.read(reader).map(RightLeaf)
     }
 }
@@ -773,9 +772,10 @@ mod tests {
         assert_eq!(model.char_at(Char(0)), Ok('a'));
         assert_eq!(model.char_at(Char(1)), Ok('é'));
         let codec = Codec::new(model);
+        let bits = codec.encode_bits("aé").expect("an encodable name");
+        assert_eq!(bits.len(), 2);
         let code = codec.encode("aé").expect("an encodable name");
-        assert_eq!(code.bits, 2);
-        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+        assert_eq!(codec.decode(code).expect("a decodable code"), "aé");
     }
 
     #[test]
@@ -854,7 +854,7 @@ mod tests {
         // Encoding never reaches it, and the round trip is unaffected.
         let codec = Codec::new(model);
         let code = codec.encode("aé").expect("an encodable name");
-        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+        assert_eq!(codec.decode(code).expect("a decodable code"), "aé");
         // The top tree's codeword `01` names the empty cluster.
         assert!(matches!(codec.decode(2), Err(Error::EmptyTree)));
     }
@@ -875,7 +875,7 @@ mod tests {
         assert_eq!(model.num_rules(), 0);
         let codec = Codec::new(model);
         let code = codec.encode("aé").expect("an encodable name");
-        assert_eq!(codec.decode(code.value).expect("a decodable code"), "aé");
+        assert_eq!(codec.decode(code).expect("a decodable code"), "aé");
     }
 
     #[test]

@@ -7,12 +7,13 @@
 //! in the low bits.
 //!
 //! ```
-//! use varnames::standard;
+//! use varnames::standard::standard;
 //!
 //! let codec = standard().expect("the embedded tables");
-//! let code = codec.encode("getUserName").unwrap();
-//! assert_eq!(code.bits, 27);
-//! assert_eq!(codec.decode(code.value).unwrap(), "getUserName");
+//! let bits = codec.encode_bits("getUserName").unwrap();
+//! assert_eq!(bits.len(), 27);
+//! assert_eq!(codec.decode_bits(&bits).unwrap(), "getUserName");
+//! assert_eq!(codec.encode("getUserName").unwrap(), 124_101_637);
 //! ```
 //!
 //! The tables ship inside the crate ([`mod@standard`]); a project that prefers its
@@ -27,22 +28,20 @@
 
 use std::fmt;
 
-pub mod bitio;
+mod bitio;
 pub mod case;
-pub mod codec;
+mod codec;
 mod huffman;
-pub mod ladder;
+mod ladder;
 pub mod model;
 pub mod sha256;
 pub mod standard;
 
 pub use bitio::Bits;
-pub use case::{classify, from_camel, to_camel, Class};
-pub use codec::{Code, Codec};
+pub use codec::Codec;
 pub use model::{
     BottomTree, Char, CharOrRule, Left, LeftLeaf, Model, Right, RightLeaf, Rule, TopTree, Word,
 };
-pub use standard::standard;
 
 /// Everything that can go wrong encoding or decoding.
 #[derive(Clone, Debug, PartialEq, Eq)]

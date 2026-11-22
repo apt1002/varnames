@@ -3,7 +3,9 @@
 //! Both are *static*: the decoder derives every interval edge from `n` alone,
 //! so nothing is stored for the code.
 
-use crate::bitio::{BitReader, BitWriter};
+use crate::bitio::BitReader;
+#[cfg(test)]
+use crate::bitio::BitWriter;
 
 /// Index bits; the ladder has `2 ** LADDER_B` intervals.
 pub const LADDER_B: u32 = 3;
@@ -18,6 +20,10 @@ pub fn ceil_log2(n: u32) -> u32 {
 }
 
 /// Append `n` as a base-128 little-endian varint.
+///
+/// The writing half of this module is compiled for tests only: the library
+/// reads model files and never writes one.
+#[cfg(test)]
 pub fn put_varint(n: u64, out: &mut Vec<u8>) {
     let mut n = n;
     loop {
@@ -56,6 +62,7 @@ fn variable_widths(n: u32) -> (u32, u32) {
     (l, n - (1 << l))
 }
 
+#[cfg(test)]
 fn variable_put(bw: &mut BitWriter, x: u32, n: u32) {
     if n <= 1 {
         return;
@@ -101,6 +108,7 @@ pub fn ladder_edges(n: u32) -> [u32; 9] {
 }
 
 /// The interval that holds `x`: the last edge at or below it.
+#[cfg(test)]
 fn ladder_interval(edges: &[u32; 9], x: u32) -> u32 {
     let mut found = 0;
     for (i, &edge) in edges.iter().enumerate().take(8) {
@@ -117,6 +125,7 @@ fn interval_width(edges: &[u32; 9], index: u32) -> u32 {
 }
 
 /// Code `x` in `[0, n)`.
+#[cfg(test)]
 pub fn ladder_put(bw: &mut BitWriter, x: u32, n: u32) {
     let edges = ladder_edges(n);
     let i = ladder_interval(&edges, x);
@@ -157,7 +166,7 @@ mod tests {
                 let mut w = BitWriter::new();
                 ladder_put(&mut w, x, n);
                 let bits = w.finish();
-                assert_eq!(ladder_get(&mut bits.reader(), n), x);
+                assert_eq!(ladder_get(&mut BitReader::new(bits.as_bytes()), n), x);
             }
         }
     }

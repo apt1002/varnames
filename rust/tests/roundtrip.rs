@@ -1,7 +1,8 @@
 //! End-to-end tests against a golden file that the Python reference
 //! implementation also reads: the two must agree code for code.
 
-use varnames::{standard, Codec, Error, Model};
+use varnames::standard::standard;
+use varnames::{Codec, Error, Model};
 
 /// `name value bits`, one per line, produced by the reference implementation.
 const GOLDEN: &str = include_str!("../../standard/golden.txt");
@@ -37,8 +38,7 @@ fn every_golden_code_agrees() {
         assert_eq!(bits_value.len(), bits, "{name}: length");
         if let Some(value) = value {
             let code = codec.encode(name).expect("a code within 128 bits");
-            assert_eq!(code.value, value, "{name}: value");
-            assert_eq!(code.bits, bits as u32, "{name}: length");
+            assert_eq!(code, value, "{name}: value");
             assert_eq!(codec.decode(value).expect("a decodable code"), name);
             short += 1;
         }
@@ -54,8 +54,8 @@ fn every_golden_code_agrees() {
 #[test]
 fn short_names_are_small() {
     let codec = standard().expect("the embedded tables");
-    assert!(codec.encode("a").unwrap().value < 1 << 8);
-    assert!(codec.encode("foo").unwrap().bits < 16);
+    assert!(codec.encode("a").unwrap() < 1 << 8);
+    assert!(codec.encode_bits("foo").unwrap().len() < 16);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn a_custom_model_can_be_loaded() {
     let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/data/model.nvm1"))
         .expect("the model file");
     let codec = Codec::new(Model::from_bytes(&bytes).expect("a valid model"));
-    assert_eq!(codec.encode("getUserName").unwrap().value, 124_101_637);
+    assert_eq!(codec.encode("getUserName").unwrap(), 124_101_637);
 }
 
 #[test]

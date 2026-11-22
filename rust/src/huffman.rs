@@ -239,7 +239,7 @@ mod tests {
         assert_eq!(tree.num_leaves(), 1);
         let mut writer = BitWriter::new();
         tree.write(&mut writer, 0).expect("the only leaf");
-        assert_eq!(writer.len(), 0);
+        assert!(writer.finish().is_empty());
         let mut reader = BitReader::new(&[]);
         assert_eq!(tree.read(&mut reader), Ok(0));
         assert_eq!(reader.position(), 0);
@@ -255,7 +255,7 @@ mod tests {
         ));
         let mut writer = BitWriter::new();
         assert!(tree.write(&mut writer, 0).is_err());
-        assert_eq!(writer.len(), 0);
+        assert!(writer.finish().is_empty());
     }
 
     #[test]

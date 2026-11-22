@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use varnames::{Code, Codec, Error, Model};
+use varnames::{Codec, Model};
 
 const USAGE: &str = "\
 usage: varnames [--model PATH] <command> [args...]
@@ -25,7 +25,7 @@ fn load(path: Option<&str>) -> Result<Codec, String> {
                 .map(Codec::new)
                 .map_err(|err| format!("{path}: {err}"))
         }
-        None => varnames::standard()
+        None => varnames::standard::standard()
             .cloned()
             .map_err(|err| err.to_string()),
     }
@@ -102,19 +102,14 @@ fn main() -> ExitCode {
 fn encode(codec: &Codec, names: &[String]) -> ExitCode {
     let mut status = ExitCode::SUCCESS;
     for name in names {
-        match codec.encode(name) {
-            Ok(Code { value, bits }) => {
-                println!("{name:<16}  {value}  {bits} bits")
-            }
-            Err(Error::CodeTooLong { bits }) => match codec.encode_bits(name) {
-                Ok(code) => println!(
-                    "{name:<16}  {} bytes  {bits} bits (above 128)",
-                    code.as_bytes().len()
+        match codec.encode_bits(name) {
+            Ok(bits) => match bits.to_u128() {
+                Some(value) => println!("{name:<16}  {value}  {} bits", bits.len()),
+                None => println!(
+                    "{name:<16}  {} bytes  {} bits (does not fit in 128)",
+                    bits.as_bytes().len(),
+                    bits.len()
                 ),
-                Err(err) => {
-                    eprintln!("{name}: {err}");
-                    status = ExitCode::FAILURE;
-                }
             },
             Err(err) => {
                 eprintln!("{name}: {err}");
