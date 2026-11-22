@@ -252,6 +252,78 @@ fn read_alphabet(
     Ok((alphabet, p - pos))
 }
 
+/// The pair table: which rule merges an ordered pair of words.
+///
+/// Open addressing with linear probing.  A bucket holds only the rule, because
+/// the rule's children *are* the key: [`Model::children`] recovers them for the
+/// comparison, so no slot pays for a stored pair or a hash.  Four bytes a slot
+/// at a load of at most one half keeps the whole table in a handful of cache
+/// lines and a probe to one or two buckets.
+#[derive(Clone, Debug)]
+struct RuleIndex {
+    /// [`EMPTY`], or the rule whose children hash to this bucket.
+    slots: Vec<u32>,
+}
+
+/// The empty marker.  A model cannot hold `u32::MAX` rules: its words are
+/// `nchars + rule` in a `u32`, so the ids run out first.
+const EMPTY: u32 = u32::MAX;
+
+impl RuleIndex {
+    /// Index `rules`, which the model has already checked: the child ids exist
+    /// and no pair repeats, so a bucket's rule is the only rule for its key.
+    fn with_rules(rules: &[(Word, Word)]) -> RuleIndex {
+        let mut len = 8;
+        while len < rules.len() * 2 {
+            len *= 2;
+        }
+        let mut index = RuleIndex {
+            slots: vec![EMPTY; len],
+        };
+        for (rank, &(a, b)) in rules.iter().enumerate() {
+            index.insert(Rule(rank as u32), a, b);
+        }
+        index
+    }
+
+    /// The bucket `a b` hashes to.
+    ///
+    /// Fibonacci hashing: multiply the pair, packed into one word, by a fixed
+    /// odd constant and take the top bits, which move every bit of the key.
+    fn start(&self, a: Word, b: Word) -> usize {
+        let key = ((a.0 as u64) << 32) | b.0 as u64;
+        let mixed = key.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        (mixed >> (64 - self.slots.len().trailing_zeros())) as usize
+    }
+
+    /// The rule for `a b`, if the model has one.
+    fn get(&self, rules: &[(Word, Word)], a: Word, b: Word) -> Option<Rule> {
+        let mask = self.slots.len() - 1;
+        let mut at = self.start(a, b);
+        loop {
+            let slot = self.slots[at];
+            if slot == EMPTY {
+                return None;
+            }
+            if rules[slot as usize] == (a, b) {
+                return Some(Rule(slot));
+            }
+            at = (at + 1) & mask;
+        }
+    }
+
+    /// Add `rule`, whose children are `a b`.  The table is never full, so the
+    /// scan for an empty bucket ends.
+    fn insert(&mut self, rule: Rule, a: Word, b: Word) {
+        let mask = self.slots.len() - 1;
+        let mut at = self.start(a, b);
+        while self.slots[at] != EMPTY {
+            at = (at + 1) & mask;
+        }
+        self.slots[at] = rule.0;
+    }
+}
+
 /// A loaded model: the tables plus every derived view the codec needs.
 ///
 /// The sizes are not stored separately: the vocabulary is the alphabet plus the
@@ -271,8 +343,8 @@ pub struct Model {
     pos_in_cluster: Vec<RightLeaf>,
     bottom_trees: Vec<BottomTree>,
     top_trees: Vec<TopTree>,
-    /// The rules indexed by the pair they merge: word pair -> its rule.
-    rule_index: HashMap<(Word, Word), Rule>,
+    /// The rules indexed by the pair they merge.
+    rule_index: RuleIndex,
 }
 
 impl Model {
@@ -370,10 +442,7 @@ impl Model {
             .map(|(a, b)| (Word(a), Word(b)))
             .collect();
         let memberships: Vec<Right> = memberships.into_iter().map(Right).collect();
-        let mut rule_index = HashMap::with_capacity(rules.len());
-        for (rank, &(a, b)) in rules.iter().enumerate() {
-            rule_index.insert((a, b), Rule(rank as u32));
-        }
+        let rule_index = RuleIndex::with_rules(&rules);
 
         Ok(Model {
             nchars,
@@ -562,7 +631,7 @@ impl Model {
     }
     /// The rule that merges an adjacent pair of words, if the model has one.
     pub fn rule_for(&self, a: Word, b: Word) -> Option<Rule> {
-        self.rule_index.get(&(a, b)).copied()
+        self.rule_index.get(&self.rules, a, b)
     }
     /// The right cluster a word belongs to.
     pub fn right(&self, word: Word) -> Result<Right, Error> {
@@ -859,6 +928,33 @@ mod tests {
                 "the rule table's length is not the length of its rules"
             ))
         ));
+    }
+
+    #[test]
+    fn the_pair_index_agrees_with_a_map_of_the_rules() {
+        let model = crate::standard::standard()
+            .expect("the embedded tables")
+            .model();
+        let mut map = HashMap::with_capacity(model.num_rules() as usize);
+        for rank in 0..model.num_rules() {
+            let rule = Rule(rank);
+            let (a, b) = model.children(rule).expect("a rule");
+            assert_eq!(model.rule_for(a, b), Some(rule), "rule {rank}");
+            map.insert((a, b), rule);
+        }
+        // A dense block of small ids -- characters and the words built out of
+        // them -- which is where the probe chains sit and where a bucket that
+        // forgot to compare its key would show.
+        for a in 0..200u32 {
+            for b in 0..200u32 {
+                let (a, b) = (Word(a), Word(b));
+                assert_eq!(
+                    model.rule_for(a, b),
+                    map.get(&(a, b)).copied(),
+                    "{a:?} {b:?}"
+                );
+            }
+        }
     }
 
     #[test]
