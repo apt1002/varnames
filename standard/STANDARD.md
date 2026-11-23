@@ -5,8 +5,8 @@ bijection between identifiers and integers, and of the two identifier sets that
 follow from it: those whose code fits in 64 bits and those whose code fits in
 128.  It uses the byte layout specified and measured in
 [`MODEL_FORMAT.md`](MODEL_FORMAT.md). This document states what a conforming
-implementation must *do*, in terms that do not mention any language, corpus or
-build script.
+implementation must *do*, in terms that do not depend on any language, corpus
+or build script.
 
 ## 1. Scope and domain
 
@@ -40,9 +40,9 @@ conforming implementation, and no other file may override one of these.
 | `golden.txt` | 250 conformance vectors: name, code, bits | informative (§12) |
 
 This repository contains two implementations of the standard. Both ship
-byte-for-byte copies of the `model.nvm1` and of `case-pairs.txt`. They check the
+byte-for-byte copies of `model.nvm1` and of `case-pairs.txt`. They check the
 model's digest before using it, and test that their copy of the pairs is the
-published file (§9). Their unit tests test conformance with `golden.txt`. We
+published file (§9). Their unit tests check conformance with `golden.txt`. We
 recommend that other implementations of the standard do the same.
 
 ## 2. The model
@@ -50,7 +50,7 @@ recommend that other implementations of the standard do the same.
 A model is a file of five tables:
 
 - an alphabet of characters, of length `C`,
-- a list of tokenisation rules, of length `V - C`,
+- a list of tokenisation rules, of length `V − C`,
 - a partition of the words (characters and rules) into clusters,
 - a Huffman tree that encodes a word given its cluster, and
 - a Huffman tree that encodes a cluster given its predecessor.
@@ -75,8 +75,9 @@ cluster level and the word level:
    then the word's left cluster becomes the new current left cluster.
 4. Write the **terminator**, leaf 0 of the final left cluster's tree.
 
-The terminator's codeword is all zeros. Some additional trailing bits may be
-zero by chance.
+The terminator's codeword is all zeros. The last word's codeword may also end
+in zeros, so the bit string can end in a longer run of zeros than the terminator
+alone.
 
 ## 4. Codewords
 
@@ -116,7 +117,7 @@ that.
 The model's tokenisation rules are applied to the identifier in ascending rank
 order (the order they appear in the model file). Each rule is a
 search-and-replace operation that merges every occurrence of a particular 2-gram
-(two adjacent words) into a 1-gram (a single word).
+(two adjacent words) into a fresh 1-gram (a single word).
 
 The replacement order within one rank does not matter: two occurrences of a
 2-gram cannot overlap, because the rule's two children differ.
@@ -130,7 +131,7 @@ integer is
 value = Σ b_i · 2^i        (b₀ is the least significant bit)
 ```
 
-I.e. the encoding is little-endian. Trailing zeros of the bit string, including
+The integer is little-endian. Trailing zeros of the bit string, including
 the all-zeros terminator codeword, become leading zeros of the integer. Leading
 zeros are implicitly endless, and are therefore stored for free. The decoder
 reads as many zeros as it needs to finish the identifier; when reading a 64-bit
@@ -141,25 +142,27 @@ integer is the code of exactly one identifier.  There are no reserved values.
 
 ## 7. The two sets
 
-A contribution of this standard is two useful sets of identifiers. The sets are
-read off the encoder rather than tabulated:
+This standard contributes two useful sets of identifiers. The sets are read
+off the encoder rather than tabulated:
 
 * The **64-bit set** is the identifiers whose canonical integer has no ones
-beyond bit 63. This includes 85% of unique identifiers in a validation corpus.
+beyond bit 63. In the authors' measurements on a case-normalised validation
+corpus, it covers 85% of unique identifiers.
 * The **128-bit set** is the identifiers whose canonical integer has no ones
-beyond bit 127. This includes 99% of unique identifiers in the corpus.
+beyond bit 127. It covers 99% of unique identifiers in the same corpus.
 
 Measuring the sets as a fraction of *unique* identifiers undersells them,
-because a typical word in the set is used more frequently than a typical word
-outside it. As a fraction of occurrences, the 64-bit set covers about 92% of
-identifiers. Words excluded by the sets tend to be long and odd in some way,
-e.g. they contain an unusual number of underscores, or use unconventional
-capitalisation. There is often an easy fix.
+because a typical identifier in the set occurs more frequently than a typical
+identifier outside it. As a fraction of occurrences, the 64-bit set covers over
+90% of identifier occurrences in sampled source code. Identifiers excluded by
+the sets tend to be long and odd in some way, e.g. they contain an unusual
+number of underscores, or use unconventional capitalisation. Some have an easy
+fix.
 
 Membership is a property of the identifier and the model, not of a second
 table. Codes longer than 128 bits exist, and they are outside both sets. The
 code generalises to bit strings of any length, and the two sets are merely the
-subset that fits a machine word.
+subsets that fit a machine word.
 
 ## 8. Conformance
 
@@ -177,10 +180,10 @@ A conforming **decoder** must:
 * reproduce the canonical assignment of §4 exactly, or it will mis-decode.
 
 A conforming **model file** must satisfy the invariants of `MODEL_FORMAT.md`
-§3: the rules topological and run-free, one membership and one depth per word,
-each cluster tree complete with leaf 0 deepest, each word tree within the Kraft
-bound, `V = C + len(rules)`.  A reader that finds a violation must reject the
-file rather than guess.
+§3: the rules topological, with distinct children in each pair and no two pairs
+equal, one membership and one depth per word, each cluster tree complete with
+leaf 0 deepest, each word tree within the Kraft bound, `V = C + len(rules)`.
+A reader that finds a violation must reject the file rather than guess.
 
 No floating point is needed anywhere in encoding or decoding.  A decoder that
 computes probabilities is computing the wrong object: it needs only the depths
@@ -246,8 +249,8 @@ different files will not agree; the digest is how they find out.
 ## 11. Case conversion
 
 An implementation **may** convert between the three conventions `foo_bar`,
-`FOO_BAR` and `fooBar`; one that does not offer the conversion conforms. Both
-the implementations in this repository do provide case convention conversions.
+`FOO_BAR` and `fooBar`; one that does not offer the conversion conforms. The
+implementations in this repository provide case convention conversions.
 
 The standard model is trained on CamelCase identifiers. Converting an identifier
 to camel case therefore allows the model to encode it better, but nothing in the
@@ -263,27 +266,28 @@ define how single characters are converted to upper- and lower-case forms.
 Although the standard model has an ASCII-only alphabet, non-standard models are
 allowed, so the definition covers non-ASCII characters too. For interoperability
 between implementations, we encourage you to use the definition given here. Note
-that the unicode character properties table shipped with your programming
-language might not match the definition given here, which is fixed so that a
-Unicode upgrade cannot change what it does.
+that the Unicode character properties table shipped with your programming
+language might not match the definition here; the definition here is fixed, so
+that a Unicode upgrade cannot change what it does.
 
 A character is said to be **cased** when its upper-case and lower-case forms are
-different, and are inverses of each other. Every other character is **inert**,
-i.e. it is unchanged by case conversions. The cased set is defined to be the
-letters in `U+0041–U+005A`, `U+0061–U+007A`, `U+00C0–U+017F` and
-`U+0400–U+052F`.  In those ranges exactly six letters are inert: `ß`, `İ`, `ı`,
-`ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper case at all.  The 266 cased
-pairs are published in `standard/case-pairs.txt` (§9), which is normative. They
-cover the majority of characters actually used in identifiers.
+each a single character, are different, and are inverses of each other. Every
+other character is **inert**, i.e. it is unchanged by case conversions. The
+cased set is the letters in `U+0041–U+005A`, `U+0061–U+007A`,
+`U+00C0–U+017F` and `U+0400–U+052F`.  In those ranges exactly six letters
+are inert: `ß`, `İ`, `ı`, `ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper
+case at all.  The 266 cased pairs are published in `standard/case-pairs.txt`
+(§9), which is normative. They cover the majority of characters actually used
+in identifiers.
 
 ### Detecting the case convention
 
-A character is **upper** when it differs from its own lower-case form, and
-**lower** when it differs from its upper-case form. Inert characters are neither
-upper nor lower. An identifier is `lower` if it has lower but not upper
-characters, `upper` if it has upper but not lower characters, and `camel` if it
-has both or neither. A name with no cased characters has nothing to convert, so
-it is already in the normal form.
+A **cased** character is **upper** when it differs from its own lower-case
+form, and **lower** when it differs from its upper-case form. Inert characters
+are neither upper nor lower. An identifier is `lower` if it has lower but not
+upper characters, `upper` if it has upper but not lower characters, and `camel`
+if it has both or neither. An identifier with no cased characters has nothing
+to convert, so it is already in the normal form.
 
 ### Converting to camel case
 
@@ -292,8 +296,10 @@ To convert a `lower` or `upper` identifier to camel case:
 * every cased character becomes lower case, **except** one immediately
   preceded by an underscore, which becomes upper case. The underscore is
   swallowed: `a` stays `a`, `_a` becomes `A`, and `A_B` becomes `aB`.
-* an underscore that precedes an uncased character, such as a digit or another
-  underscore, is not swallowed: `__3a` is therefore unchanged.
+* an underscore that precedes an inert character, such as a digit or another
+  underscore, is not swallowed: `__3a` is therefore unchanged. For example,
+  `a__b` becomes `a_B`: the second underscore is swallowed, and the first is
+  kept because it precedes another underscore.
 
 ### Other alphabets
 
@@ -316,7 +322,8 @@ further line in it.
 ## 12. Test vectors
 
 `golden.txt` (§9) holds 250 identifiers with their exact integer and bit
-length.  Both implementations in this repository read that file, so it pins
+length: the position of the highest set bit plus one, or zero for the empty
+identifier.  Both implementations in this repository read that file, so it pins
 them to each other; a third implementation can do the same.  The first lines:
 
 | identifier | integer | bits |
