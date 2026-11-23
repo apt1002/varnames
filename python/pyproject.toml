@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,13 +8,12 @@ version = "0.1.0"
 description = "Encode programming-language identifiers as 64- or 128-bit integers"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT OR Apache-2.0" }
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE", "LICENSE-CC0"]
 authors = [{ name = "Alistair Turnbull", email = "varnames@minworks.co.uk" }]
 keywords = ["identifier", "compression", "huffman", "bijection"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "License :: OSI Approved :: Apache Software License",
   "Topic :: Software Development :: Compilers",
 ]
 

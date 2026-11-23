@@ -130,8 +130,10 @@ A short list, in order:
 1. Publish the crate (`cargo publish` from `rust/`), which also puts the
    rustdoc on docs.rs.
 2. Publish the package (`python -m build` and upload from `python/`), wheel and
-   sdist; each package directory carries its own three licence texts, so the
-   archives are complete on their own.
+   sdist. Each package directory carries its own three licence texts, so the
+   archives are complete on their own; the PEP 639 metadata records the code's
+   `License-Expression: MIT OR Apache-2.0` and puts all three files in the
+   wheel's `dist-info/licenses/`.
 3. Tag 0.1.0 in git and check that the version appears identically in
    `rust/Cargo.toml`, `python/pyproject.toml` and `python/varnames/__init__.py`.
 4. Run `./check.sh` on the tagged tree: table digests, packaged copies, both
