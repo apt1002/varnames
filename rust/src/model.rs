@@ -356,6 +356,13 @@ impl Model {
     ) -> Result<Model, Error> {
         let nchars = alphabet.len() as u32;
         let kq = k * q;
+        // The alphabet is a set, so a character has exactly one id.  Two ids
+        // for one character would make the code ambiguous: the encoder would
+        // use one and the other would be unreachable.
+        let mut chars = HashSet::with_capacity(alphabet.len());
+        if !alphabet.iter().all(|&c| chars.insert(c)) {
+            return Err(Error::Model("the alphabet repeats a character"));
+        }
         if v != nchars + rules.len() as u32 {
             return Err(Error::Model("v is not the alphabet plus the rule list"));
         }
@@ -881,6 +888,25 @@ mod tests {
         let start = 4 + 4 + 1 + 2; // magic, header, rules length, rules
         buf[start + 1] = 0xff; // the lead byte of é
         assert!(matches!(Model::from_bytes(&buf), Err(Error::Model(_))));
+    }
+
+    #[test]
+    fn a_repeated_alphabet_character_is_refused() {
+        // `V = 2`, `k = q = 1`: two ids for one character would make the code
+        // ambiguous, so invariant 1 says the alphabet is a set.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"NVM1");
+        for v in [2u64, 1, 1, 2, 0] {
+            put_varint(v, &mut buf); // V, k, q, nchars, and no rule bytes
+        }
+        buf.extend_from_slice(b"aa");
+        // Two leaves of depth 1 in each tree, written as deltas from the
+        // tree's own minimum.
+        buf.extend_from_slice(&[0x11, 0x11]);
+        assert!(matches!(
+            Model::from_bytes(&buf),
+            Err(Error::Model("the alphabet repeats a character"))
+        ));
     }
 
     #[test]

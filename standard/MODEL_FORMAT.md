@@ -128,21 +128,25 @@ leaf then the leaf has depth 0 and is assigned the empty codeword.
 
 ### Invariants a reader must check
 
-1. `len(memberships) == V`, and `V == len(alphabet) + len(rules)` — in the YAML
+1. The characters of `alphabet` are distinct: it is a set, so a character has
+   exactly one id and `V` counts it once.  Two ids for one character would make
+   the code ambiguous — `encode` would use one and the other would be
+   unreachable, so `decode` could not be its inverse.
+2. `len(memberships) == V`, and `V == len(alphabet) + len(rules)` — in the YAML
    that is the definition of `V`; the binary stores `V` and must agree.
-2. `len(bottom_trees) == k·q`, every word id `0 … V−1` appears in exactly one
+3. `len(bottom_trees) == k·q`, every word id `0 … V−1` appears in exactly one
    of their leaves, in ascending order, and the total leaf count is `V`.
-3. Every tree is **complete**: `Σ 2^{−d} == 1` exactly.
-4. In each tree, `max(depth) - min(depth) <= 15`.
-5. `len(top_trees) == k`, each with `k·q + 1` leaves: the STOP leaf and one per
+4. Every tree is **complete**: `Σ 2^{−d} == 1` exactly.
+5. In each tree, `max(depth) - min(depth) <= 15`.
+6. `len(top_trees) == k`, each with `k·q + 1` leaves: the STOP leaf and one per
    right cluster.
-6. `rules[i] = [a, b]` with `a ≠ b` and `a, b < len(alphabet) + i`, and no two
+7. `rules[i] = [a, b]` with `a ≠ b` and `a, b < len(alphabet) + i`, and no two
    rules the same pair.
-7. A left cluster has at most `q` non-empty right clusters.  Fewer is legal — a
+8. A left cluster has at most `q` non-empty right clusters.  Fewer is legal — a
    right cluster with one word cannot be split further — and an empty one is an
    empty depth list and never decodes.  The default model has `q = 1`, so every
    left cluster has exactly one non-empty right cluster.
-8. In every top tree, leaf 0 (STOP) is at the **maximum** depth.  It follows
+9. In every top tree, leaf 0 (STOP) is at the **maximum** depth.  It follows
    from giving that leaf zero weight, and it is what makes the padding decode as
    the terminator (§6).  There is no corresponding rule for the bottom trees:
    they carry no terminator.
