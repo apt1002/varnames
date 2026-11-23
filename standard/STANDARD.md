@@ -114,13 +114,15 @@ reversed to form a little-endian integer (see §6).
 §3 says "Tokenise the identifier into words"; this section defines how to do
 that.
 
-The model's tokenisation rules are applied to the identifier in ascending rank
+The identifier is initially a string of 1-character words. The model's
+tokenisation rules are applied to the identifier in ascending rank
 order (the order they appear in the model file). Each rule is a
 search-and-replace operation that merges every occurrence of a particular 2-gram
 (two adjacent words) into a fresh 1-gram (a single word).
 
-The replacement order within one rank does not matter: two occurrences of a
-2-gram cannot overlap, because the rule's two children differ.
+The replacement word is specific to the rule, and not recognised by any earlier
+rule. The replacement order within one rank does not matter; two occurrences of
+a 2-gram cannot overlap, because the rule's two children differ.
 
 ## 6. The integer
 
@@ -282,12 +284,11 @@ in identifiers.
 
 ### Detecting the case convention
 
-A **cased** character is **upper** when it differs from its own lower-case
-form, and **lower** when it differs from its upper-case form. Inert characters
-are neither upper nor lower. An identifier is `lower` if it has lower but not
-upper characters, `upper` if it has upper but not lower characters, and `camel`
-if it has both or neither. An identifier with no cased characters has nothing
-to convert, so it is already in the normal form.
+An identifier is `lower` if it contains cased characters and they are all
+lower-case, `upper` if it contains cased characters and they are all upper-case,
+and `camel` if it has both kinds of cased character or neither. An identifier
+with no cased characters has nothing to convert, so it is already in the normal
+form.
 
 ### Converting to camel case
 
