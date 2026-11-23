@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""C26 close-out: is the shared-assignment margin at 4096/k=64 real?
+"""Is the shared-assignment margin at 4096/k=64 real?
+
+The close-out measurement for "one cluster assignment for both sides"
+(docs/SHARED_CLUSTERS.md).
 
 For each seed, at V=4096:
   * asymmetric(k=32), asymmetric(k=64), shared(k=64, w=1);
@@ -14,7 +17,7 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, '/home/cod/varnames/scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw
 import hfactor_words as hf
 import cluster_words as cw

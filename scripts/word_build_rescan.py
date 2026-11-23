@@ -17,12 +17,13 @@ Usage:
     word_build_rescan.py --sample 0 --num-pairs 512        # time only
 """
 import argparse
+import os
 import sys
 import time
 
 import numpy as np
 
-sys.path.insert(0, 'scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw                                        # noqa: E402
 
 

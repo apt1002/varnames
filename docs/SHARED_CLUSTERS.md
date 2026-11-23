@@ -143,8 +143,8 @@ scaled: the testing-point run is recorded in
 A margin of a tenth of a point cannot be carried by one seed, so both
 `V = 4096` points were re-measured with five seeds on the 10x held-out set
 (stride 10, 42,268 identifiers), re-interpolating the frontier per seed
-(`scripts/c26_closeout.py`, which also counts the identifiers that cross the
-64-bit line in each direction):
+(`scripts/shared_clusters_closeout.py`, which also counts the identifiers that
+cross the 64-bit line in each direction):
 
 | point | margin over 5 seeds | paired SE | shared − asymmetric bits | crossings at 64 bits |
 |---|---:|---:|---:|---:|

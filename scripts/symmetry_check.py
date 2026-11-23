@@ -23,11 +23,12 @@ Usage: symmetry_check.py CORPUS SUBS REVCORPUS SUBSTR
              work/rev/merged_rev.txt \
              work/rev/common10000/common_substrings.txt
 """
+import os
 import sys
 
 import numpy as np
 
-sys.path.insert(0, 'scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pair_matrix_lib as pair_matrix
 
 

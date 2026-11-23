@@ -12,10 +12,12 @@ identifier, 85.0 % within 64 bits.
 import argparse
 import collections
 import random
+import os
 import re
 import sys
 
-sys.path.insert(0, 'python')
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'python'))
 
 import varnames  # noqa: E402
 

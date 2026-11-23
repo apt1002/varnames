@@ -23,11 +23,12 @@ Usage:
     wordlist_order.py --dirs work/tw4096ns,work/tw6144ns,work/tw8192ns
 """
 import argparse
+import os
 import sys
 
 import numpy as np
 
-sys.path.insert(0, 'scripts')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw
 import model_fit_rates as mfr
 

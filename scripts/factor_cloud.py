@@ -132,14 +132,15 @@ def model_labels(path, V0):
     import varnames
 
     model = varnames.Model.from_path(path)
-    nchars = model.nchars
-    if model.V + 1 != V0:
-        sys.exit(f'{path}: V={model.V} does not match the adjacency ({V0 - 1})')
+    nchars = model.num_chars()
+    if model.num_words() + 1 != V0:
+        sys.exit(f'{path}: V={model.num_words()} does not match the adjacency '
+                 f'({V0 - 1})')
     labels = np.full(V0, -1, dtype=np.int64)
     for i in range(V0):
         if i == nchars:
             continue                      # the stop token
-        labels[i] = model.memberships[i if i < nchars else i - 1]
+        labels[i] = model.right(i if i < nchars else i - 1)
     return labels
 
 

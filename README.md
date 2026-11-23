@@ -348,7 +348,7 @@ varnames/
 │   ├── newline_cluster.py               # reserve a cluster for the stop token
 │   ├── quarter_accounting.py            # price the quarter code layouts exactly
 │   ├── quarter_codes.py                 # build the quarter codes and score them held-out
-│   ├── c26_closeout.py                  # shared-clusters close-out vs the interpolated frontier
+│   ├── shared_clusters_closeout.py      # shared-clusters close-out vs the interpolated frontier
 │   ├── run_sweep.sh                     # run the analyses over all thresholds
 │   └── run_break_open_prior.sh          # run the break-open-prior sweep
 ├── python/                              # reference implementation, runnable and readable

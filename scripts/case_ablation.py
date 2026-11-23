@@ -6,9 +6,12 @@ strings* in both corpora.  Scoring just those gives a paired comparison of a
 model trained on the normalised corpus vs one trained on the raw corpus, with
 the target held fixed.
 """
+import os
 import sys
+
 import numpy as np
-sys.path.insert(0, 'scripts')
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw
 import hfactor_words as hf
 import cluster_words as cw

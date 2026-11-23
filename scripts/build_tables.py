@@ -26,17 +26,19 @@ The stages, each of which the other documents describe in full:
      held-out identifiers and report bits/identifier and the 64/128-bit fit
      rates.
 
-`--V` is the size of the file's alphabet-plus-word space; the number of words is
-`V - 1 - (characters in the corpus)`, so `--words` is available instead.  The
-shipped standard model is `V = 8,191`, `k = 32`, `q = 1` (`STANDARD.md`), and
-`build_standard_model.py` builds that one from an existing dictionary directory.
+`--V` counts the end of the identifier as well as the words, because this
+pipeline represents it by the character `\n`; the file does not, so the file's
+`V` is `--V - 1`.  The two conventions are unavoidable and differ only by that
+one: `--V 8192` here writes the shipped standard model, whose file says
+`V = 8,191` (`STANDARD.md` §2, `MODEL_FORMAT.md` §1).  `--words` sets the
+number of pair-merge words instead, which is `--V - 1 - (characters)`.
 
 Nothing here is language-specific except `model_yaml`, and nothing here needs
 to be: a port that can read `model.nvm1` can use the tables whatever built
 them.
 
 Usage:
-    build_tables.py --corpus ids.txt --out build --V 8191 --k 32
+    build_tables.py --corpus ids.txt --out build --V 8192 --k 32
     build_tables.py --corpus ids.txt --out build --words 448 --k 8 --sample 1
 """
 import argparse
