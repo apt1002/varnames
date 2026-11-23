@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The bytes-for-fit frontier as a curve, not two points.
 
-Every pricing decision so far -- C26's +0.08 pt, C27's recovery estimate, C28's
-nets -- was referred to a frontier slope obtained from two or three measured
+Every pricing decision so far -- the shared cluster assignment's +0.08 pt, the
+reserved-stop-cluster recovery estimate, the cluster-quarter nets -- was
+referred to a frontier slope obtained from two or three measured
 configurations: `k = 32 -> 64` at `V = 4096` (4,088 B for 0.733 bits) and
 `V = 4096 -> 8192` at `k = 64` (18,432 B for 3.34 bits).  Both gave ≈5.5 kB per
 bit, which was comforting, but a two-point slope cannot say whether the frontier
@@ -23,8 +24,8 @@ Two accountings, because the project has two model shapes:
     code    2 kB
     bits    assoc model, held-out, `model_fit_rates.bits_assoc`
 
-``codebook`` (``--code-side``, what SHARED_CLUSTERS.md and the C26-C28 pricing
-tables quote: 17,400 B at 4096/32)
+``codebook`` (``--code-side``, what SHARED_CLUSTERS.md and the shared-cluster,
+stop-cluster and quarter pricing tables quote: 17,400 B at 4096/32)
     word    2(V-k) + V log V bits  (the bottom Huffman tree: internal nodes and
                                     the word -> leaf map)
     uni V, mem 2 V log k bits, block k*k, no rule table and no code.

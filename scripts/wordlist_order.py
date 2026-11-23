@@ -30,7 +30,6 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tree_words as tw
-import model_fit_rates as mfr
 
 
 def measure(d, corpus, stride):
