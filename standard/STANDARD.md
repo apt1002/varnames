@@ -115,14 +115,13 @@ reversed to form a little-endian integer (see §6).
 that.
 
 The identifier is initially a string of 1-character words. The model's
-tokenisation rules are applied to the identifier in ascending rank
-order (the order they appear in the model file). Each rule is a
-search-and-replace operation that merges every occurrence of a particular 2-gram
-(two adjacent words) into a fresh 1-gram (a single word).
-
-The replacement word is specific to the rule, and not recognised by any earlier
-rule. The replacement order within one rank does not matter; two occurrences of
-a 2-gram cannot overlap, because the rule's two children differ.
+tokenisation rules are applied in ascending rank order (the order they appear in
+the model file). Each rule is a search-and-replace operation that merges every
+occurrence of a particular 2-gram (two adjacent words) into a fresh 1-gram (a
+single word). The replacement word is new, and specific to the rule: it does not
+occur in the identifier, and can appear in the pair of no earlier rule. The
+replacement order within one rank does not matter; two occurrences of a 2-gram
+cannot overlap, because the rule's two children differ.
 
 ## 6. The integer
 
@@ -258,8 +257,9 @@ The standard model is trained on CamelCase identifiers. Converting an identifier
 to camel case therefore allows the model to encode it better, but nothing in the
 encoding or decoding process depends on it. To convert an identifier back to its
 original case convention, you must record the convention out-of-band, as it is
-not part of the encoded data. `from_camel(to_camel(x), class(x)) = x` for every
-identifier.
+not part of the encoded data. Let `classify(x)` be the convention that `x` is
+written in, as defined below; then `from_camel(to_camel(x), classify(x)) = x`
+for every identifier.
 
 ### Converting single characters
 
@@ -277,18 +277,18 @@ each a single character, are different, and are inverses of each other. Every
 other character is **inert**, i.e. it is unchanged by case conversions. The
 cased set is the letters in `U+0041–U+005A`, `U+0061–U+007A`,
 `U+00C0–U+017F` and `U+0400–U+052F`.  In those ranges exactly six letters
-are inert: `ß`, `İ`, `ı`, `ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no upper
-case at all.  The 266 cased pairs are published in `standard/case-pairs.txt`
-(§9), which is normative. They cover the majority of characters actually used
-in identifiers.
+are inert: `ß`, `İ`, `ı`, `ŉ` and `ſ` have no 1:1 pair, and `ĸ` has no
+upper case at all.  The 266 cased pairs are published in
+`standard/case-pairs.txt` (§9), which is normative. They cover the majority of
+characters actually used in identifiers.
 
 ### Detecting the case convention
 
-An identifier is `lower` if it contains cased characters and they are all
-lower-case, `upper` if it contains cased characters and they are all upper-case,
-and `camel` if it has both kinds of cased character or neither. An identifier
-with no cased characters has nothing to convert, so it is already in the normal
-form.
+An identifier is `lower` if it contains cased characters and each of them is
+its own lower-case form, `upper` if it contains cased characters and each of
+them is its own upper-case form, and `camel` otherwise. An identifier with no
+cased characters is `camel` for the trivial reason that it has nothing to
+convert: it is already in the normal form.
 
 ### Converting to camel case
 
