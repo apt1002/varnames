@@ -44,4 +44,4 @@ ignore = ["RUF001", "RUF002", "RUF003", "SIM300"]
 [tool.mypy]
 python_version = "3.9"
 strict = true
-files = ["varnames"]
+files = ["varnames", "tests"]

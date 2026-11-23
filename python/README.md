@@ -117,10 +117,11 @@ checks the measured 45.218 bits per identifier, 85.0 % within 64 bits and
 implementations to the same codes.  The suite is plain `unittest` and has no
 dependencies; it is run on Python 3.9 as well as the current 3.
 
-`mypy` type-checks `varnames` in strict mode and `ruff check varnames tests` is
-the lint; both are configured in `pyproject.toml`.  They are development tools,
-not dependencies, and `ruff format` is deliberately not enforced: the code is
-hand-wrapped to 79 columns.
+`mypy` type-checks `varnames` and `tests` in strict mode and
+`ruff check varnames tests` is the lint; both are configured in
+`pyproject.toml`.  They are development tools, not dependencies, and
+`ruff format` is deliberately not enforced: the code is hand-wrapped to 79
+columns.
 
 ## Licence
 
