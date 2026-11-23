@@ -38,6 +38,21 @@ words — so the number of pair-merge words is `V − 1 − (characters in the
 corpus)`; `--words 8128` sets the word count directly.  Both are printed at the
 start of the build.
 
+## Requirements
+
+The build needs **Python 3 and `numpy`**, and nothing else: `build_tables.py`
+draws in the dictionary and adjacency code, `model_size.py`, and the held-out
+rate, all of which use the standard library plus `numpy`.
+
+The wider research scripts in `scripts/` need a little more, and only for
+figures and side studies: `matplotlib` for `frontier_plot.py` and
+`factor_cloud.py`, and `scipy` for `factor_cloud.py` and
+`shape_gain_test.py`. Nothing on the path from a corpus to a model file needs
+either. They are named here rather than declared as dependencies of the
+`varnames` package, because the package itself does not import `numpy` and must
+not acquire a dependency its users would have to install; the tools are run
+from a checkout of this repository.
+
 ## The stages
 
 | stage | script | design note |

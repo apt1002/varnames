@@ -39,7 +39,8 @@ public because there is nothing to protect: a codec *is* a shared model, and
 the tables inside the model are already private.  The model is reachable as
 `codec.0`; cloning a codec costs an `Arc` increment.
 
-The crate has no dependencies and no build script.
+The crate has no dependencies and no build script.  Its MSRV is Rust 1.85,
+what Debian stable ships; the suite is run against that compiler.
 
 ## Every index has a type
 
@@ -98,4 +99,9 @@ embedded tables against `standard::STANDARD_SHA256`.
 
 ## Licence
 
-MIT OR Apache-2.0.
+The code is **MIT OR Apache-2.0**, at your option. The embedded standard tables
+(`data/model.nvm1`, and the corpus they were derived from) are **CC0-1.0**, as
+are the tables of any model file you load. All three texts ship in this
+directory — `LICENSE-MIT`, `LICENSE-APACHE`, `LICENSE-CC0` — and `Cargo.toml`'s
+`license` field names the code's dual licence. The model is data, and CC0 is
+what lets a program embed it without an attribution burden.
