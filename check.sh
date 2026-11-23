@@ -55,7 +55,16 @@ for copy in python/varnames/data/case-pairs.txt rust/data/case-pairs.txt; do
         die "$copy is not byte-for-byte standard/case-pairs.txt"
 done
 
-echo "model and pairs: one file each, shipped twice, digest as published"
+# Each package archive contains only its own directory, so its licence texts
+# must be copies of these, not links out of it.
+for name in MIT APACHE CC0; do
+    for copy in python/LICENSE-$name rust/LICENSE-$name; do
+        cmp -s LICENSE-$name "$copy" ||
+            die "$copy is not byte-for-byte LICENSE-$name"
+    done
+done
+
+echo "model, pairs and licences: shipped twice, identical"
 
 # ---------------------------------------------------------------------------
 step "the Python reference implementation"

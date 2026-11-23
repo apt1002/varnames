@@ -119,4 +119,9 @@ implementations to the same codes.
 
 ## Licence
 
-MIT OR Apache-2.0.
+The code is **MIT OR Apache-2.0**, at your option. The packaged standard tables
+(`varnames/data/model.nvm1`, `case-pairs.txt`, and the corpus they were derived
+from) are **CC0-1.0**. All three texts ship in this directory — `LICENSE-MIT`,
+`LICENSE-APACHE`, `LICENSE-CC0` — and `pyproject.toml`'s `license` field names
+the code's dual licence. The model is data, and CC0 is what lets a program embed
+it without an attribution burden.
