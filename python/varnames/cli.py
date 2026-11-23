@@ -7,11 +7,13 @@ Examples::
     $ varnames decode 124101637
     getUserName  27 bits
     $ varnames info
-    standard model 976670d7  V=8191 k=32 q=1 alphabet=63 rules=8128
+    standard model 976670d7  V=8191 k=32 q=1 alphabet=63 rules=8128 kq=32
 
 The standard tables ship with the package.  ``--model PATH`` reads any
 ``NVM1`` file instead, which is how a project pins its own tables (``E9``).
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
@@ -22,13 +24,13 @@ from .model import Model, ModelError
 from .standard import standard
 
 
-def _codec(args):
+def _codec(args) -> Codec:
     if args.model is None:
         return standard()
     return Codec(Model.from_path(args.model))
 
 
-def cmd_encode(args):
+def cmd_encode(args) -> int:
     codec = _codec(args)
     width = len("identifier")
     status = 0
@@ -48,7 +50,7 @@ def cmd_encode(args):
     return status
 
 
-def cmd_decode(args):
+def cmd_decode(args) -> int:
     codec = _codec(args)
     width = len("identifier")
     status = 0
@@ -66,22 +68,21 @@ def cmd_decode(args):
             status = 1
             continue
         if args.bits:
-            print(name.bit_length())
+            print(value.bit_length())
         else:
             print(f"{name:<{width}}  {value.bit_length()} bits")
     return status
 
 
-def cmd_info(args):
+def cmd_info(args) -> int:
     codec = _codec(args)
-    model = codec.model
-    digest = getattr(codec, "sha256", "custom")
+    digest = getattr(codec, "sha256", None) or "custom"
     print(f"{'standard' if args.model is None else 'custom'} model "
-          f"{digest[:8]}  {model.info()}")
+          f"{digest[:8]}  {codec.model.info()}")
     return 0
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="varnames",
         description="Encode identifiers as integers with the name code.")
@@ -113,7 +114,7 @@ def build_parser():
     return ap
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)

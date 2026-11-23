@@ -21,20 +21,22 @@ argument to the inverse and not information hidden in the output.
 The cased characters are the ASCII letters and the letters of ``U+00C0–U+017F``
 and ``U+0400–U+052F`` that have a 1:1 upper/lower pair; they are listed in
 ``data/case-pairs.txt`` (266 pairs, ``CC0-1.0``).  Everything else — including
-the five letters those ranges exclude (``ß İ ı ŉ ſ``), Greek, and every script
+the six letters those ranges exclude (``ß İ ı ŉ ſ ĸ``), Greek, and every script
 without case — is **inert**: copied through unchanged and never mapped.  A
 partly-cased identifier therefore converts consistently rather than half-way,
 and a name written in Han or Devanagari is unchanged.
 """
 
+from __future__ import annotations
+
 import os
 
 #: ``cased character -> its upper-case form``, and likewise for lower case.
-_UPPER = {}
-_LOWER = {}
+_UPPER: dict[str, str] = {}
+_LOWER: dict[str, str] = {}
 
 
-def _load(path):
+def _load(path: str) -> None:
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -48,17 +50,17 @@ def _load(path):
 _load(os.path.join(os.path.dirname(__file__), "data", "case-pairs.txt"))
 
 
-def cased(ch):
+def cased(ch: str) -> bool:
     """True when `ch` has a 1:1 case partner, i.e. this module maps it."""
     return ch in _UPPER
 
 
-def is_upper(ch):
+def is_upper(ch: str) -> bool:
     """True when `ch` is cased and is its own upper-case form."""
     return _UPPER.get(ch) == ch
 
 
-def classify(s):
+def classify(s: str) -> str:
     """Return ``'lower'``, ``'upper'`` or ``'camel'`` for an identifier.
 
     A class is decided by the cased characters alone: ``'lower'`` has lower
@@ -81,7 +83,7 @@ def classify(s):
     return 'camel'
 
 
-def to_camel(s):
+def to_camel(s: str) -> str:
     """Rewrite a ``lower`` or ``upper`` identifier in CamelCase.
 
     A cased character immediately preceded by an underscore is upper-cased and
@@ -117,7 +119,7 @@ def to_camel(s):
     return ''.join(out)
 
 
-def from_camel(s, cls):
+def from_camel(s: str, cls: str) -> str:
     """Invert :func:`to_camel` given the identifier's case class.
 
     In the normalised form an upper-case cased character always marks a

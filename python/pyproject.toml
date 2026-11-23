@@ -9,7 +9,7 @@ description = "Encode programming-language identifiers as 64- or 128-bit integer
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT OR Apache-2.0" }
-authors = [{ name = "the varnames project" }]
+authors = [{ name = "Alistair Turnbull", email = "varnames@minworks.co.uk" }]
 keywords = ["identifier", "compression", "huffman", "bijection"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -18,6 +18,11 @@ classifiers = [
   "Topic :: Software Development :: Compilers",
 ]
 
+[project.urls]
+Homepage = "https://github.com/apt1002/varnames"
+Documentation = "https://github.com/apt1002/varnames/blob/main/standard/STANDARD.md"
+Source = "https://github.com/apt1002/varnames"
+
 [project.scripts]
 varnames = "varnames.cli:main"
 
@@ -25,4 +30,4 @@ varnames = "varnames.cli:main"
 packages = ["varnames"]
 
 [tool.setuptools.package-data]
-varnames = ["data/*.nvm1", "data/*.txt"]
+varnames = ["data/*.nvm1", "data/*.txt", "py.typed"]

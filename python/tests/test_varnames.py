@@ -1,11 +1,14 @@
 """Tests for the reference implementation: ``python3 -m unittest`` from python/.
 
 The strict test is :meth:`TestStandard.test_held_out_rate`: the package must
-reproduce the rates ``MODEL_BUDGET.md`` reports for the standard model, byte for
-byte.  It walks the held-out corpus, so it takes about a minute.
+reproduce the rates ``MODEL_BUDGET.md`` reports for the standard model.  It
+walks the held-out corpus; the whole suite takes a few seconds.
 """
 
+import contextlib
+import doctest
 import hashlib
+import io
 import os
 import unittest
 
@@ -17,6 +20,7 @@ from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
                              ladder_get, ladder_interval, ladder_put,
                              read_varint, varint)
 from varnames.model import DEPTH_BITS, MAGIC, Tree, _canonical_codes
+from varnames.cli import main
 from varnames.standard import STANDARD_SHA256, standard
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,24 +121,27 @@ class TestModel(unittest.TestCase):
 
     def test_dimensions(self):
         m = self.model
-        self.assertEqual((m.V, m.k, m.q), (8_191, 32, 1))
-        self.assertEqual(m.nchars, 63)
-        self.assertEqual(len(m.rules), 8_128)
-        self.assertEqual(m.V, m.nchars + len(m.rules))
-        self.assertEqual(m.kq, 32)
+        self.assertEqual((m.num_words(), m.num_lefts(), m.num_rights_per_left()),
+                         (8_191, 32, 1))
+        self.assertEqual(m.num_chars(), 63)
+        self.assertEqual(m.num_rules(), 8_128)
+        self.assertEqual(m.num_words(), m.num_chars() + m.num_rules())
+        self.assertEqual(m.num_rights(), 32)
 
     def test_every_rule_reads_back(self):
         m = self.model
-        text = {i: c for i, c in enumerate(m.alphabet)}
-        for rank, (a, b) in enumerate(m.rules):
-            self.assertLess(a, m.nchars + rank)
-            self.assertLess(b, m.nchars + rank)
-            text[m.nchars + rank] = text[a] + text[b]
+        text = {i: m.char_at(i) for i in range(m.num_chars())}
+        for rank in range(m.num_rules()):
+            a, b = m.children(rank)
+            self.assertLess(a, m.num_chars() + rank)
+            self.assertLess(b, m.num_chars() + rank)
+            text[m.word_of_rule(rank)] = text[a] + text[b]
         self.assertIn("getUser", text.values())
 
     def test_top_trees_carry_the_deepest_stop_leaf(self):
-        for tree in self.model.top_trees:
-            depths = [length for _, length in tree.codes]
+        m = self.model
+        for left in range(m.num_lefts()):
+            depths = list(m.top_tree(left).depths())
             self.assertEqual(len(depths), 33)
             self.assertEqual(depths[0], max(depths))
             self.assertEqual(sum(2 ** (max(depths) - d) for d in depths),
@@ -161,6 +168,25 @@ class TestModel(unittest.TestCase):
     def test_trailing_bytes_are_rejected(self):
         with self.assertRaises(ModelError):
             Model.from_bytes(self.buf + b"\x00")
+
+    def test_the_packaged_model_is_the_standard_file(self):
+        # The digest pins the bytes to `STANDARD_SHA256`, but the constant
+        # could be edited to match a corrupted copy.  The file in `standard/`
+        # is the published one, so compare against it directly.
+        with open(os.path.join(ROOT, "standard", "model.nvm1"), "rb") as f:
+            self.assertEqual(self.buf, f.read())
+
+    def test_a_repeated_alphabet_character_is_refused(self):
+        # `V = 2`, no rules, alphabet "aa": two ids for one character.  The
+        # reader must refuse it, or `encode` would use one id and leave the
+        # other unreachable, and `decode` would not be its inverse.
+        out = bytearray(b"NVM1")
+        out += varint(2) + varint(1) + varint(1) + varint(2) + varint(0)
+        out += "aa".encode("utf-8")     # membership map: zero width, no bytes
+        out += b"\x11"                  # bottom depths, one leaf each: 1, 1
+        out += b"\x11"                  # top depths: STOP, cluster 0
+        with self.assertRaisesRegex(ModelError, "repeats a character"):
+            Model.from_bytes(bytes(out))
 
     def test_custom_model_by_path(self):
         self.assertEqual(Model.from_path(MODEL).info(), self.model.info())
@@ -202,10 +228,11 @@ class TestEmptyCluster(unittest.TestCase):
 
     def test_the_empty_cluster_has_a_tree_with_no_leaves(self):
         m = Model.from_bytes(self.fixture())
-        self.assertEqual((m.V, m.kq), (4, 2))
-        self.assertEqual([len(t) for t in m.bottom_trees], [4, 0])
+        self.assertEqual((m.num_words(), m.num_rights()), (4, 2))
+        self.assertEqual([len(m.bottom_tree(r)) for r in range(m.num_rights())],
+                         [4, 0])
         with self.assertRaisesRegex(ModelError, "empty tree"):
-            m.bottom_trees[1].read(BitReader(b"\xff"))
+            m.bottom_tree(1).read(BitReader(b"\xff"))
 
     def test_a_code_that_names_it_fails(self):
         codec = Codec(Model.from_bytes(self.fixture()))
@@ -258,9 +285,9 @@ class TestUtf8Alphabet(unittest.TestCase):
         self.assertEqual(len(buf), 17)
         self.assertEqual(buf[11:14], "a\u00e9".encode("utf-8"))
         m = Model.from_bytes(buf)
-        self.assertEqual(m.alphabet, "a\u00e9")
-        self.assertEqual(m.nchars, 2)
-        self.assertEqual(m.nchars, len(m.alphabet))
+        self.assertEqual(m.alphabet(), "a\u00e9")
+        self.assertEqual(m.num_chars(), 2)
+        self.assertEqual(m.num_chars(), len(m.alphabet()))
         codec = Codec(m)
         value, bits = codec.encode("a\u00e9")
         self.assertEqual(bits, 2)
@@ -272,7 +299,7 @@ class TestUtf8Alphabet(unittest.TestCase):
         out += "a\u00e9".encode("utf-8")
         out += bytes(2)                     # one depth byte per tree
         m = Model.from_bytes(bytes(out))
-        self.assertEqual(len(m.rules), 0)
+        self.assertEqual(m.num_rules(), 0)
         codec = Codec(m)
         value, _bits = codec.encode("a\u00e9")
         self.assertEqual(codec.decode(value), "a\u00e9")
@@ -360,7 +387,8 @@ class TestCodec(unittest.TestCase):
     def test_every_rule_pair_is_one_word(self):
         m = self.codec.model
         # a rule's own two children tokenise to the word the rule defines
-        for a, b in list(m.rules)[:200]:
+        for rank in range(min(200, m.num_rules())):
+            a, b = m.children(rank)
             self.assertEqual(len(_MergePairs([a, b], m).run()), 1)
 
     def test_the_sweep_agrees_with_the_definition(self):
@@ -369,17 +397,16 @@ class TestCodec(unittest.TestCase):
         # a tie is taken here, but the choice cannot matter (STANDARD.md §5);
         # the sweep in _MergePairs is the fast form of the definition.
         model = self.codec.model
-        rule_index = model._rule_index
-        n_words = model.nchars + len(model.rules)
+        n_words = model.num_words()
 
         def naive(words):
             out = list(words)
             while True:
                 best = None
                 for i in range(len(out) - 1):
-                    found = rule_index.get((out[i], out[i + 1]))
-                    if found is not None and (best is None or found[0] < best[0]):
-                        best = (found[0], i, found[1])
+                    rank = model.rule_for(out[i], out[i + 1])
+                    if rank is not None and (best is None or rank < best[0]):
+                        best = (rank, i, model.word_of_rule(rank))
                 if best is None:
                     return out
                 _, i, new_word = best
@@ -417,7 +444,7 @@ class TestCodec(unittest.TestCase):
         # surfaces, is what prevents this; the random test above only stumbles
         # on such a case by luck of the draw.
         model = self.codec.model
-        words = [model._char_id[c] for c in "Find"]
+        words = [model.char_id(c) for c in "Find"]
         self.assertEqual(len(_MergePairs(words, model).run()), 1)
 
     def test_spelling_expands_only_the_words_present(self):
@@ -425,14 +452,29 @@ class TestCodec(unittest.TestCase):
         # list would trip over it; expanding the words present cannot, because
         # no word here is that rule.
         class _Stub:
-            nchars = 1
-            alphabet = ["a"]
-            rules = [(0, 0), (7, 7)]
+            def num_words(self):
+                return 3
 
-        self.assertEqual(_spell(_Stub, []), "")
-        self.assertEqual(_spell(_Stub, [0]), "a")
-        self.assertEqual(_spell(_Stub, [1]), "aa")
-        self.assertEqual(_spell(_Stub, [1, 0, 1]), "aaaaa")
+            def num_chars(self):
+                return 1
+
+            def is_char(self, word):
+                return word < 1
+
+            def char_at(self, char):
+                return "a"
+
+            def rule_of_word(self, word):
+                return word - 1
+
+            def children(self, rule):
+                return [(0, 0), (7, 7)][rule]
+
+        stub = _Stub()
+        self.assertEqual(_spell(stub, []), "")
+        self.assertEqual(_spell(stub, [0]), "a")
+        self.assertEqual(_spell(stub, [1]), "aa")
+        self.assertEqual(_spell(stub, [1, 0, 1]), "aaaaa")
 
     def test_a_word_outside_the_model_is_an_error(self):
         with self.assertRaises(DecodeError):
@@ -628,6 +670,74 @@ class TestCaseConversion(unittest.TestCase):
     def test_an_unknown_class_is_refused(self):
         with self.assertRaises(ValueError):
             from_camel("aB", "mixed")
+
+
+class TestCli(unittest.TestCase):
+    """`python -m varnames`: the same three commands as the console script."""
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            status = main(list(argv))
+        return status, out.getvalue(), err.getvalue()
+
+    def test_encode(self):
+        status, out, err = self.run_cli("encode", "getUserName")
+        self.assertEqual((status, err), (0, ""))
+        self.assertIn("124101637", out)
+        self.assertIn("27 bits", out)
+
+    def test_encode_prints_one_column_on_request(self):
+        self.assertEqual(self.run_cli("encode", "-i", "foo")[1].strip(), "7043")
+        self.assertEqual(self.run_cli("encode", "-b", "foo")[1].strip(), "13")
+
+    def test_decode(self):
+        status, out, err = self.run_cli("decode", "124101637")
+        self.assertEqual((status, err), (0, ""))
+        self.assertIn("getUserName", out)
+        self.assertIn("27 bits", out)
+
+    def test_decode_prints_the_bit_length_on_request(self):
+        # Regression: this printed `name.bit_length()`, which a `str` does not
+        # have, so `varnames decode -b` raised AttributeError.
+        status, out, err = self.run_cli("decode", "-b", "124101637")
+        self.assertEqual((status, err), (0, ""))
+        self.assertEqual(out.strip(), "27")
+
+    def test_decode_rejects_a_code_above_the_stated_length(self):
+        status, _out, err = self.run_cli("decode", "-l", "10", "124101637")
+        self.assertEqual(status, 1)
+        self.assertIn("above the stated length", err)
+
+    def test_info(self):
+        status, out, _err = self.run_cli("info")
+        self.assertEqual(status, 0)
+        self.assertTrue(out.startswith("standard model 976670d7"), out)
+        self.assertIn("V=8191", out)
+
+    def test_encode_reports_a_character_outside_the_alphabet(self):
+        status, out, err = self.run_cli("encode", "hello world")
+        self.assertEqual(status, 1)
+        self.assertEqual(out, "")
+        self.assertIn("not in the model's alphabet", err)
+
+    def test_an_unreadable_model_is_an_error_not_a_traceback(self):
+        status, _out, err = self.run_cli("--model", MODEL + ".missing", "info")
+        self.assertEqual(status, 2)
+        self.assertTrue(err.startswith("varnames: "), err)
+
+
+class TestDoctests(unittest.TestCase):
+    """The examples in the docstrings must keep working."""
+
+    def test_docstring_examples(self):
+        import varnames.case
+        import varnames.codec
+        import varnames.model
+        for module in (varnames, varnames.case, varnames.codec,
+                       varnames.model):
+            result = doctest.testmod(module)
+            self.assertEqual(result.failed, 0, module.__name__)
 
 
 if __name__ == "__main__":

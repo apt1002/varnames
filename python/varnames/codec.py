@@ -5,11 +5,20 @@ cluster we are in*, then *which word in that right cluster*.  The identifier
 starts in left cluster 0 by convention and ends when the top stage reaches its
 STOP leaf, whose codeword is all zeros — which is also the padding above the
 integer, so the end costs nothing and is not stored.
+
+One codec can be shared: encoding and decoding mutate nothing, so the only
+state is the model, which is read-only after it is loaded.
 """
+
+from __future__ import annotations
 
 import heapq
 
 from .bitio import bits_length, bits_to_int
+from .model import Model, Word
+
+#: A decode that has not reached STOP after this many words is not a code.
+MAX_WORDS = 1_000_000
 
 
 class EncodeError(ValueError):
@@ -17,49 +26,56 @@ class EncodeError(ValueError):
 
 
 class DecodeError(ValueError):
-    """The integer is not a code of this model."""
+    """The integer cannot be decoded as an identifier of this model."""
 
 
 class Codec:
     """Ties a :class:`~varnames.model.Model` to the encoding loop."""
 
-    def __init__(self, model):
+    def __init__(self, model: Model) -> None:
         self.model = model
 
     # --------------------------------------------------------------- encoding
 
-    def tokenise(self, identifier):
-        """Split an identifier into the model's words (``ENCODING.md`` §1)."""
+    def tokenise(self, identifier: str) -> list[Word]:
+        """Split an identifier into the model's words (``ENCODING.md`` §1).
+
+        The result is word ids, which mean something only relative to
+        :attr:`model`: ``0 .. num_chars() - 1`` are characters, and the rest
+        are the words the rules define.
+        """
         model = self.model
-        try:
-            words = [model._char_id[c] for c in identifier]
-        except KeyError as exc:
-            raise EncodeError(f"character {exc.args[0]!r} is not in the "
-                              "model's alphabet") from None
+        words = []
+        for c in identifier:
+            word = model.char_id(c)
+            if word is None:
+                raise EncodeError(f"character {c!r} is not in the "
+                                  "model's alphabet")
+            words.append(word)
         return _MergePairs(words, model).run()
 
-    def encode_bits(self, identifier):
+    def encode_bits(self, identifier: str) -> list[int]:
         """The codeword as a list of bits, stream order, trailing zeros cut."""
         model = self.model
         bits = []
 
         def emit(tree, position):
-            value, length = tree.codes[position]
+            value, length = tree.code(position)
             for shift in range(length - 1, -1, -1):
                 bits.append((value >> shift) & 1)
 
         left = 0
         for word in self.tokenise(identifier):
-            cluster = model.memberships[word]
-            emit(model.top_trees[left], 1 + cluster)
-            emit(model.bottom_trees[cluster], model.pos_in_cluster[word])
-            left = model.left[word]
-        emit(model.top_trees[left], 0)          # the STOP leaf: all zeros
+            right = model.right(word)
+            emit(model.top_tree(left), 1 + right)
+            emit(model.bottom_tree(right), model.position(word))
+            left = model.left(word)
+        emit(model.top_tree(left), 0)           # the STOP leaf: all zeros
         while bits and bits[-1] == 0:
             bits.pop()
         return bits
 
-    def encode(self, identifier):
+    def encode(self, identifier: str) -> tuple[int, int]:
         """``(integer, bits)`` for an identifier.
 
         The integer's bit *i* is the *i*-th bit of the codeword, so the code
@@ -71,48 +87,39 @@ class Codec:
 
     # --------------------------------------------------------------- decoding
 
-    def decode_bits(self, bits, limit=1_000_000):
+    def decode_bits(self, bits, limit: int = MAX_WORDS) -> str:
         """Decode a bit list; bits past the end read as zeros."""
-        model = self.model
-        reader = _ListReader(bits)
-        out = []
-        left = 0
-        for _ in range(limit):
-            slot = model.top_trees[left].read(reader)
-            if slot == 0:
-                return _spell(model, out)
-            cluster = slot - 1
-            word = model.cluster_ids[cluster][
-                model.bottom_trees[cluster].read(reader)]
-            out.append(word)
-            left = model.left[word]
-        raise DecodeError("the identifier does not terminate")
+        return self._decode(_ListReader(bits), limit)
 
-    def decode(self, value, bits=None):
-        """Decode an integer; ``bits`` is optional and only a sanity bound."""
+    def decode(self, value: int, bits: int | None = None) -> str:
+        """Decode an integer; ``bits`` is optional and only a sanity bound.
+
+        It rejects an integer with a set bit above position ``bits``; that is
+        how a caller checks that the integer is the canonical code of the
+        identifier it decodes to rather than that code with extra high bits.
+        """
         if value < 0:
             raise DecodeError("a code is a non-negative integer")
-        reader = _IntReader(value)
-        model = self.model
-        out = []
-        left = 0
-        for _ in range(1_000_000):
-            slot = model.top_trees[left].read(reader)
-            if slot == 0:
-                break
-            cluster = slot - 1
-            word = model.cluster_ids[cluster][
-                model.bottom_trees[cluster].read(reader)]
-            out.append(word)
-            left = model.left[word]
-        else:
-            raise DecodeError("the identifier does not terminate")
-        if bits is not None and bits_length_of(value) > bits:
+        if bits is not None and value.bit_length() > bits:
             raise DecodeError("the integer has bits above the stated length")
-        return _spell(model, out)
+        return self._decode(_IntReader(value), MAX_WORDS)
+
+    def _decode(self, reader, limit: int) -> str:
+        model = self.model
+        words = []
+        left = 0
+        for _ in range(limit):
+            slot = model.top_tree(left).read(reader)
+            if slot == 0:
+                return _spell(model, words)
+            right = slot - 1
+            word = model.word_at(right, model.bottom_tree(right).read(reader))
+            words.append(word)
+            left = model.left(word)
+        raise DecodeError("the identifier does not terminate")
 
 
-def _spell(model, words):
+def _spell(model: Model, words) -> str:
     """Words back to characters, expanding only the words that are present.
 
     A rule names children whose ids are smaller than its own, so expansion is a
@@ -120,35 +127,32 @@ def _spell(model, words):
     Spelling one identifier never replays the rule list, so the cost follows
     the output, not the model.
     """
-    first_rule = model.nchars
-    limit = first_rule + len(model.rules)
+    limit = model.num_words()
     out = []
     stack = list(reversed(words))
     while stack:
         word = stack.pop()
         if not 0 <= word < limit:
             raise DecodeError("a word is outside the model")
-        if word < first_rule:
-            out.append(model.alphabet[word])
+        if model.is_char(word):
+            out.append(model.char_at(word))
         else:
-            a, b = model.rules[word - first_rule]
+            a, b = model.children(model.rule_of_word(word))
             stack.append(b)               # the left operand comes off first
             stack.append(a)
     return "".join(out)
 
 
-def bits_length_of(value):
-    return value.bit_length()
-
-
 class _ListReader:
+    """Read a bit list; past the end it yields the padding zeros."""
+
     __slots__ = ("bits", "pos")
 
-    def __init__(self, bits):
+    def __init__(self, bits) -> None:
         self.bits = bits
         self.pos = 0
 
-    def get(self, width):
+    def get(self, width: int) -> int:
         value = 0
         for i in range(width):
             bit = self.bits[self.pos] if self.pos < len(self.bits) else 0
@@ -158,13 +162,19 @@ class _ListReader:
 
 
 class _IntReader:
+    """Read the bits of a non-negative integer, least significant first.
+
+    Bits above the top set bit are zeros forever, which is the padding the
+    terminator relies on.
+    """
+
     __slots__ = ("value", "pos")
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value = value
         self.pos = 0
 
-    def get(self, width):
+    def get(self, width: int) -> int:
         chunk = (self.value >> self.pos) & ((1 << width) - 1)
         self.pos += width
         # bits arrive most-significant first, so reverse the chunk
@@ -245,9 +255,10 @@ class _MergePairs:
         right = self.nodes[node.next]
         if right is None:
             return
-        found = self.model._rule_index.get((node.word, right.word))
-        if found is not None:
-            heapq.heappush(self.heap, _Candidate(found[0], found[1], i))
+        rank = self.model.rule_for(node.word, right.word)
+        if rank is not None:
+            heapq.heappush(
+                self.heap, _Candidate(rank, self.model.word_of_rule(rank), i))
 
     def run(self):
         """Merge until no adjacent pair has a rule; return the words that remain."""
@@ -266,7 +277,7 @@ class _MergePairs:
                 continue
             # The rank says which rule was queued; its children say whether
             # the rule still applies here, without hashing the pair again.
-            if self.model.rules[rank] != (node.word, right.word):
+            if self.model.children(rank) != (node.word, right.word):
                 continue                    # not the pair we queued: stale
             following = right.next
             node.word = merged

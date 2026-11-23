@@ -23,6 +23,7 @@ first time they are loaded.
 | `codec.encode(name)` | `(value, bits)`; bit *i* of `value` is the *i*-th bit of the code |
 | `codec.encode_bits(name)` | the code as a list of bits, first bit first, trailing zeros cut |
 | `codec.decode(value)` | the identifier; bits past the top read as zeros |
+| `codec.decode(value, bits)` | the same, but reject a `value` with a bit above `bits` |
 | `codec.tokenise(name)` | the model's words, before coding |
 | `codec.model` | the loaded `Model` |
 | `varnames.Codec(varnames.Model.from_path(path))` | any `NVM1` model file instead of the standard one |
@@ -33,6 +34,17 @@ first time they are loaded.
 `encode` returns an integer of any size; a 64-bit or 128-bit set is simply the
 identifiers whose `bits` fit.  Round trips are exact: `decode(encode(n))` is
 `n`, and the terminator is never stored.
+
+`decode` is total: every non-negative integer decodes to an identifier, because
+bits beyond the terminator read as zeros.  An integer is the *canonical* code of
+the identifier it decodes to when it has no set bit above that identifier's
+`bits`; `decode(value, bits)` rejects the ones that do, which is how a caller
+checks an integer it did not get from `encode`.
+
+The tables are private.  `codec.model` reads them through accessors named as in
+the Rust crate — `num_words()`, `char_at(i)`, `right(word)`, `left(word)`,
+`top_tree(left)`, `word_at(right, at)`, `info()` — so a right cluster cannot be
+passed where a left cluster is meant.
 
 ## Case conversion
 
@@ -55,7 +67,23 @@ classify(x)) == x`.  The cased characters are the ASCII letters and the
 script without case included, is inert and passed through.  The definition is
 `STANDARD.md` §11.
 
+## What you can rely on
+
+* **One codec, every thread.**  `standard()` loads the tables once under a
+  lock, and encoding and decoding mutate nothing, so a single `Codec` can be
+  shared.  The cased-pair table is loaded once at import and never changed.
+* **Throughput.**  Pure Python, no extension: about 18,000 identifiers a second
+  encoded and 17,000 decoded on a 2020s laptop (27,000 a second for
+  `tokenise` alone), which is four minutes for the 4.4-million-identifier
+  corpus.  This is a reference implementation, not a hot path.
+* **One version number.**  `varnames.__version__` is `0.1.0`; until 1.0, minor
+  versions may change the API.
+* **Types.**  The package is annotated and ships `py.typed`.
+
 ## Command line
+
+`python -m varnames` works from a checkout; `varnames` is the same command once
+installed.
 
 ```console
 $ varnames encode getUserName foo
@@ -83,7 +111,8 @@ Nothing is required beyond Python 3.9.
 python3 -m unittest discover -s tests
 ```
 
-The suite includes `test_held_out_rate`, which walks the held-out corpus and
+The suite takes a few seconds.  It includes `test_held_out_rate`, which walks
+the held-out corpus and
 checks the measured 45.218 bits per identifier, 85.0 % within 64 bits and
 99.0 % within 128 bits.  `standard/golden.txt` pins the two
 implementations to the same codes.
