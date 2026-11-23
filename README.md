@@ -26,7 +26,8 @@ The goal is to provide a library to encode identifiers into integers and decode
 them again. Integers are much more efficient to process than strings, and more
 compact, so a bijective map between them would be useful. We propose to specify
 a portable (cross-language) standard for the encoding, and to ship
-implementations of it. The long-term scope, audiences and design intent are in
+implementations of it. The audiences, the artefacts each of them gets and what
+publication still needs are in
 [`docs/PRODUCTISATION.md`](docs/PRODUCTISATION.md).
 
 The library works with CamelCase identifiers, containing only letters, digits,
@@ -280,7 +281,7 @@ varnames/
 │   ├── ALGORITHM.md                     # the whole design in one sequence, corpus to integer
 │   ├── ALTERNATIVES.md                  # what was rejected, and why: the measured negatives
 │   ├── ABLATION.md                      # what the shipped model's pieces are worth, priced
-│   └── PRODUCTISATION.md                # long-term: design intent, scope, audiences (draft)
+│   └── PRODUCTISATION.md                # audiences, artefacts, publication status
 ├── scripts/
 │   ├── extract.py                       # streaming regex tokeniser (memory-bounded)
 │   ├── audit_extract.py                 # check the scrubber against real source trees

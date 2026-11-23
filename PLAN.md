@@ -125,11 +125,11 @@ filenames refer to experiments by name, never by these labels (see `README.md`).
 
 ## E. Productisation (long-term horizon)
 
-The distant target.  **In progress** — the encoding and the plan for the
-product are settled: the packed model, the standard, both implementations
-and the table-building tools are done, and the algorithm, its rejected
-alternatives and a priced ablation of the model's pieces are written up.
-Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
+**Built; publication remains.**  The packed model, the standard, both
+implementations and the table-building tools are done and agree with one
+another, and the algorithm, its rejected alternatives and a priced ablation of
+the model's pieces are written up.  Audiences, artefacts and what publication
+still needs: `docs/PRODUCTISATION.md`.
 
 - [x] **E1. Design the encoding.** *Done — designed, measured and shipped: one
       model file of 30,745 bytes, one canonical assignment, the stop as padding.*
@@ -166,6 +166,9 @@ Design intent, scope and audiences: `docs/PRODUCTISATION.md`.
 - [x] **E11. Licence.** *Settled — `MIT OR Apache-2.0` for the code and the
       specification, `CC0-1.0` for the derived corpus and the published tables.*
       `README.md`.
+- [ ] **E12. Publish to crates.io and PyPI.** *Open — both archives build and
+      `check.sh` passes on the tagged tree; neither is on an index yet.*
+      `docs/PRODUCTISATION.md`.
 
 ## Housekeeping / deferred regenerations
 
