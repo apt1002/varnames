@@ -23,7 +23,7 @@ first time they are loaded.
 | `codec.encode(name)` | `(value, bits)`; bit *i* of `value` is the *i*-th bit of the code |
 | `codec.encode_bits(name)` | the code as a list of bits, first bit first, trailing zeros cut |
 | `codec.decode(value)` | the identifier; bits past the top read as zeros |
-| `codec.decode(value, bits)` | the same, but reject a `value` with a bit above `bits` |
+| `codec.decode(value, bits)` | the same, with a sanity bound on the integer's width |
 | `codec.tokenise(name)` | the model's words, before coding |
 | `codec.model` | the loaded `Model` |
 | `varnames.Codec(varnames.Model.from_path(path))` | any `NVM1` model file instead of the standard one |
@@ -36,10 +36,9 @@ identifiers whose `bits` fit.  Round trips are exact: `decode(encode(n))` is
 `n`, and the terminator is never stored.
 
 `decode` is total: every non-negative integer decodes to an identifier, because
-bits beyond the terminator read as zeros.  An integer is the *canonical* code of
-the identifier it decodes to when it has no set bit above that identifier's
-`bits`; `decode(value, bits)` rejects the ones that do, which is how a caller
-checks an integer it did not get from `encode`.
+bits beyond the terminator read as zeros.  `decode(value, bits)` takes an
+optional sanity bound and rejects a value with a set bit above `bits`, which is
+what a fixed-width field needs.
 
 The tables are private.  `codec.model` reads them through accessors named as in
 the Rust crate — `num_words()`, `char_at(i)`, `right(word)`, `left(word)`,

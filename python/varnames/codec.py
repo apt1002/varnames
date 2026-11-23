@@ -94,9 +94,7 @@ class Codec:
     def decode(self, value: int, bits: int | None = None) -> str:
         """Decode an integer; ``bits`` is optional and only a sanity bound.
 
-        It rejects an integer with a set bit above position ``bits``; that is
-        how a caller checks that the integer is the canonical code of the
-        identifier it decodes to rather than that code with extra high bits.
+        A value with a set bit above position ``bits`` is rejected.
         """
         if value < 0:
             raise DecodeError("a code is a non-negative integer")
