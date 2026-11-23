@@ -25,17 +25,17 @@ from .model import Model, ModelError
 from .standard import STANDARD_SHA256, StandardCodec, standard
 
 __all__ = [
+    "STANDARD_SHA256",
     "Codec",
     "DecodeError",
     "EncodeError",
     "Model",
     "ModelError",
-    "STANDARD_SHA256",
     "StandardCodec",
     "cased",
     "classify",
     "from_camel",
-    "to_camel",
     "standard",
+    "to_camel",
 ]
 __version__ = "0.1.0"

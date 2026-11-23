@@ -6,6 +6,8 @@ nothing is stored for the code.
 
 from __future__ import annotations
 
+from .bitio import BitReader, BitWriter
+
 LADDER_B = 3              # index bits; the ladder has 2**b intervals
 
 
@@ -27,7 +29,7 @@ def varint(n: int) -> bytes:
             return bytes(out)
 
 
-def read_varint(buf, pos: int) -> tuple[int, int]:
+def read_varint(buf: bytes, pos: int) -> tuple[int, int]:
     """Read a base-128 varint; returns ``(value, position after it)``."""
     value = shift = 0
     while True:
@@ -49,7 +51,7 @@ def variable_widths(N: int) -> tuple[int, int]:
     return L, N - (1 << L)
 
 
-def variable_put(bw, x: int, N: int) -> None:
+def variable_put(bw: BitWriter, x: int, N: int) -> None:
     """Write ``x`` in ``[0, N)`` at variable width."""
     if N <= 1:
         return
@@ -63,7 +65,7 @@ def variable_put(bw, x: int, N: int) -> None:
         bw.put(1, 1)
 
 
-def variable_get(br, N: int) -> int:
+def variable_get(br: BitReader, N: int) -> int:
     """Read what :func:`variable_put` wrote."""
     if N <= 1:
         return 0
@@ -104,7 +106,7 @@ def ladder_interval(x: int, N: int, b: int = LADDER_B) -> int:
     return 0
 
 
-def ladder_put(bw, x: int, N: int, b: int = LADDER_B) -> None:
+def ladder_put(bw: BitWriter, x: int, N: int, b: int = LADDER_B) -> None:
     """Write ``x`` in ``[0, N)``: its interval, then its offset within it."""
     edges = ladder_edges(N, b)
     i = ladder_interval(x, N, b)
@@ -113,7 +115,7 @@ def ladder_put(bw, x: int, N: int, b: int = LADDER_B) -> None:
     variable_put(bw, min(max(x - edges[i], 0), width - 1), width)
 
 
-def ladder_get(br, N: int, b: int = LADDER_B) -> int:
+def ladder_get(br: BitReader, N: int, b: int = LADDER_B) -> int:
     """Read what :func:`ladder_put` wrote."""
     edges = ladder_edges(N, b)
     i = br.get(b)

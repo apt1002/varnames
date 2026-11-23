@@ -10,13 +10,14 @@ Examples::
     standard model 976670d7  V=8191 k=32 q=1 alphabet=63 rules=8128 kq=32
 
 The standard tables ship with the package.  ``--model PATH`` reads any
-``NVM1`` file instead, which is how a project pins its own tables (``E9``).
+``NVM1`` file instead, which is how a project pins its own tables.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable, Sequence
 
 from . import __version__
 from .codec import Codec, DecodeError, EncodeError
@@ -24,13 +25,13 @@ from .model import Model, ModelError
 from .standard import standard
 
 
-def _codec(args) -> Codec:
+def _codec(args: argparse.Namespace) -> Codec:
     if args.model is None:
         return standard()
     return Codec(Model.from_path(args.model))
 
 
-def cmd_encode(args) -> int:
+def cmd_encode(args: argparse.Namespace) -> int:
     codec = _codec(args)
     width = len("identifier")
     status = 0
@@ -50,7 +51,7 @@ def cmd_encode(args) -> int:
     return status
 
 
-def cmd_decode(args) -> int:
+def cmd_decode(args: argparse.Namespace) -> int:
     codec = _codec(args)
     width = len("identifier")
     status = 0
@@ -74,7 +75,7 @@ def cmd_decode(args) -> int:
     return status
 
 
-def cmd_info(args) -> int:
+def cmd_info(args: argparse.Namespace) -> int:
     codec = _codec(args)
     digest = getattr(codec, "sha256", None) or "custom"
     print(f"{'standard' if args.model is None else 'custom'} model "
@@ -114,10 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    func: Callable[[argparse.Namespace], int] = args.func
     try:
-        return args.func(args)
+        return func(args)
     except (ModelError, OSError) as exc:
         print(f"varnames: {exc}", file=sys.stderr)
         return 2

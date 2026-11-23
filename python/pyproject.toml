@@ -30,3 +30,18 @@ packages = ["varnames"]
 
 [tool.setuptools.package-data]
 varnames = ["data/*.nvm1", "data/*.txt", "py.typed"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 79
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF"]
+# The package is *about* confusable letters (ı, ſ, σ) and dashes, and `V` is a
+# model size rather than a constant, so these heuristics are noise here.
+ignore = ["RUF001", "RUF002", "RUF003", "SIM300"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["varnames"]

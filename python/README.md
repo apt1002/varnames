@@ -114,7 +114,13 @@ The suite takes a few seconds.  It includes `test_held_out_rate`, which walks
 the held-out corpus and
 checks the measured 45.218 bits per identifier, 85.0 % within 64 bits and
 99.0 % within 128 bits.  `standard/golden.txt` pins the two
-implementations to the same codes.
+implementations to the same codes.  The suite is plain `unittest` and has no
+dependencies; it is run on Python 3.9 as well as the current 3.
+
+`mypy` type-checks `varnames` in strict mode and `ruff check varnames tests` is
+the lint; both are configured in `pyproject.toml`.  They are development tools,
+not dependencies, and `ruff format` is deliberately not enforced: the code is
+hand-wrapped to 79 columns.
 
 ## Licence
 

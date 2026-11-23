@@ -9,6 +9,16 @@ number with the first bit as the least significant.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Protocol
+
+
+class BitSource(Protocol):
+    """Anything a tree can read bits from: a byte buffer or an integer."""
+
+    def get(self, width: int) -> int:
+        """The next ``width`` bits, the first one most significant."""
+
 
 class BitWriter:
     """Collect bits in stream order; `finish()` packs them LSB-first."""
@@ -51,9 +61,9 @@ class BitReader:
     padding the terminator relies on (`ENCODING.md` §2).
     """
 
-    __slots__ = ("_buf", "_pos", "_acc", "_n", "total")
+    __slots__ = ("_acc", "_buf", "_n", "_pos", "total")
 
-    def __init__(self, buf) -> None:
+    def __init__(self, buf: bytes | bytearray | memoryview) -> None:
         self._buf = bytes(buf)
         self._pos = 0
         self._acc = 0
@@ -80,7 +90,7 @@ class BitReader:
         return self.get(1)
 
 
-def bits_to_int(bits) -> int:
+def bits_to_int(bits: Sequence[int]) -> int:
     """The integer a bit list denotes: bit *i* of the list is bit *i* of it."""
     value = 0
     for i, bit in enumerate(bits):
@@ -89,7 +99,7 @@ def bits_to_int(bits) -> int:
     return value
 
 
-def bits_length(bits) -> int:
+def bits_length(bits: Sequence[int]) -> int:
     """The number of significant bits: the position of the last set bit + 1."""
     for i in range(len(bits) - 1, -1, -1):
         if bits[i]:

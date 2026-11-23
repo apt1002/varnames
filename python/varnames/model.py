@@ -18,8 +18,9 @@ they carry the same names, so an annotation can say which integer is which.
 from __future__ import annotations
 
 import codecs
+from collections.abc import Iterable, Sequence
 
-from .bitio import BitReader
+from .bitio import BitReader, BitSource, BitWriter
 from .ladder import ceil_log2, ladder_get, read_varint
 
 MAGIC = b"NVM1"
@@ -43,7 +44,7 @@ class ModelError(ValueError):
     """The bytes are not a model this reader understands."""
 
 
-def _read_alphabet(buf, pos, nchars):
+def _read_alphabet(buf: bytes, pos: int, nchars: int) -> tuple[str, int]:
     """Decode exactly `nchars` characters of UTF-8: `(alphabet, bytes used)`.
 
     The header counts characters, not bytes.  UTF-8 delimits itself, so the
@@ -53,7 +54,7 @@ def _read_alphabet(buf, pos, nchars):
     not a decode fallback: the file has no other way to say "unknown".
     """
     dec = codecs.getincrementaldecoder("utf-8")()
-    out = []
+    out: list[str] = []
     used = 0
     while len(out) < nchars:
         if pos + used >= len(buf):
@@ -80,32 +81,32 @@ class Tree:
     any position fails.
     """
 
-    __slots__ = ("_codes", "_book", "_maxlen")
+    __slots__ = ("_book", "_codes", "_maxlen")
 
-    def __init__(self, depths):
+    def __init__(self, depths: Sequence[int]) -> None:
         self._codes = _canonical_codes(depths)
         self._book = {(length, value): pos
                       for pos, (value, length) in enumerate(self._codes)}
         self._maxlen = max(depths) if depths else 0
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._codes)
 
-    def code(self, position):
+    def code(self, position: Leaf) -> tuple[int, int]:
         """``(value, length)`` of the codeword at ``position``, MSB first."""
         return self._codes[position]
 
-    def depths(self):
+    def depths(self) -> tuple[int, ...]:
         """The length of the codeword at each position, in stored order."""
         return tuple(length for _value, length in self._codes)
 
-    def write(self, writer, position):
+    def write(self, writer: BitWriter, position: Leaf) -> None:
         """Append the codeword of ``position`` to ``writer``, MSB first."""
         value, length = self._codes[position]
         for shift in range(length - 1, -1, -1):
             writer.put((value >> shift) & 1, 1)
 
-    def read(self, reader):
+    def read(self, reader: BitSource) -> Leaf:
         """Read one codeword; returns the leaf position.
 
         A codeword is a prefix of the stream, so the depths are tried from 0
@@ -125,7 +126,7 @@ class Tree:
         raise ModelError("no codeword within the tree's maximum depth")
 
 
-def _canonical_codes(depths):
+def _canonical_codes(depths: Sequence[int]) -> list[tuple[int, int]]:
     """``MODEL_FORMAT.md`` §2: code 0 is the first leaf at the maximum depth.
 
     Codes ascend within a depth and the space is filled from the top down, so
@@ -149,7 +150,7 @@ def _canonical_codes(depths):
     return codes
 
 
-def _depths_from_offsets(deltas):
+def _depths_from_offsets(deltas: Sequence[int]) -> list[int]:
     """Add back the per-tree offset, which is recovered from the Kraft sum.
 
     A complete tree has ``sum 2**-d = 1``; with ``d = o + delta`` that is
@@ -167,38 +168,45 @@ def _depths_from_offsets(deltas):
 class Model:
     """A loaded model: the tables, and the codes derived from them at load."""
 
-    def __init__(self, alphabet, rules, memberships, bottom, top, V, k, q):
-        self._alphabet = alphabet
-        self._rules = [tuple(p) for p in rules]
-        self._memberships = list(memberships)
-        self._bottom = list(bottom)
-        self._top = [list(row) for row in top]
-        self._V, self._k, self._q = V, k, q
+    def __init__(self, alphabet: str,
+                 rules: Iterable[tuple[Word, Word]],
+                 memberships: Iterable[Right],
+                 bottom: Sequence[int],
+                 top: Iterable[Sequence[int]],
+                 V: int, k: int, q: int) -> None:
+        self._alphabet: str = alphabet
+        self._rules: list[tuple[Word, Word]] = [
+            (int(a), int(b)) for a, b in rules]
+        self._memberships: list[Right] = [int(m) for m in memberships]
+        self._bottom: list[int] = [int(d) for d in bottom]
+        self._top: list[list[int]] = [[int(d) for d in row] for row in top]
+        self._V, self._k, self._q = int(V), int(k), int(q)
         self._nchars = len(alphabet)
-        self._kq = k * q
-        self._left = [m // q for m in self._memberships]
+        self._kq = self._k * self._q
+        self._left: list[Left] = [m // self._q for m in self._memberships]
         self._check()
 
-        ids = [[] for _ in range(self._kq)]
+        ids: list[list[Word]] = [[] for _ in range(self._kq)]
         for word, cluster in enumerate(self._memberships):
             ids[cluster].append(word)
-        self._ids_per_right = ids
-        self._position = [0] * self._V
-        self._bottom_trees = []
-        for right, words in enumerate(ids):
+        self._ids_per_right: list[list[Word]] = ids
+        self._position: list[Leaf] = [0] * self._V
+        self._bottom_trees: list[Tree] = []
+        for words in ids:
             self._bottom_trees.append(
                 Tree([self._bottom[i] for i in words]))
             for pos, word in enumerate(words):
                 self._position[word] = pos
         self._top_trees = [Tree(row) for row in self._top]
-        self._char_to_id = {c: i for i, c in enumerate(alphabet)}
-        self._rule_by_pair = {(a, b): rank
+        self._char_to_id: dict[str, Char] = {
+            c: i for i, c in enumerate(alphabet)}
+        self._rule_by_pair: dict[tuple[Word, Word], Rule] = {(a, b): rank
                               for rank, (a, b) in enumerate(self._rules)}
 
     # ---------------------------------------------------------------- loading
 
     @classmethod
-    def from_bytes(cls, buf):
+    def from_bytes(cls, buf: bytes | bytearray | memoryview) -> Model:
         """Load a model from the bytes of an ``NVM1`` file."""
         buf = bytes(buf)
         if buf[:4] != MAGIC:
@@ -219,7 +227,7 @@ class Model:
         kq = k * q
 
         reader = BitReader(buf[pos:pos + rules_len])
-        rules = []
+        rules: list[tuple[Word, Word]] = []
         for i in range(V - nchars):
             N = nchars + i
             rules.append((ladder_get(reader, N), ladder_get(reader, N)))
@@ -237,7 +245,7 @@ class Model:
             raise ModelError("truncated membership map")
         reader = BitReader(buf[pos:pos + nbytes])
         pos += nbytes
-        memberships = [reader.get(width) for _ in range(V)]
+        memberships: list[Right] = [reader.get(width) for _ in range(V)]
         if any(m >= kq for m in memberships):
             raise ModelError("a membership names a cluster that does not exist")
 
@@ -246,7 +254,7 @@ class Model:
             raise ModelError("truncated word-depth table")
         reader = BitReader(buf[pos:pos + nbytes])
         pos += nbytes
-        bottom = [0] * V
+        bottom: list[int] = [0] * V
         for cluster in range(kq):
             ids = [i for i, m in enumerate(memberships) if m == cluster]
             deltas = [reader.get(DEPTH_BITS) for _ in ids]
@@ -258,7 +266,7 @@ class Model:
             raise ModelError("truncated cluster-depth table")
         reader = BitReader(buf[pos:pos + nbytes])
         pos += nbytes
-        top = []
+        top: list[list[int]] = []
         for _ in range(k):
             deltas = [reader.get(DEPTH_BITS) for _ in range(kq + 1)]
             top.append(_depths_from_offsets(deltas))
@@ -268,14 +276,14 @@ class Model:
         return cls(alphabet, rules, memberships, bottom, top, V, k, q)
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path: str) -> Model:
         """Load a model from an ``NVM1`` file."""
         with open(path, "rb") as f:
             return cls.from_bytes(f.read())
 
     # ------------------------------------------------------------- invariants
 
-    def _check(self):
+    def _check(self) -> None:
         if len(set(self._alphabet)) != self._nchars:
             # Two ids for one character would make the code ambiguous: `encode`
             # uses one of them and the other is unreachable, so decode could
@@ -320,108 +328,108 @@ class Model:
 
     # ------------------------------------------------------------------ sizes
 
-    def num_chars(self):
+    def num_chars(self) -> int:
         """The size of the alphabet, ``len(alphabet)``."""
         return self._nchars
 
-    def num_rules(self):
+    def num_rules(self) -> int:
         """The number of pair-merge rules, which is also the number of ranks."""
         return len(self._rules)
 
-    def num_words(self):
+    def num_words(self) -> int:
         """The size of the word space, ``V`` -- characters and rules."""
         return self._V
 
-    def num_lefts(self):
+    def num_lefts(self) -> int:
         """The number of left clusters, ``k``."""
         return self._k
 
-    def num_rights(self):
+    def num_rights(self) -> int:
         """The number of right clusters, ``kq``."""
         return self._kq
 
-    def num_rights_per_left(self):
+    def num_rights_per_left(self) -> int:
         """The number of right clusters per left cluster, ``q``."""
         return self._q
 
-    def alphabet(self):
+    def alphabet(self) -> str:
         """The characters the model can code, as one string."""
         return self._alphabet
 
     # ---------------------------------------------------------------- lookups
 
-    def char_at(self, char):
+    def char_at(self, char: Char) -> str:
         """The character with id ``char``."""
         return self._alphabet[char]
 
-    def char_id(self, c):
+    def char_id(self, c: str) -> Char | None:
         """The id of character ``c``, or ``None`` if the model cannot code it."""
         return self._char_to_id.get(c)
 
-    def children(self, rule):
+    def children(self, rule: Rule) -> tuple[Word, Word]:
         """The two child words of ``rule``; both are smaller than its word."""
         return self._rules[rule]
 
-    def word_of_rule(self, rule):
+    def word_of_rule(self, rule: Rule) -> Word:
         """The word that ``rule`` defines: ``num_chars() + rule``."""
         return self._nchars + rule
 
-    def rule_of_word(self, word):
+    def rule_of_word(self, word: Word) -> Rule:
         """The rule that defines ``word``, which must be a rule's word."""
         return word - self._nchars
 
-    def is_char(self, word):
+    def is_char(self, word: Word) -> bool:
         """True when ``word`` is one character rather than a merged pair."""
         return word < self._nchars
 
-    def rule_for(self, a, b):
+    def rule_for(self, a: Word, b: Word) -> Rule | None:
         """The rank of the rule that merges ``a`` then ``b``, or ``None``."""
         return self._rule_by_pair.get((a, b))
 
     # --------------------------------------------------------------- clusters
 
-    def right(self, word):
+    def right(self, word: Word) -> Right:
         """The right cluster of ``word`` — the membership stored in the file."""
         return self._memberships[word]
 
-    def left(self, word):
+    def left(self, word: Word) -> Left:
         """The left cluster of ``word``, which is its right cluster // q."""
         return self._left[word]
 
-    def left_of(self, right):
+    def left_of(self, right: Right) -> Left:
         """The left cluster that owns right cluster ``right``."""
         return right // self._q
 
-    def position(self, word):
+    def position(self, word: Word) -> Leaf:
         """``word``'s leaf position in the bottom tree of its right cluster."""
         return self._position[word]
 
-    def word_at(self, right, at):
+    def word_at(self, right: Right, at: Leaf) -> Word:
         """The word at leaf ``at`` of the bottom tree of right cluster ``right``."""
         return self._ids_per_right[right][at]
 
-    def top_tree(self, left):
+    def top_tree(self, left: Left) -> Tree:
         """The top tree of left cluster ``left``."""
         return self._top_trees[left]
 
-    def bottom_tree(self, right):
+    def bottom_tree(self, right: Right) -> Tree:
         """The bottom tree of right cluster ``right``."""
         return self._bottom_trees[right]
 
     # ------------------------------------------------------------------ views
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (f"<varnames model V={self._V} k={self._k} q={self._q} "
                 f"alphabet={self._nchars} rules={len(self._rules)}>")
 
-    def info(self):
+    def info(self) -> str:
         """A one-line description for the CLI and for audit logs."""
         return (f"V={self._V} k={self._k} q={self._q} "
                 f"alphabet={self._nchars} rules={len(self._rules)} "
                 f"kq={self._kq}")
 
 
-def _require_complete(depths):
+def _require_complete(depths: Sequence[int]) -> None:
     """A tree must tile the code space: ``sum 2**(max-d) == 2**max``."""
     if not depths:
         return
@@ -431,7 +439,7 @@ def _require_complete(depths):
         raise ModelError("a depth table is not a complete tree")
 
 
-def _require_kraft(depths):
+def _require_kraft(depths: Sequence[int]) -> None:
     """A tree must not over-fill the code space."""
     if not depths:
         return

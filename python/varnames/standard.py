@@ -19,13 +19,13 @@ STANDARD_SHA256 = (
     "976670d71a1273a2506bb537183c4854523bec20eb0b2c9708b5934adbef3f79")
 
 _LOCK = threading.Lock()
-_STANDARD: "StandardCodec | None" = None
+_STANDARD: StandardCodec | None = None
 
 
 class StandardCodec(Codec):
     """A :class:`~varnames.codec.Codec` for the standard tables."""
 
-    def __init__(self, model: Model, digest: "str | None" = None) -> None:
+    def __init__(self, model: Model, digest: str | None = None) -> None:
         super().__init__(model)
         self.sha256 = digest
 

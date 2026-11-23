@@ -15,12 +15,19 @@ import unittest
 from varnames import Codec, DecodeError, EncodeError, Model, ModelError
 from varnames.bitio import BitReader, BitWriter, bits_length, bits_to_int
 from varnames.case import cased, classify, from_camel, is_upper, to_camel
-from varnames.codec import _MergePairs, _spell
-from varnames.ladder import (ceil_log2, ladder_bits, ladder_edges,
-                             ladder_get, ladder_interval, ladder_put,
-                             read_varint, varint)
-from varnames.model import DEPTH_BITS, MAGIC, Tree, _canonical_codes
 from varnames.cli import main
+from varnames.codec import _MergePairs, _spell
+from varnames.ladder import (
+    ceil_log2,
+    ladder_bits,
+    ladder_edges,
+    ladder_get,
+    ladder_interval,
+    ladder_put,
+    read_varint,
+    varint,
+)
+from varnames.model import DEPTH_BITS, MAGIC, Tree, _canonical_codes
 from varnames.standard import STANDARD_SHA256, standard
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -182,7 +189,7 @@ class TestModel(unittest.TestCase):
         # other unreachable, and `decode` would not be its inverse.
         out = bytearray(b"NVM1")
         out += varint(2) + varint(1) + varint(1) + varint(2) + varint(0)
-        out += "aa".encode("utf-8")     # membership map: zero width, no bytes
+        out += b"aa"                    # membership map: zero width
         out += b"\x11"                  # bottom depths, one leaf each: 1, 1
         out += b"\x11"                  # top depths: STOP, cluster 0
         with self.assertRaisesRegex(ModelError, "repeats a character"):
@@ -493,7 +500,7 @@ class TestGolden(unittest.TestCase):
 
     def test_agrees_with_the_rust_crate(self):
         codec = standard()
-        with open(GOLDEN, "r", encoding="ascii") as f:
+        with open(GOLDEN, encoding="ascii") as f:
             for line in f:
                 name, value, bits = line.split()
                 value, bits = int(value), int(bits)
@@ -510,7 +517,7 @@ class TestStandard(unittest.TestCase):
     def test_held_out_rate(self):
         codec = standard()
         bits = []
-        with open(VALIDATION, "r", encoding="ascii") as f:
+        with open(VALIDATION, encoding="ascii") as f:
             for i, line in enumerate(f):
                 if i % 10:
                     continue
@@ -560,17 +567,16 @@ class TestCaseConversion(unittest.TestCase):
             self.assertEqual(cased, camel, cased)
         else:
             swallowed = sum(1 for ch in camel if is_upper(ch))
-            self.assertEqual(len(camel) + swallowed, len(cased),
-                             "%s: one swallowed separator per capital in %s"
-                             % (cased, camel))
+            self.assertEqual(
+                len(camel) + swallowed, len(cased),
+                f"{cased}: one swallowed separator per capital in {camel}")
 
     def test_table_is_the_published_one(self):
         pairs = self.pairs()
         self.assertEqual(len(pairs), 266)
         for path in CASE_COPIES:
-            with open(path, "rb") as f:
-                with open(CASE_PAIRS, "rb") as g:
-                    self.assertEqual(f.read(), g.read(), path)
+            with open(path, "rb") as f, open(CASE_PAIRS, "rb") as g:
+                self.assertEqual(f.read(), g.read(), path)
 
     def test_every_pair_is_a_one_to_one_inverse(self):
         for up, lo in self.pairs():
@@ -640,7 +646,7 @@ class TestCaseConversion(unittest.TestCase):
         # an underscore the transform keeps — before a digit, before an inert
         # character, or at the end — costs no capital, so it does not shorten
         # the name either
-        for cased, cls, camel in [
+        for text, cls, camel in [
             ("A_B_", "upper", "aB_"),
             ("A_3_", "upper", "a_3_"),
             ("_A_3B", "upper", "A_3b"),
@@ -648,7 +654,7 @@ class TestCaseConversion(unittest.TestCase):
             ("A__3B", "upper", "a__3b"),
             ("A_日本", "upper", "a_日本"),
         ]:
-            self.check(cased, cls, camel)
+            self.check(text, cls, camel)
 
     def test_to_camel_is_not_idempotent(self):
         # The transform is defined up to the class, so it cannot be idempotent:
